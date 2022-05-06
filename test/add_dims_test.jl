@@ -5,25 +5,23 @@ using ModelingToolkit, Catalyst
 @variables u(t) q(t)
 Dt = Differential(t)
 
-eq = Dt(u) ~ 2u + 3k * q + 1
-eq2 = Dt(q) ~ 3u + k * q + 1
-eqs = [eq, eq2]
+exp = 3k * u + 1
+eq = Dt(u) ~ 3k * u + q + 1
 
 @testset "Expression" begin
-    exp = 2u + k * q + 1
     r1 = EarthSciMLBase.add_dims(exp, [u, q], x, y, t)
-    @test sprint(print, r1) == "1 + k*q(x, y, t) + 2u(x, y, t)"
+    @test sprint(print, r1) == "1 + 3k*u(x, y, t)"
 end
 
 @testset "Equation" begin
     r2 = EarthSciMLBase.add_dims(eq, [u, q], x, y, t)
-    @test sprint(print, r2) == "Differential(t)(u(x, y, t)) ~ 1 + 2u(x, y, t) + 3k*q(x, y, t)"
+    @test sprint(print, r2) == "Differential(t)(u(x, y, t)) ~ 1 + 3k*u(x, y, t) + q(x, y, t)"
 end
 
 @testset "ODESystem" begin
-    @named sys = ODESystem(eqs)
+    @named sys = ODESystem([eq])
     r5 = sys + AddDims(x, y, t)
-    @test sprint(print, r5) == "Symbolics.Equation[Differential(t)(u(x, y, t)) ~ 1 + 2u(x, y, t) + 3k*q(x, y, t), Differential(t)(q(x, y, t)) ~ 1 + k*q(x, y, t) + 3u(x, y, t)]"
+    @test sprint(print, r5) == "Symbolics.Equation[Differential(t)(u(x, y, t)) ~ 1 + 3k*u(x, y, t) + q(x, y, t)]"
     @test sys + AddDims(x, y, t) == AddDims(x, y, t) + sys
 end
 

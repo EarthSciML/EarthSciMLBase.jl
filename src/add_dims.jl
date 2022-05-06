@@ -15,6 +15,8 @@ defined like `@variables u(t)` rather than `@variables u(..)`.
 
 # Example:
 ```jldoctest
+using ModelingToolkit
+
 @parameters x y k t
 @variables u(t) q(t)
 exp = 2u + 3k*q + 1
@@ -25,7 +27,7 @@ add_dims(exp, [u, q], x, y, t)
 ```
 """
 function add_dims(exp, vars, dims::Num...)
-    syms = [Symbolics.tosymbol(x; escape=false) for x in vars]
+    syms = [Symbolics.tosymbol(x, escape=false) for x in vars]
     for (i, xx) in enumerate(syms)
         newvar = (@variables $xx(..))[1]
         exp = substitute(exp, Dict(vars[i] => newvar(dims...)))
