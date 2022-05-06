@@ -1,5 +1,7 @@
 module EarthSciMLBase
+using ModelingToolkit, Symbolics, Catalyst
 
-# Write your package code here.
+include("composition.jl")
+include("add_dims.jl")
 
 end

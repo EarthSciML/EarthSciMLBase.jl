@@ -1,6 +1,7 @@
 using EarthSciMLBase
-using Test
+using Test, SafeTestsets
 
 @testset "EarthSciMLBase.jl" begin
-    # Write your tests here.
+    @safetestset "Composition" begin include("composition_test.jl") end
+    @safetestset "AddDims" begin include("add_dims_test.jl") end
 end
