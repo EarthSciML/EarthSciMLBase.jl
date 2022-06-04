@@ -27,12 +27,26 @@ EarthSciMLBase.add_dims(exp, [u, q], x, y, t)
 ```
 """
 function add_dims(exp, vars, dims::Num...)
-    syms = [Symbolics.tosymbol(x, escape=false) for x in vars]
-    for (i, xx) in enumerate(syms)
-        newvar = (@variables $xx(..))[1]
-        exp = substitute(exp, Dict(vars[i] => newvar(dims...)))
+    newvars = add_dims(vars, dims...)
+    @variables 🦖🌋temp # BUG(CT): If someone chooses 🦖🌋temp as a variable in their equation this will fail.
+    for (var, newvar) ∈ zip(vars, newvars)
+        # Replace variable with temporary variable, then replace temporary
+        # variable with new variable.
+        # TODO(CT): Should be able to directly substitute all variables at once but doesn't work.
+        exp = substitute(exp, Dict(var => 🦖🌋temp))
+        exp = substitute(exp, Dict(🦖🌋temp => newvar))
     end
     exp
+end
+
+function add_dims(vars, dims::Num...)
+    syms = [Symbolics.tosymbol(x, escape=false) for x in vars]
+    o = []
+    for xx in syms
+        newvar = (@variables $xx(..))[1]
+        push!(o, newvar(dims...))
+    end
+    return o
 end
 
 function add_dims(eq::Equation, vars, dims::Num...)::Equation
@@ -45,7 +59,7 @@ function add_dims(sys::ModelingToolkit.AbstractSystem, dims::Num...)::Vector{Equ
 end
 
 function add_dims(rxs::Catalyst.ReactionSystem, dims::Num...)::Vector{Equation}
-    sys = convert(ODESystem, rxs)
+    sys = convert(ODESystem, rxs; combinatoric_ratelaws=false)
     vars = states(sys)
     [add_dims(eq, vars, dims...) for eq in equations(sys)]
 end
