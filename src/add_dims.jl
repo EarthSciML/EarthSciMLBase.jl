@@ -53,15 +53,10 @@ function add_dims(eq::Equation, vars, dims::Num...)::Equation
     add_dims(eq.lhs, vars, dims...) ~ add_dims(eq.rhs, vars, dims...)
 end
 
-function add_dims(sys::ModelingToolkit.AbstractSystem, dims::Num...)::Vector{Equation}
-    vars = states(sys)
-    [add_dims(eq, vars, dims...) for eq in equations(sys)]
-end
 
 function add_dims(rxs::Catalyst.ReactionSystem, dims::Num...)::Vector{Equation}
     sys = convert(ODESystem, rxs; combinatoric_ratelaws=false)
-    vars = states(sys)
-    [add_dims(eq, vars, dims...) for eq in equations(sys)]
+    add_dims(sys, dims...)
 end
 
 
@@ -86,7 +81,24 @@ eqs = [
     Dt(q) ~ 3u + k*q + 1
 ]
 @named sys = ODESystem(eqs)
-sys + AddDims(x, y, t)
+
+bcs = [u(t,0,y) ~ 0.,
+       u(t,1,y) ~ 0.,
+       u(t,x,0) ~ 0.,
+       u(t,x,1) ~ 0.,
+       q(t,0,y) ~ 0.,
+       q(t,1,y) ~ 0.,
+       q(t,x,0) ~ 0.,
+       q(t,x,1) ~ 0.,
+       u(0,x,y) ~ 1.,
+       q(0,x,y) ~ 0.]
+
+domains = [t ∈ (0.0,1.0),
+           x ∈ (0.0,1.0),
+           y ∈ (0.0,1.0)]
+
+
+sys + AddDims(t ∈ (0,1.0), x ∈ (0, 2.0), y ∈ (0, 3.0))
 
 # output
 2-element Vector{Equation}:
@@ -96,9 +108,9 @@ sys + AddDims(x, y, t)
 """
 struct AddDims
     dims
-    AddDims(dims::Num...) = new(dims)
+    AddDims(dims::Symbolics.VarDomainPairing...) = new(dims)
 end
 
-Base.:(+)(a::Catalyst.ReactionSystem, b::AddDims)::Vector{Equation} = add_dims(a, b.dims...)
-Base.:(+)(a::ModelingToolkit.AbstractSystem, b::AddDims)::Vector{Equation} = add_dims(a, b.dims...)
-Base.:(+)(a::AddDims, b::ModelingToolkit.AbstractSystem)::Vector{Equation} = b + a
+Base.:(+)(a::Catalyst.ReactionSystem, b::AddDims)::Vector{Equation} = add_dims(a, b.bcs, b.domains, b.dims...)
+Base.:(+)(a::ModelingToolkit.ODESystem, b::AddDims)::Vector{Equation} = add_dims(a, b.bcs, b.domains, b.dims...)
+Base.:(+)(a::AddDims, b::ModelingToolkit.ODESystem)::Vector{Equation} = b + a
