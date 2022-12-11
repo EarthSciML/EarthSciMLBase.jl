@@ -40,7 +40,7 @@ function Base.:(+)(sys::ModelingToolkit.ODESystem, icbc::ICBC)::ModelingToolkit.
     ivs = dims(icbc) # New dimensions are the independent variables.
     dvs = add_dims(statevars, dimensions...) # Add new dimensions to dependent variables.
     eqs = Vector{Equation}([add_dims(eq, statevars, dimensions...) for eq in equations(sys)]) # Add new dimensions to equations.
-    PDESystem(eqs, icbc(sys), domains(icbc), ivs, dvs, name=sys.name) # defaults=sys.defaults,
+    PDESystem(eqs, icbc(sys), domains(icbc), ivs, dvs, ps, name=sys.name) # defaults=sys.defaults,
 end
 
 Base.:(+)(icbc::ICBC, sys::ModelingToolkit.ODESystem)::ModelingToolkit.PDESystem = sys + icbc
