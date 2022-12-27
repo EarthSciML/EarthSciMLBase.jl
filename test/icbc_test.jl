@@ -1,28 +1,32 @@
 using EarthSciMLBase
 using ModelingToolkit, Catalyst
-using MethodOfLines, DifferentialEquations
+using MethodOfLines, DifferentialEquations, DomainSets
 
-@parameters x y t k=0.1
-@variables u(t) q(t)
+@parameters x y t α=10.0
+@variables u(t) v(t)
 Dt = Differential(t)
 
-eqs = [
-    Dt(u) ~ 2u + 3k * q + 1,
-    Dt(q) ~ 3u + k * q + 1
+x_min = y_min = t_min = 0.0
+x_max = y_max = 1.0
+t_max = 11.5
+
+eqs = [Dt(u) ~ -α * √abs(v),
+       Dt(v) ~ -α * √abs(u),
 ]
+
 @named sys = ODESystem(eqs)
 
-indepdomain = t ∈ (0.0, 1.0)
+indepdomain = t ∈ Interval(t_min, t_max)
 
-partialdomains = [x ∈ (1.0, 2.0),
-    y ∈ (2.5, 3.0)]
+partialdomains = [x ∈ Interval(x_min, x_max),
+    y ∈ Interval(y_min, y_max)]
 
 icbc = constICBC(16.0, indepdomain, partialdomains)
 
 @testset "dims" begin
     dims_result = dims(icbc)
 
-    dims_want = [t, x, y]
+    dims_want = [x, y, t]
 
     @test isequal(dims_result, dims_want)
 end
@@ -30,47 +34,55 @@ end
 @testset "domains" begin
     domains_result = domains(icbc)
 
-    domains_want = [t ∈ (0.0, 1.0),
-        x ∈ (1.0, 2.0),
-        y ∈ (2.5, 3.0)]
+    domains_want = [
+        x ∈ Interval(x_min, x_max),
+        y ∈ Interval(y_min, y_max),
+        t ∈ Interval(t_min, t_max),
+    ]
 
     @test isequal(domains_result, domains_want)
 end
 
 @testset "pde" begin
     pde_want = let
-        @parameters x y t k=0.1
-        @variables u(..) q(..)
+        @parameters x y t α=10.0
+        @variables u(..) v(..)
         Dt = Differential(t)
 
-        eqs = [
-            Dt(u(t, x, y)) ~ 2u(t, x, y) + 3k * q(t, x, y) + 1,
-            Dt(q(t, x, y)) ~ 3u(t, x, y) + k * q(t, x, y) + 1
+        x_min = y_min = t_min = 0.0
+        x_max = y_max = 1.0
+        t_max = 11.5
+
+        eqs = [Dt(u(x,y,t)) ~ -α * √abs(v(x,y,t)),
+            Dt(v(x,y,t)) ~ -α * √abs(u(x,y,t)),
         ]
 
-        bcs = [u(0.0, x, y) ~ 16.0,
-            u(t, 1.0, y) ~ 16.0,
-            u(t, 2.0, y) ~ 16.0,
-            u(t, x, 2.5) ~ 16.0,
-            u(t, x, 3.0) ~ 16.0,
-            q(0.0, x, y) ~ 16.0,
-            q(t, 1.0, y) ~ 16.0,
-            q(t, 2.0, y) ~ 16.0,
-            q(t, x, 2.5) ~ 16.0,
-            q(t, x, 3.0) ~ 16.0]
+        domains = [x ∈ Interval(x_min, x_max),
+                    y ∈ Interval(y_min, y_max),
+                    t ∈ Interval(t_min, t_max)]
 
-        dmns = [t ∈ (0.0, 1.0),
-            x ∈ (1.0, 2.0),
-            y ∈ (2.5, 3.0)]
+        # Periodic BCs
+        bcs = [u(x,y,t_min) ~ 16.0,
+            u(x_min,y,t) ~ 16.0,
+            u(x_max,y,t) ~ 16.0,
+            u(x,y_min,t) ~ 16.0,
+            u(x,y_max,t) ~ 16.0,
 
-        PDESystem(eqs, bcs, dmns, [t, x, y], [u(t, x, y), q(t, x, y)], [k], name=:sys)
+            v(x,y,t_min) ~ 16.0,
+            v(x_min,y,t) ~ 16.0,
+            v(x_max,y,t) ~ 16.0,
+            v(x,y_min,t) ~ 16.0,
+            v(x,y_max,t) ~ 16.0,
+        ] 
+
+        @named pdesys = PDESystem(eqs,bcs,domains,[x,y,t],[u(x,y,t),v(x,y,t)], [α => 10.0])
     end
 
     pde_result = sys + icbc
 
     @test isequal(pde_result.eqs, pde_want.eqs)
     @test isequal(pde_result.ivs, pde_want.ivs)
-    @test isequal(pde_result.dvs, pde_want.dvs) # These don't match exactly: u(t, x, y) vs u*
+    @test isequal(pde_result.dvs, pde_want.dvs)
     @test isequal(pde_result.bcs, pde_want.bcs)
     @test isequal(pde_result.domain, pde_want.domain)
     @test isequal(pde_result.ps, pde_want.ps)
@@ -78,35 +90,39 @@ end
 
 @testset "ReactionSystem" begin
     pde_want = let
-        @parameters β x y t
+        @parameters x y t
         @variables m₁(..) m₂(..)
         Dt = Differential(t)
         eqs = [
-            Dt(m₁(t, x, y)) ~ -β * m₁(t, x, y),
-            Dt(m₂(t, x, y)) ~ β * m₁(t, x, y),
+            Dt(m₁(x, y, t)) ~ -10.0 * m₁(x, y, t),
+            Dt(m₂(x, y, t)) ~ 10.0 * m₁(x, y, t),
         ]
 
-        bcs = [m₁(0.0, x, y) ~ 16.0,
-            m₁(t, 1.0, y) ~ 16.0,
-            m₁(t, 2.0, y) ~ 16.0,
-            m₁(t, x, 2.5) ~ 16.0,
-            m₁(t, x, 3.0) ~ 16.0,
-            m₂(0.0, x, y) ~ 16.0,
-            m₂(t, 1.0, y) ~ 16.0,
-            m₂(t, 2.0, y) ~ 16.0,
-            m₂(t, x, 2.5) ~ 16.0,
-            m₂(t, x, 3.0) ~ 16.0]
+        bcs = [
+            m₁(x, y, t_min) ~ 16.0,
+            m₁(x_min, y, t) ~ 16.0,
+            m₁(x_max, y, t) ~ 16.0,
+            m₁(x, y_min, t) ~ 16.0,
+            m₁(x, y_max, t) ~ 16.0,
+            m₂(x, y, t_min) ~ 16.0,
+            m₂(x_min, y, t) ~ 16.0,
+            m₂(x_max, y, t) ~ 16.0,
+            m₂(x, y_min, t) ~ 16.0,
+            m₂(x, y_max, t) ~ 16.0,
+        ]
 
-        dmns = [t ∈ (0.0, 1.0),
-            x ∈ (1.0, 2.0),
-            y ∈ (2.5, 3.0)]
+        dmns = [
+            x ∈ Interval(x_min, x_max),
+            y ∈ Interval(y_min, y_max),
+            t ∈ Interval(t_min, t_max),    
+        ]
 
-        PDESystem(eqs, bcs, dmns, [t, x, y], [m₁(t, x, y), m₂(t, x, y)], [β], name=:sys)
+        PDESystem(eqs, bcs, dmns, [x, y, t], [m₁(x, y, t), m₂(x, y, t)], [], name=:sys)
     end
 
     rn = @reaction_network begin
-        β, m₁ --> m₂
-    end β
+        10.0, m₁ --> m₂
+    end
     pde_result = rn + icbc
 
     @test isequal(pde_result.eqs, pde_want.eqs)
@@ -123,4 +139,5 @@ end
     discretization = MOLFiniteDifference([x=>dx, y=>dy], t, approx_order=2, grid_align=center_align)
     prob = discretize(pdesys,discretization)
     sol = solve(prob, TRBDF2(), saveat=0.1)
+    @test sol.retcode == :Success
 end
