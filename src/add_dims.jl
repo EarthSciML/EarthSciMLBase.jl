@@ -16,7 +16,7 @@ using EarthSciMLBase, ModelingToolkit
 @parameters x y k t
 @variables u(t) q(t)
 exp = 2u + 3k*q + 1
-add_dims(exp, [u, q], [x, y, t])
+EarthSciMLBase.add_dims(exp, [u, q], [x, y, t])
 
 # output
 1 + 2u(x, y, t) + 3k*q(x, y, t)
