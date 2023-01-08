@@ -23,17 +23,17 @@ end
         3k * u(x, y, t) + 1
     end
 
-    result = EarthSciMLBase.add_dims(exp, [u], x, y, t)
+    result = EarthSciMLBase.add_dims(exp, [u], [x, y, t])
     @test isequal(result, wantexp)
 end
 
 @testset "Equation" begin
-    result = EarthSciMLBase.add_dims(eq, [u, q], x, y, t)
+    result = EarthSciMLBase.add_dims(eq, [u, q], [x, y, t])
     @test isequal(result, wanteq[1])
 end
 
 @testset "Equation 2" begin
-    result = EarthSciMLBase.add_dims(eq2, [u], x, y, t)
+    result = EarthSciMLBase.add_dims(eq2, [u], [x, y, t])
 
     wanteq = let 
         @parameters x y t k
@@ -43,30 +43,4 @@ end
     end
 
     @test isequal(result, wanteq)
-end
-
-@testset "ODESystem" begin
-    @named sys = ODESystem([eq])
-    result = sys + AddDims(x, y, t)
-    @test isequal(result, wanteq)
-    @test isequal(AddDims(x, y, t) + sys, wanteq)
-end
-
-@testset "ReactionSystem" begin
-    rn = @reaction_network begin
-        β, m₁ --> m₂
-    end β
-    result = rn + AddDims(x, y, t)
-
-    wantrn = let 
-        @parameters β x y t
-        @variables m₁(..) m₂(..)
-        Dt = Differential(t)
-        [
-            Dt(m₁(x, y, t)) ~ -β*m₁(x, y, t), 
-            Dt(m₂(x, y, t)) ~ β*m₁(x, y, t),
-        ]
-    end
-    @test isequal(result, wantrn)
-    @test isequal(AddDims(x, y, t) + rn, wantrn)
 end
