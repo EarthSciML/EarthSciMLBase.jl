@@ -21,10 +21,10 @@ indepdomain = t ∈ Interval(t_min, t_max)
 partialdomains = [x ∈ Interval(x_min, x_max),
     y ∈ Interval(y_min, y_max)]
 
-icbc = constICBC(16.0, indepdomain, partialdomains)
+icbc = ICBC(constIC(16.0, indepdomain, partialdomains), constBC(16.0, indepdomain, partialdomains))
 
 @testset "dims" begin
-    dims_result = dims(icbc)
+    dims_result = EarthSciMLBase.dims(icbc)
 
     dims_want = [x, y, t]
 
@@ -32,7 +32,7 @@ icbc = constICBC(16.0, indepdomain, partialdomains)
 end
 
 @testset "domains" begin
-    domains_result = domains(icbc)
+    domains_result = EarthSciMLBase.domains(icbc)
 
     domains_want = [
         x ∈ Interval(x_min, x_max),
@@ -62,13 +62,15 @@ end
                     t ∈ Interval(t_min, t_max)]
 
         # Periodic BCs
-        bcs = [u(x,y,t_min) ~ 16.0,
+        bcs = [
+            u(x,y,t_min) ~ 16.0,
+            v(x,y,t_min) ~ 16.0,
+
             u(x_min,y,t) ~ 16.0,
             u(x_max,y,t) ~ 16.0,
             u(x,y_min,t) ~ 16.0,
             u(x,y_max,t) ~ 16.0,
 
-            v(x,y,t_min) ~ 16.0,
             v(x_min,y,t) ~ 16.0,
             v(x_max,y,t) ~ 16.0,
             v(x,y_min,t) ~ 16.0,
@@ -100,11 +102,13 @@ end
 
         bcs = [
             m₁(x, y, t_min) ~ 16.0,
+            m₂(x, y, t_min) ~ 16.0,
+
             m₁(x_min, y, t) ~ 16.0,
             m₁(x_max, y, t) ~ 16.0,
             m₁(x, y_min, t) ~ 16.0,
             m₁(x, y_max, t) ~ 16.0,
-            m₂(x, y, t_min) ~ 16.0,
+
             m₂(x_min, y, t) ~ 16.0,
             m₂(x_max, y, t) ~ 16.0,
             m₂(x, y_min, t) ~ 16.0,
@@ -131,6 +135,34 @@ end
     @test isequal(pde_result.bcs, pde_want.bcs)
     @test isequal(pde_result.domain, pde_want.domain)
     @test isequal(pde_result.ps, pde_want.ps)
+end
+
+
+@testset "zero-grad and periodic" begin
+    icbc = ICBC(
+        constIC(16.0, indepdomain, partialdomains),
+        periodicBC(indepdomain, [x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)], 1), 
+        zerogradBC(indepdomain, [x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)], 2),
+    )
+    pdesys = sys + icbc
+
+    want_bcs = let 
+        @parameters x y t
+        @variables u(..) v(..)
+        Dt = Differential(t)
+        [
+            u(x, y, t_min) ~ 16.0,
+            v(x, y, t_min) ~ 16.0,
+            u(x_min, y, t) ~ u(x_max, y, t), 
+            v(x_min, y, t) ~ v(x_max, y, t), 
+            Dt(u(x, y_min, t)) ~ 0.0, 
+            Dt(u(x, y_max, t)) ~ 0.0, 
+            Dt(v(x, y_min, t)) ~ 0.0, 
+            Dt(v(x, y_max, t)) ~ 0.0,
+        ]
+    end 
+
+    @test pdesys.bcs == want_bcs
 end
 
 @testset "Solve PDE" begin
