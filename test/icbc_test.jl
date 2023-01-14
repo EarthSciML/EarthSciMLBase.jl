@@ -21,7 +21,7 @@ indepdomain = t ∈ Interval(t_min, t_max)
 partialdomains = [x ∈ Interval(x_min, x_max),
     y ∈ Interval(y_min, y_max)]
 
-icbc = ICBC(constIC(16.0, indepdomain, partialdomains), constBC(16.0, indepdomain, partialdomains))
+icbc = ICBC(constBC(16.0, partialdomains...), constIC(16.0, indepdomain))
 
 @testset "dims" begin
     dims_result = EarthSciMLBase.dims(icbc)
@@ -63,9 +63,6 @@ end
 
         # Periodic BCs
         bcs = [
-            u(x,y,t_min) ~ 16.0,
-            v(x,y,t_min) ~ 16.0,
-
             u(x_min,y,t) ~ 16.0,
             u(x_max,y,t) ~ 16.0,
             u(x,y_min,t) ~ 16.0,
@@ -75,6 +72,9 @@ end
             v(x_max,y,t) ~ 16.0,
             v(x,y_min,t) ~ 16.0,
             v(x,y_max,t) ~ 16.0,
+
+            u(x,y,t_min) ~ 16.0,
+            v(x,y,t_min) ~ 16.0,
         ] 
 
         @named pdesys = PDESystem(eqs,bcs,domains,[x,y,t],[u(x,y,t),v(x,y,t)], [α => 10.0])
@@ -101,9 +101,6 @@ end
         ]
 
         bcs = [
-            m₁(x, y, t_min) ~ 16.0,
-            m₂(x, y, t_min) ~ 16.0,
-
             m₁(x_min, y, t) ~ 16.0,
             m₁(x_max, y, t) ~ 16.0,
             m₁(x, y_min, t) ~ 16.0,
@@ -113,6 +110,9 @@ end
             m₂(x_max, y, t) ~ 16.0,
             m₂(x, y_min, t) ~ 16.0,
             m₂(x, y_max, t) ~ 16.0,
+
+            m₁(x, y, t_min) ~ 16.0,
+            m₂(x, y, t_min) ~ 16.0,
         ]
 
         dmns = [
@@ -137,12 +137,11 @@ end
     @test isequal(pde_result.ps, pde_want.ps)
 end
 
-
 @testset "zero-grad and periodic" begin
     icbc = ICBC(
-        constIC(16.0, indepdomain, partialdomains),
-        periodicBC(indepdomain, [x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)], 1), 
-        zerogradBC(indepdomain, [x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)], 2),
+        periodicBC(x ∈ Interval(x_min, x_max)), 
+        zerogradBC(y ∈ Interval(y_min, y_max)),
+        constIC(16.0, indepdomain),
     )
     pdesys = sys + icbc
 
@@ -151,14 +150,15 @@ end
         @variables u(..) v(..)
         Dt = Differential(t)
         [
-            u(x, y, t_min) ~ 16.0,
-            v(x, y, t_min) ~ 16.0,
             u(x_min, y, t) ~ u(x_max, y, t), 
             v(x_min, y, t) ~ v(x_max, y, t), 
             Dt(u(x, y_min, t)) ~ 0.0, 
             Dt(u(x, y_max, t)) ~ 0.0, 
             Dt(v(x, y_min, t)) ~ 0.0, 
             Dt(v(x, y_max, t)) ~ 0.0,
+
+            u(x, y, t_min) ~ 16.0,
+            v(x, y, t_min) ~ 16.0,
         ]
     end 
 

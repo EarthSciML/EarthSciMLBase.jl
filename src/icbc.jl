@@ -7,6 +7,8 @@ create an ICBC object.
 $(METHODLIST)
 """
 abstract type ICBCcomponent end
+abstract type ICcomponent <: ICBCcomponent end
+abstract type BCcomponent <: ICBCcomponent end
 
 
 """
@@ -41,16 +43,14 @@ eqs = [
 
 @named sys = ODESystem(eqs)
 
-# Create domains.
-indepdomain = t ∈ Interval(t_min, t_max)
-
-partialdomains = [
-    x ∈ Interval(x_min, x_max),
-    y ∈ Interval(y_min, y_max)
-]
-
 # Create constant initial and boundary conditions = 16.0.
-icbc = ICBC(constIC(16.0, indepdomain, partialdomains), constBC(16.0, indepdomain, partialdomains))
+icbc = ICBC(
+    constBC(16.0, 
+        x ∈ Interval(x_min, x_max),
+        y ∈ Interval(y_min, y_max),
+    ),
+    constIC(4.0, t ∈ Interval(t_min, t_max)),
+)
 
 # Convert to PDESystem and add constant initial and boundary conditions.
 pdesys = sys + icbc
@@ -59,8 +59,6 @@ pdesys.bcs
 
 # output
 10-element Vector{Equation}:
- u(x, y, 0.0) ~ 16.0
- v(x, y, 0.0) ~ 16.0
  u(0.0, y, t) ~ 16.0
  u(1.0, y, t) ~ 16.0
  u(x, 0.0, t) ~ 16.0
@@ -69,6 +67,8 @@ pdesys.bcs
  v(1.0, y, t) ~ 16.0
  v(x, 0.0, t) ~ 16.0
  v(x, 1.0, t) ~ 16.0
+ u(x, y, 0.0) ~ 4.0
+ v(x, y, 0.0) ~ 4.0
 ```
 
 """
@@ -80,7 +80,14 @@ struct ICBC
 end
 
 function (icbc::ICBC)(sys::ModelingToolkit.ODESystem)::Vector{Equation}
-    o = [icbc(sys) for icbc ∈ icbc.icbc]
+    ic = icbc.icbc[findall(icbc -> isa(icbc, ICcomponent), icbc.icbc)]
+    @assert length(ic) == 1 "Only one independent domain is allowed."
+
+    bcs = icbc.icbc[findall(icbc -> isa(icbc, BCcomponent), icbc.icbc)]
+    partialdomains = vcat([bc.partialdomains for bc ∈ bcs]...)
+    @assert length(partialdomains) > 0 "At least one partial domain is required."
+    @assert length(unique(partialdomains)) == length(partialdomains) "Each partial domain must have only one set of boundary conditions."
+    o = [icbc(sys, ic[1].indepdomain, partialdomains) for icbc ∈ icbc.icbc]
     vcat(o...)
 end
 
@@ -93,23 +100,21 @@ specified by `val`.
 $(FIELDS)
 
 """
-struct constIC <: ICBCcomponent
+struct constIC <: ICcomponent
     "The value of the constant initial conditions."
-    val
+    val::Number
     "The independent domain, e.g. `t ∈ Interval(t_min, t_max)`."
     indepdomain::Symbolics.VarDomainPairing
-    "The partial domains, e.g. `[x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)]`."
-    partialdomains::Vector{Symbolics.VarDomainPairing}
 end
 
-function (ic::constIC)(sys::ModelingToolkit.ODESystem)
-    dims = [domain.variables for domain in ic.partialdomains]
-    statevars = add_dims(states(sys), [dims...; ic.indepdomain.variables])
+function (ic::constIC)(sys::ModelingToolkit.ODESystem, indepdomain::Symbolics.VarDomainPairing, allpartialdomains::Vector{Symbolics.VarDomainPairing})
+    dims = [domain.variables for domain in allpartialdomains]
+    statevars = add_dims(states(sys), [dims...; indepdomain.variables])
     
     bcs = Equation[]
     
     for state ∈ statevars
-        push!(bcs, state.val.f(dims..., ic.indepdomain.domain.left) ~ ic.val)
+        push!(bcs, state.val.f(dims..., indepdomain.domain.left) ~ ic.val)
     end
 
     bcs
@@ -124,30 +129,28 @@ specified by `val`.
 $(FIELDS)
 
 """
-struct constBC <: ICBCcomponent
+struct constBC <: BCcomponent
     "The value of the constant boundary conditions."
-    val
-    "The independent domain, e.g. `t ∈ Interval(t_min, t_max)`."
-    indepdomain::Symbolics.VarDomainPairing
+    val::Number
     "The partial domains, e.g. `[x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)]`."
     partialdomains::Vector{Symbolics.VarDomainPairing}
-    "The indexes of the domains that these boundary conditons are applied to, e.g. `1,2`. Leave empty if you want to apply to all partial domains."
-    activepartialdomainindex
 
-    constBC(val, indepdomain::Symbolics.VarDomainPairing, partialdomains::Vector{Symbolics.VarDomainPairing}) = new(val, indepdomain, partialdomains, 1:length(partialdomains))
-    constBC(val, indepdomain::Symbolics.VarDomainPairing, partialdomains::Vector{Symbolics.VarDomainPairing}, activepartialdomainindex...) = new(val, indepdomain, partialdomains, activepartialdomainindex)
+    constBC(val::Number, partialdomains::Symbolics.VarDomainPairing...) = new(val, [partialdomains...])
 end
 
-function (bc::constBC)(sys::ModelingToolkit.ODESystem)
-    dims = [domain.variables for domain in bc.partialdomains]
-    statevars = add_dims(states(sys), [dims...; bc.indepdomain.variables])
+function (bc::constBC)(sys::ModelingToolkit.ODESystem, indepdomain::Symbolics.VarDomainPairing, allpartialdomains::Vector{Symbolics.VarDomainPairing})
+    dims = [domain.variables for domain in allpartialdomains]
+    statevars = add_dims(states(sys), [dims...; indepdomain.variables])
     
     bcs = Equation[]
+
+    activepartialdomainindex = vcat((y -> findall(x -> x == y, allpartialdomains)).(bc.partialdomains)...)
     
     for state ∈ statevars
-        for (i, domain) ∈ enumerate(bc.partialdomains)
+        for (j, i) ∈ enumerate(activepartialdomainindex)
+            domain = bc.partialdomains[j]
             for edge ∈ [domain.domain.left, domain.domain.right]
-                args = Any[dims..., bc.indepdomain.variables]
+                args = Any[dims..., indepdomain.variables]
                 args[i] = edge
                 push!(bcs, state.val.f(args...) ~ bc.val)
             end
@@ -165,33 +168,32 @@ Construct zero-gradient boundary conditions for the given `partialdomains`.
 $(FIELDS)
 
 """
-struct zerogradBC <: ICBCcomponent
-    "The independent domain, e.g. `t ∈ Interval(t_min, t_max)`."
-    indepdomain::Symbolics.VarDomainPairing
-    "All of partial domains, e.g. `[x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)]`."
+struct zerogradBC <: BCcomponent
+    "The partial domains, e.g. `[x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)]`."
     partialdomains::Vector{Symbolics.VarDomainPairing}
-    "The indexes of the domains that these boundary conditons are applied to, e.g. `1,2`. Leave empty if you want to apply to all partial domains."
-    activepartialdomainindex
-    zerogradBC(indepdomain::Symbolics.VarDomainPairing, partialdomains::Vector{Symbolics.VarDomainPairing}) = new(indepdomain, partialdomains, 1:length(partialdomains))
-    zerogradBC(indepdomain::Symbolics.VarDomainPairing, partialdomains::Vector{Symbolics.VarDomainPairing}, activepartialdomainindex...) = new(indepdomain, partialdomains, activepartialdomainindex)
+
+    zerogradBC(partialdomains::Symbolics.VarDomainPairing...) = new([partialdomains...])
 end
 
-function (bc::zerogradBC)(sys::ModelingToolkit.ODESystem)
-    dims = [domain.variables for domain in bc.partialdomains]
-    statevars = add_dims(states(sys), [dims...; bc.indepdomain.variables])
+function (bc::zerogradBC)(sys::ModelingToolkit.ODESystem, indepdomain::Symbolics.VarDomainPairing, allpartialdomains::Vector{Symbolics.VarDomainPairing})
+    dims = [domain.variables for domain in allpartialdomains]
+    statevars = add_dims(states(sys), [dims...; indepdomain.variables])
     
     bcs = Equation[]
 
-    D = Differential(bc.indepdomain.variables)
+    D = Differential(indepdomain.variables)
+
+    activepartialdomainindex = vcat((y -> findall(x -> x == y, allpartialdomains)).(bc.partialdomains)...)
 
     for state ∈ statevars
-        for i ∈ bc.activepartialdomainindex
-            domain = bc.partialdomains[i]
+        for (j, i) ∈ enumerate(activepartialdomainindex)
+            domain = bc.partialdomains[j]
             for edge ∈ [domain.domain.left, domain.domain.right]
-                args = Any[dims..., bc.indepdomain.variables]
+                args = Any[dims..., indepdomain.variables]
                 args[i] = edge
                 push!(bcs, D(state.val.f(args...)) ~ 0.0)
             end
+            j += 1
         end
     end
 
@@ -201,7 +203,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Construct period boundary conditions for the given `partialdomains`.
+Construct periodic boundary conditions for the given `partialdomains`.
 Periodic boundary conditions are defined as when the value at one
 side of the domain is set equal to the value at the other side, so 
 that the domain "wraps around" from one side to the other.
@@ -209,30 +211,27 @@ that the domain "wraps around" from one side to the other.
 $(FIELDS)
 
 """
-struct periodicBC <: ICBCcomponent
-    "The independent domain, e.g. `t ∈ Interval(t_min, t_max)`."
-    indepdomain::Symbolics.VarDomainPairing
-    "All of partial domains, e.g. `[x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)]`."
+struct periodicBC <: BCcomponent
+    "The partial domains, e.g. `[x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)]`."
     partialdomains::Vector{Symbolics.VarDomainPairing}
-    "The indexes of the domains that these boundary conditons are applied to, e.g. `1,2`. Leave empty if you want to apply to all partial domains."
-    activepartialdomainindex
 
-    periodicBC(indepdomain::Symbolics.VarDomainPairing, partialdomains::Vector{Symbolics.VarDomainPairing}) = new(indepdomain, partialdomains, 1:length(partialdomains))
-    periodicBC(indepdomain::Symbolics.VarDomainPairing, partialdomains::Vector{Symbolics.VarDomainPairing}, activepartialdomainindex...) = new(indepdomain, partialdomains, activepartialdomainindex)
+    periodicBC(partialdomains::Symbolics.VarDomainPairing...) = new([partialdomains...])
 end
 
-function (bc::periodicBC)(sys::ModelingToolkit.ODESystem)
-    dims = [domain.variables for domain in bc.partialdomains]
-    statevars = add_dims(states(sys), [dims...; bc.indepdomain.variables])
+function (bc::periodicBC)(sys::ModelingToolkit.ODESystem, indepdomain::Symbolics.VarDomainPairing, allpartialdomains::Vector{Symbolics.VarDomainPairing})
+    dims = [domain.variables for domain in allpartialdomains]
+    statevars = add_dims(states(sys), [dims...; indepdomain.variables])
     
     bcs = Equation[]
 
+    activepartialdomainindex = vcat((y -> findall(x -> x == y, allpartialdomains)).(bc.partialdomains)...)
+
     for state ∈ statevars
-        for i ∈ bc.activepartialdomainindex
-            domain = bc.partialdomains[i]
-            argsleft = Any[dims..., bc.indepdomain.variables]
+        for (j, i) ∈ enumerate(activepartialdomainindex)
+            domain = bc.partialdomains[j]
+            argsleft = Any[dims..., indepdomain.variables]
             argsleft[i] = domain.domain.left
-            argsright = Any[dims..., bc.indepdomain.variables]
+            argsright = Any[dims..., indepdomain.variables]
             argsright[i] = domain.domain.right
             push!(bcs, state.val.f(argsleft...) ~ state.val.f(argsright...))
         end
@@ -247,7 +246,8 @@ $(METHODLIST)
 Returns the dimensions of the independent and partial domains associated with these 
 initial or boundary conditions.
 """
-dims(icbc::ICBCcomponent) = [[domain.variables for domain in icbc.partialdomains]..., icbc.indepdomain.variables]
+dims(icbc::ICcomponent) = [icbc.indepdomain.variables]
+dims(icbc::BCcomponent) = [domain.variables for domain in icbc.partialdomains]
 dims(icbc::ICBC) = unique(vcat(dims.(icbc.icbc)...))
 
 """
@@ -255,7 +255,8 @@ $(METHODLIST)
 
 Returns the domains associated with these initial or boundary conditions.
 """
-domains(icbc::ICBCcomponent) = [icbc.partialdomains..., icbc.indepdomain]
+domains(icbc::ICcomponent) = [icbc.indepdomain]
+domains(icbc::BCcomponent) = icbc.partialdomains
 domains(icbc::ICBC) = unique(vcat(domains.(icbc.icbc)...))
 
 function Base.:(+)(sys::ModelingToolkit.ODESystem, icbc::ICBC)::ModelingToolkit.PDESystem
