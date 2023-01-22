@@ -165,7 +165,7 @@ end
 Base.:(+)(icbc::ICBC, composed::ComposedEarthSciMLSystem)::ComposedEarthSciMLSystem = composed + icbc
 
 function Base.:(+)(sys::EarthSciMLODESystem, icbc::ICBC)::ComposedEarthSciMLSystem
-    ComposedEarthSciMLSystem(sys, icbc)
+    ComposedEarthSciMLSystem(AbstractEarthSciMLSystem[sys], icbc, [])
 end
 
 function get_mtk(sys::ComposedEarthSciMLSystem)::ModelingToolkit.AbstractSystem
@@ -183,7 +183,9 @@ function get_mtk(sys::ComposedEarthSciMLSystem)::ModelingToolkit.AbstractSystem
     end
 
     # Create the connector system of equations.
-    @named connectors = ODESystem(vcat([s.eqs for s ∈ connectorsystems]...))
+    if length(connectorsystems) > 0
+        @named connectors = ODESystem(vcat([s.eqs for s ∈ connectorsystems]...))
+    end
 
     # Finalize the concrete systems.
     mtksys = []
@@ -195,7 +197,12 @@ function get_mtk(sys::ComposedEarthSciMLSystem)::ModelingToolkit.AbstractSystem
         end
     end
     # Compose everything together.
-    o = compose(connectors, mtksys...)
+    o = nothing
+    if length(connectorsystems) > 0
+        o = compose(connectors, mtksys...)
+    else
+        o = compose(mtksys...)
+    end
 
     if sys.icbc !== nothing
         o += sys.icbc
