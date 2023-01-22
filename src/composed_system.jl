@@ -1,4 +1,4 @@
-export AbstractEarthSciMLSystem, EarthSciMLSystem, ComposedEarthSciMLSystem, ConnectorSystem, get_mtk 
+export AbstractEarthSciMLSystem, EarthSciMLODESystem, ComposedEarthSciMLSystem, ConnectorSystem, get_mtk 
 
 """
 One or more ModelingToolkit systems of equations. EarthSciML uses custom types to allow 
@@ -7,9 +7,9 @@ automatic composition of different systems together.
 abstract type AbstractEarthSciMLSystem end
 
 """
-A type of actual implementations of systems.
+A type for actual implementations of ODE systems.
 """
-abstract type EarthSciMLSystem <: AbstractEarthSciMLSystem end
+abstract type EarthSciMLODESystem <: AbstractEarthSciMLSystem end
 
 """
 ```julia
@@ -38,7 +38,7 @@ using ModelingToolkit
 @parameters t
 
 # Create three systems which we will compose together.
-struct SEqn <: EarthSciMLSystem
+struct SEqn <: EarthSciMLODESystem
     sys::ODESystem
 
     function SEqn(t) 
@@ -51,7 +51,7 @@ struct SEqn <: EarthSciMLSystem
     end
 end
 
-struct IEqn <: EarthSciMLSystem
+struct IEqn <: EarthSciMLODESystem
     sys::ODESystem
 
     function IEqn(t) 
@@ -64,7 +64,7 @@ struct IEqn <: EarthSciMLSystem
     end
 end
 
-struct REqn <: EarthSciMLSystem
+struct REqn <: EarthSciMLODESystem
     sys::ODESystem
 
     function REqn(t) 
@@ -129,9 +129,18 @@ equations(structural_simplify(sirfinal))
 ```
 """
 struct ComposedEarthSciMLSystem <: AbstractEarthSciMLSystem
+    "Model components to be composed together"
     systems::Vector{AbstractEarthSciMLSystem}
+    "Initial and boundary conditions"
+    icbc
+    """
+    A vector of functions where each function takes as an argument the resulting PDESystem after ICBCs are 
+    added to this sytem, and returns a transformed PDESystem.
+    """
+    pdefunctions::AbstractVector
 
-    ComposedEarthSciMLSystem(systems::AbstractEarthSciMLSystem...) = new([systems...])
+    ComposedEarthSciMLSystem(systems::Vector{AbstractEarthSciMLSystem}, icbc, f::AbstractVector) = new(systems, icbc, f)
+    ComposedEarthSciMLSystem(systems::AbstractEarthSciMLSystem...) = new([systems...], nothing, [])
 end
 
 function Base.:(+)(composed::ComposedEarthSciMLSystem, sys::AbstractEarthSciMLSystem)::ComposedEarthSciMLSystem
@@ -142,11 +151,21 @@ function Base.:(+)(composed::ComposedEarthSciMLSystem, sys::AbstractEarthSciMLSy
             push!(o, (s + sys).systems...)
         end
     end
-    ComposedEarthSciMLSystem(unique(o)...)
+    ComposedEarthSciMLSystem(unique(o), composed.icbc, composed.pdefunctions)
 end
 
 function Base.:(+)(sys::AbstractEarthSciMLSystem, composed::ComposedEarthSciMLSystem)::ComposedEarthSciMLSystem
     composed + sys
+end
+
+function Base.:(+)(composed::ComposedEarthSciMLSystem, icbc::ICBC)::ComposedEarthSciMLSystem
+    @assert composed.icbc === nothing "Cannot add two sets ICBCs to a system."
+    ComposedEarthSciMLSystem(composed.systems, icbc, composed.pdefunctions)
+end
+Base.:(+)(icbc::ICBC, composed::ComposedEarthSciMLSystem)::ComposedEarthSciMLSystem = composed + icbc
+
+function Base.:(+)(sys::EarthSciMLODESystem, icbc::ICBC)::ComposedEarthSciMLSystem
+    ComposedEarthSciMLSystem(sys, icbc)
 end
 
 function get_mtk(sys::ComposedEarthSciMLSystem)::ModelingToolkit.AbstractSystem
@@ -156,7 +175,7 @@ function get_mtk(sys::ComposedEarthSciMLSystem)::ModelingToolkit.AbstractSystem
     for s ∈ sys.systems
         if isa(s, ConnectorSystem)
             push!(connectorsystems, s)
-        elseif isa(s, EarthSciMLSystem)
+        elseif isa(s, EarthSciMLODESystem)
             push!(systems, s)
         else
             error("Cannot compose system of type $(typeof(s))")
@@ -176,7 +195,15 @@ function get_mtk(sys::ComposedEarthSciMLSystem)::ModelingToolkit.AbstractSystem
         end
     end
     # Compose everything together.
-    compose(connectors, mtksys...)
+    o = compose(connectors, mtksys...)
+
+    if sys.icbc !== nothing
+        o += sys.icbc
+        for f ∈ sys.pdefunctions
+            o = f(o)
+        end    
+    end
+    return o
 end
 
 """
@@ -190,4 +217,4 @@ struct ConnectorSystem <: AbstractEarthSciMLSystem
     to::AbstractEarthSciMLSystem
 end
 
-get_mtk(sys::ConnectorSystem) = error("Cannot convert a connector system to ModelingToolkit")
+get_mtk(_::ConnectorSystem) = error("Cannot convert a connector system to ModelingToolkit")

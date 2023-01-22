@@ -3,7 +3,7 @@ using ModelingToolkit
 
 @parameters t
 
-struct ExampleSys <: EarthSciMLSystem
+struct ExampleSys <: EarthSciMLODESystem
     sys::ODESystem
 
     function ExampleSys(t; name)

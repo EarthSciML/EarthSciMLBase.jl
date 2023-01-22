@@ -4,7 +4,7 @@ using ModelingToolkit
 @testset "Composed System" begin
     @parameters t
 
-    struct SEqn <: EarthSciMLSystem
+    struct SEqn <: EarthSciMLODESystem
         sys::ODESystem
     
         function SEqn(t) 
@@ -17,7 +17,7 @@ using ModelingToolkit
         end
     end
     
-    struct IEqn <: EarthSciMLSystem
+    struct IEqn <: EarthSciMLODESystem
         sys::ODESystem
     
         function IEqn(t) 
@@ -30,7 +30,7 @@ using ModelingToolkit
         end
     end
     
-    struct REqn <: EarthSciMLSystem
+    struct REqn <: EarthSciMLODESystem
         sys::ODESystem
     
         function REqn(t) 
