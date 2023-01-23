@@ -13,7 +13,7 @@ abstract type EarthSciMLODESystem <: AbstractEarthSciMLSystem end
 
 """
 ```julia
-    get_mtk(sys::AbstractEarthSciMLSystem)
+$(TYPEDSIGNATURES)
 ```
 Return the ModelingToolkit version of this system.
 """
@@ -25,11 +25,11 @@ $(TYPEDSIGNATURES)
 
 A system for composing together other systems using the `+` operator.
 
-## Example
 The easiest way to explain how this works and why we might want to do it is with an example.
 The following example is modified from the ModelingToolkit.jl documentation 
 [here](https://docs.sciml.ai/ModelingToolkit/dev/basics/Composition/#Inheritance-and-Combine):
 
+# Example:
 ```jldoctest
 using EarthSciMLBase
 using ModelingToolkit

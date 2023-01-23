@@ -23,7 +23,7 @@ ModelingToolkit.jl ODESystem or Catalyst.jl ReactionSystem.
 $(FIELDS)
 
 # Example:
-```jldoctest
+```@example
 using EarthSciMLBase
 using ModelingToolkit, DomainSets
 
@@ -56,19 +56,6 @@ icbc = ICBC(
 pdesys = sys + icbc
 
 pdesys.bcs
-
-# output
-10-element Vector{Equation}:
- u(0.0, y, t) ~ 16.0
- u(1.0, y, t) ~ 16.0
- u(x, 0.0, t) ~ 16.0
- u(x, 1.0, t) ~ 16.0
- v(0.0, y, t) ~ 16.0
- v(1.0, y, t) ~ 16.0
- v(x, 0.0, t) ~ 16.0
- v(x, 1.0, t) ~ 16.0
- u(x, y, 0.0) ~ 4.0
- v(x, y, 0.0) ~ 4.0
 ```
 
 """
@@ -267,7 +254,7 @@ function (bc::periodicBC)(states::AbstractVector, indepdomain::Symbolics.VarDoma
 end
 
 """
-$(METHODLIST)
+$(TYPEDSIGNATURES)
 
 Returns the dimensions of the independent and partial domains associated with these 
 initial or boundary conditions.
@@ -277,7 +264,7 @@ dims(icbc::BCcomponent) = Num[domain.variables for domain in icbc.partialdomains
 dims(icbc::ICBC) = unique(vcat(dims.(icbc.icbc)...))
 
 """
-$(METHODLIST)
+$(TYPEDSIGNATURES)
 
 Returns the domains associated with these initial or boundary conditions.
 """
@@ -287,7 +274,8 @@ domains(icbc::ICBC) = unique(vcat(domains.(icbc.icbc)...))
 
 function Base.:(+)(sys::ModelingToolkit.ODESystem, icbc::ICBC)::ModelingToolkit.PDESystem
     dimensions = dims(icbc)
-    statevars = states(sys)
+    allvars = states(sys)
+    statevars = states(structural_simplify(sys))
     # TODO(CT): Update once the MTK get_defaults function can get defaults for composed system.
     # defaults = ModelingToolkit.get_defaults(sys)
     defaults = get_defaults_all(sys)
@@ -296,8 +284,8 @@ function Base.:(+)(sys::ModelingToolkit.ODESystem, icbc::ICBC)::ModelingToolkit.
         error("All parameters in the system of equations must have default values.")
     end
     ivs = dims(icbc) # New dimensions are the independent variables.
-    dvs = add_dims(statevars, dimensions) # Add new dimensions to dependent variables.
-    eqs = Vector{Equation}([add_dims(eq, statevars, dimensions) for eq in equations(sys)]) # Add new dimensions to equations.
+    dvs = add_dims(allvars, dimensions) # Add new dimensions to dependent variables.
+    eqs = Vector{Equation}([add_dims(eq, allvars, dimensions) for eq in equations(sys)]) # Add new dimensions to equations.
     PDESystem(eqs, icbc(statevars), domains(icbc), ivs, dvs, ps, name=nameof(sys), defaults=defaults)
 end
 

@@ -1,16 +1,81 @@
 export Advection, MeanWind, ConstantWind
 
+"""
+$(SIGNATURES)
+
+A model component that represents the mean wind velocity, where `t` is the independent variable
+and `ndims` is the number of dimensions that wind is traveling in.
+"""
 struct MeanWind <: EarthSciMLODESystem
     sys::ODESystem
-    MeanWind(t, ndims) = new(ODESystem(Equation[], t, collect((@variables u[1:ndims](t))[1]), []; name=:meanwind))
+    function MeanWind(t, ndims) 
+        uvars = (@variables u(t) v(t) w(t))[1:ndims]
+        new(ODESystem(Equation[], t, uvars, []; name=:meanwind))
+    end
 end
 
+"""
+$(SIGNATURES)
+
+Apply advection to a model.
+
+# Example
+
+```@example
+using EarthSciMLBase
+using DomainSets, MethodOfLines, ModelingToolkit, Plots
+
+# Create our independent variable `t` and our partially-independent variable `x`.
+@parameters t, x
+
+# Create our ODE system of equations as a subtype of `EarthSciMLODESystem`.
+# Creating our system in this way allows us to convert it to a PDE system 
+# using just the `+` operator as shown below.
+struct ExampleSys <: EarthSciMLODESystem
+    sys::ODESystem
+    function ExampleSys(t; name)
+        @variables y(t)
+        @parameters p=2.0
+        D = Differential(t)
+        new(ODESystem([D(y) ~ p], t; name))
+    end
+end
+@named sys = ExampleSys(t)
+
+# Create our initial and boundary conditions.
+icbc = ICBC(constBC(1.0, x ∈ Interval(0, 1.0)), constIC(0.0, t ∈ Interval(0, 1.0)))
+
+# Convert our ODE system to a PDE system and add advection to each of the state variables.
+# We're also adding a constant wind in the x-direction, with a speed of 1.0.
+sys_advection = sys + icbc + ConstantWind(t, 1.0) + Advection()
+sys_mtk = get_mtk(sys_advection)
+
+# Discretize the system and solve it.
+discretization = MOLFiniteDifference([x=>10], t, approx_order=2)
+@time prob = discretize(sys_mtk, discretization)
+@time sol = solve(prob, Tsit5(), saveat=0.1)
+
+# Plot the solution.
+discrete_x = sol[x]
+discrete_t = sol[t]
+@variables sys₊y(..)
+soly = sol[sys₊y(x, t)]
+anim = @animate for k in 1:length(discrete_t)
+    plot(soly[1:end, k], title="t=\$(discrete_t[k])", ylim=(0,2.5), lab=:none)
+end
+gif(anim, fps = 8)
+```
+"""
 struct Advection end
 
+# Create a system of equations that apply advection to the variables in `vars`, 
+# using the given initial and boundary conditions to determine which directions
+# to advect in.
 function advection(vars, icbc::ICBC)
     iv = ivar(icbc)
     pvs = pvars(icbc)
-    uvars = (@variables meanwind₊u[1:length(pvs)](..))[1]
+    @assert length(pvs) <= 3 "Advection is only implemented for 3 or fewer dimensions."
+    uvars = (@variables meanwind₊u(..) meanwind₊v(..) meanwind₊w(..))[1:length(pvs)]
     varsdims = Num[v for v ∈ vars]
     udims = Num[ui(pvs..., iv) for ui ∈ uvars]
     eqs = Equation[]
@@ -23,185 +88,43 @@ function advection(vars, icbc::ICBC)
     eqs
 end
 
-function Base.:(+)(c::ComposedEarthSciMLSystem, a::Advection)::ComposedEarthSciMLSystem
+function Base.:(+)(c::ComposedEarthSciMLSystem, _::Advection)::ComposedEarthSciMLSystem
     @assert isa(c.icbc, ICBC) "The system must have initial and boundary conditions to add advection."
     
     # Add in a model component to allow the specification of the wind velocity.
     c += MeanWind(ivar(c.icbc), length(pvars(c.icbc)))
     
     function f(sys::ModelingToolkit.PDESystem)
-        # Get the variables we want to advect.
-        vars = pde_states(sys) # TODO(CT): Change once MTK can get the states of a PDESystem.
-        eqs = advection(vars, c.icbc)
+        eqs = advection(sys.dvs, c.icbc)
         operator_compose!(sys, eqs)
     end
     ComposedEarthSciMLSystem(c.systems, c.icbc, [c.pdefunctions; f])
 end
 Base.:(+)(a::Advection, c::ComposedEarthSciMLSystem)::ComposedEarthSciMLSystem = c + a
 
-function is_variable(var)::Bool
-    if haskey(var.metadata, Symbolics.VariableSource)
-        return var.metadata[Symbolics.VariableSource][1] == :variables
-    elseif haskey(var.metadata.value.metadata, Symbolics.VariableSource)
-        return var.metadata.value.metadata[Symbolics.VariableSource][1] == :variables
-    else
-        error("unknown type")
-    end
-end
+"""
+$(SIGNATURES)
 
-# TODO(CT): Delete once MTK can get the states of a PDESystem.
-function pde_states(sys::ModelingToolkit.PDESystem)
-    s = Num[]
-    for eq ∈ equations(sys)
-        vars = Symbolics.get_variables(eq)
-        for var ∈ vars
-            var
-            if is_variable(var)
-                push!(s, var)
-            end
-        end
-    end
-    s
-end
-
+Construct a constant wind velocity model component.
+"""
 struct ConstantWind <: EarthSciMLODESystem
     sys::ODESystem
+    ndims
 
     function ConstantWind(t, vals...)
-        @assert length(vals) > 0 "Must specify at least one wind component speed."
-        @variables u[1:length(vals)](t)
-        eqs = Symbolics.scalarize(u .~ collect(vals))
-        new(ODESystem(eqs, t, u, []; name=:constantwind))
+        @assert 0 < length(vals) <= 3 "Must specify between one and three wind component speeds."
+        uvars = (@variables u(t) v(t) w(t))[1:length(vals)]
+        eqs = Symbolics.scalarize(uvars .~ collect(vals))
+        new(ODESystem(eqs, t, uvars, []; name=:constantwind), length(vals))
     end
 end
 function Base.:(+)(mw::MeanWind, w::ConstantWind)::ComposedEarthSciMLSystem
-    @assert length(mw.sys.u) == length(w.sys.u) "The number of wind components must match the number of mean wind components."
+    eqs = [mw.sys.u ~ w.sys.u]
+    w.ndims >= 2 ? push!(eqs, mw.sys.v ~ w.sys.v) : nothing
+    w.ndims == 3 ? push!(eqs, mw.sys.w ~ w.sys.w) : nothing
     ComposedEarthSciMLSystem(ConnectorSystem(
-        Symbolics.scalarize(mw.sys.u .~ w.sys.u),
+        eqs,
         mw, w,
     ))
 end
 Base.:(+)(w::ConstantWind, mw::MeanWind)::ComposedEarthSciMLSystem = mw + w
-
-using DomainSets
-
-@parameters t x y
-
-icbc = ICBC(
-    periodicBC(x ∈ Interval(0, 1.0)),
-    constBC(1.0, y ∈ Interval(0, 1.0)),
-    constIC(0.0, t ∈ Interval(0, 1.0)),
-)
-
-scalar = @variables c1(..) c2(..)
-xxx = advection(scalar, icbc)
-
-@variables u[1:length(pvars(icbc))](..)
-xxy = PDESystem(
-    [equations(xxx); [u[1](x,y,t) ~ 1.0, u[2](x,y,t) ~ -1.0]],
-    xxx.bcs,
-    domains(icbc),
-    xxx.ivs,
-    xxx.dvs;
-    name=:advection,
-)
-
-
-N = 10
-using MethodOfLines, DifferentialEquations
-
-# Integers for x and y are interpreted as number of points. Use a Float to directly specify stepsizes dx and dy.
-discretization = MOLFiniteDifference([x=>N, y=>N], t, approx_order=2)
-@time prob = discretize(xxy,discretization)
-@time sol = solve(prob, Tsit5(), saveat=0.1)
-
-discrete_x = sol[x]
-discrete_y = sol[y]
-discrete_t = sol[t]
-
-solc1 = sol[c1(x, y, t)]
-solc2 = sol[c2(x, y, t)]
-
-using Plots
-anim = @animate for k in 1:length(discrete_t)
-    heatmap(solc1[1:end, 1:end, k]', title="$(discrete_t[k])")
-end
-gif(anim, fps = 8)
-
-
-######
-
-@parameters t, x
-
-struct ExampleSys <: EarthSciMLODESystem
-    sys::ODESystem
-
-    function ExampleSys(t; name)
-        @variables x(t)
-        @parameters p=1.0
-        D = Differential(t)
-        new(ODESystem([D(x) ~ p], t; name))
-    end
-end
-
-@named sys1 = ExampleSys(t)
-@named sys2 = ExampleSys(t)
-icbc = ICBC(constBC(1.0, x ∈ Interval(0, 1.0)), constIC(0.0, t ∈ Interval(0, 1.0)))
-
-combined = operator_compose(sys1, sys2)
-
-combined_pde = combined + icbc + ConstantWind(t, 1.0) + Advection()
-
-combined_mtk = get_mtk(combined_pde)
-
-display(equations(combined_mtk))
-
-combined_mtk.bcs
-
-structural_simplify(combined_mtk)
-
-using MethodOfLines, DifferentialEquations
-
-discretization = MOLFiniteDifference([x=>10], t, approx_order=2)
-@time prob = discretize(combined_mtk, discretization)
-@time sol = solve(prob, Tsit5(), saveat=0.1)
-
-discrete_x = sol[x]
-discrete_t = sol[t]
-
-solc1 = sol[c1(x, y, t)]
-solc2 = sol[c2(x, y, t)]
-
-using Plots
-anim = @animate for k in 1:length(discrete_t)
-    heatmap(solc1[1:end, 1:end, k]', title="$(discrete_t[k])")
-end
-gif(anim, fps = 8)
-
-
-
-######
-
-@parameters x
-@variables t u(..)
-Dxx = Differential(x)^2
-Dtt = Differential(t)^2
-Dt = Differential(t)
-
-#2D PDE
-C=1
-eq  = Dtt(u(t,x)) ~ C^2*Dxx(u(t,x))
-
-# Initial and boundary conditions
-bcs = [u(t,0) ~ 0.,# for all t > 0
-       u(t,1) ~ 0.,# for all t > 0
-       u(0,x) ~ x*(1. - x), #for all 0 < x < 1
-       Dt(u(0,x)) ~ 0. ] #for all  0 < x < 1]
-
-# Space and time domains
-domains = [t ∈ (0.0,1.0),
-           x ∈ (0.0,1.0)]
-
-@named pde_system = PDESystem(eq,bcs,domains,[t,x],[u])
-
-structural_simplify(pde_system)

@@ -6,5 +6,6 @@ include("add_dims.jl")
 include("icbc.jl")
 include("composed_system.jl")
 include("operator_compose.jl")
+include("advection.jl")
 
 end
