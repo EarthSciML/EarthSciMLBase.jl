@@ -6,7 +6,7 @@ CurrentModule = EarthSciMLBase
 
 ```@example
 using EarthSciMLBase
-using DomainSets, MethodOfLines, ModelingToolkit, Plots
+using DomainSets, MethodOfLines, ModelingToolkit, Plots, DifferentialEquations
 
 # Create our independent variable `t` and our partially-independent variable `x`.
 @parameters t, x
