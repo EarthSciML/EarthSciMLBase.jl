@@ -15,6 +15,12 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Examples" => [
+            "Initial and Boundary Conditions" => "example_icbc.md",
+            "Advection" => "example_advection.md",
+            "All together" => "example_all_together.md",
+        ],
+        "API Reference" => "api.md",
     ],
     strict=true,
 )

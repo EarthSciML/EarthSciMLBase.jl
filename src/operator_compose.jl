@@ -31,9 +31,10 @@ end
 combined = operator_compose(sys1, sys2)
 
 combined_mtk = get_mtk(combined)
-equations(structural_simplify(combined_mtk))
 
 # The simplified equation should be D(x) = p + sys2_xˍt, where sys2_xˍt is also equal to p.
+equations(structural_simplify(combined_mtk))
+
 # output
 1-element Vector{Equation}:
  Differential(t)(sys1₊x(t)) ~ sys1₊p + sys2₊sys2_xˍt(t)

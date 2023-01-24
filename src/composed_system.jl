@@ -183,8 +183,9 @@ function get_mtk(sys::ComposedEarthSciMLSystem)::ModelingToolkit.AbstractSystem
     end
 
     # Create the connector system of equations.
-    if length(connectorsystems) > 0
-        @named connectors = ODESystem(vcat([s.eqs for s ∈ connectorsystems]...))
+    connector_eqs = vcat([s.eqs for s ∈ connectorsystems]...)
+    if length(connector_eqs) > 0
+        @named connectors = ODESystem(connector_eqs)
     end
 
     # Finalize the concrete systems.
@@ -198,7 +199,7 @@ function get_mtk(sys::ComposedEarthSciMLSystem)::ModelingToolkit.AbstractSystem
     end
     # Compose everything together.
     o = nothing
-    if length(connectorsystems) > 0
+    if length(connector_eqs) > 0
         o = compose(connectors, mtksys...)
     else
         o = compose(mtksys...)
