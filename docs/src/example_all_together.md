@@ -76,13 +76,13 @@ plot(odesol)
 # add the same time.
 x_min = y_min = t_min = 0.0
 x_max = y_max = t_max = 1.0
-icbc = ICBC(
+domain = DomainInfo(
     periodicBC(x ∈ Interval(x_min, x_max)),
     zerogradBC(y ∈ Interval(y_min, y_max)),
     constIC(4.0, t ∈ Interval(t_min, t_max)),
 )
 
-sys_pde = sys + icbc + ConstantWind(t, 1.0, 1.0) + Advection()
+sys_pde = sys + domain + ConstantWind(t, 1.0, 1.0) + Advection()
 
 # Now we can inspect this new system that we've created:
 sys_pde_mtk = get_mtk(sys_pde)

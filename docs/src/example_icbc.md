@@ -25,7 +25,7 @@ eqs = [
 @named sys = ODESystem(eqs)
 
 # Create constant initial conditions = 16.0 and boundary conditions = 4.0.
-icbc = ICBC(
+icbc = DomainInfo(
     constBC(16.0, 
         x ∈ Interval(x_min, x_max),
         y ∈ Interval(y_min, y_max),

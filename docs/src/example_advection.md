@@ -26,11 +26,11 @@ end
 @named sys = ExampleSys(t)
 
 # Create our initial and boundary conditions.
-icbc = ICBC(constBC(1.0, x ∈ Interval(0, 1.0)), constIC(0.0, t ∈ Interval(0, 1.0)))
+domain = DomainInfo(constBC(1.0, x ∈ Interval(0, 1.0)), constIC(0.0, t ∈ Interval(0, 1.0)))
 
 # Convert our ODE system to a PDE system and add advection to each of the state variables.
 # We're also adding a constant wind in the x-direction, with a speed of 1.0.
-sys_advection = sys + icbc + ConstantWind(t, 1.0) + Advection()
+sys_advection = sys + domain + ConstantWind(t, 1.0) + Advection()
 sys_mtk = get_mtk(sys_advection)
 
 # Discretize the system and solve it.
