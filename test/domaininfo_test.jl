@@ -21,10 +21,10 @@ indepdomain = t ∈ Interval(t_min, t_max)
 partialdomains = [x ∈ Interval(x_min, x_max),
     y ∈ Interval(y_min, y_max)]
 
-icbc = ICBC(constBC(16.0, partialdomains...), constIC(16.0, indepdomain))
+domain = DomainInfo(constBC(16.0, partialdomains...), constIC(16.0, indepdomain))
 
 @testset "dims" begin
-    dims_result = EarthSciMLBase.dims(icbc)
+    dims_result = EarthSciMLBase.dims(domain)
 
     dims_want = [x, y, t]
 
@@ -32,7 +32,7 @@ icbc = ICBC(constBC(16.0, partialdomains...), constIC(16.0, indepdomain))
 end
 
 @testset "domains" begin
-    domains_result = EarthSciMLBase.domains(icbc)
+    domains_result = EarthSciMLBase.domains(domain)
 
     domains_want = [
         x ∈ Interval(x_min, x_max),
@@ -66,21 +66,17 @@ end
             u(x_min, y, t) ~ 16.0,
             u(x_max, y, t) ~ 16.0,
             u(x, y_min, t) ~ 16.0,
-            u(x, y_max, t) ~ 16.0, 
-            
-            v(x_min, y, t) ~ 16.0,
+            u(x, y_max, t) ~ 16.0, v(x_min, y, t) ~ 16.0,
             v(x_max, y, t) ~ 16.0,
             v(x, y_min, t) ~ 16.0,
-            v(x, y_max, t) ~ 16.0, 
-            
-            u(x, y, t_min) ~ 16.0,
+            v(x, y_max, t) ~ 16.0, u(x, y, t_min) ~ 16.0,
             v(x, y, t_min) ~ 16.0,
         ]
 
         @named pdesys = PDESystem(eqs, bcs, domains, [x, y, t], [u(x, y, t), v(x, y, t)], [α => 10.0])
     end
 
-    pde_result = sys + icbc
+    pde_result = sys + domain
 
     @test isequal(pde_result.eqs, pde_want.eqs)
     @test isequal(pde_result.ivs, pde_want.ivs)
@@ -104,14 +100,10 @@ end
             m₁(x_min, y, t) ~ 16.0,
             m₁(x_max, y, t) ~ 16.0,
             m₁(x, y_min, t) ~ 16.0,
-            m₁(x, y_max, t) ~ 16.0, 
-            
-            m₂(x_min, y, t) ~ 16.0,
+            m₁(x, y_max, t) ~ 16.0, m₂(x_min, y, t) ~ 16.0,
             m₂(x_max, y, t) ~ 16.0,
             m₂(x, y_min, t) ~ 16.0,
-            m₂(x, y_max, t) ~ 16.0, 
-            
-            m₁(x, y, t_min) ~ 16.0,
+            m₂(x, y_max, t) ~ 16.0, m₁(x, y, t_min) ~ 16.0,
             m₂(x, y, t_min) ~ 16.0,
         ]
 
@@ -127,7 +119,7 @@ end
     rn = @reaction_network begin
         10.0, m₁ --> m₂
     end
-    pde_result = rn + icbc
+    pde_result = rn + domain
 
     @test isequal(pde_result.eqs, pde_want.eqs)
     @test isequal(pde_result.ivs, pde_want.ivs)
@@ -138,12 +130,12 @@ end
 end
 
 @testset "zero-grad and periodic" begin
-    icbc = ICBC(
+    domain = DomainInfo(
         periodicBC(x ∈ Interval(x_min, x_max)),
         zerogradBC(y ∈ Interval(y_min, y_max)),
         constIC(16.0, indepdomain),
     )
-    pdesys = sys + icbc
+    pdesys = sys + domain
 
     want_bcs = let
         @parameters x y t
@@ -155,9 +147,7 @@ end
             Dt(u(x, y_min, t)) ~ 0.0,
             Dt(u(x, y_max, t)) ~ 0.0,
             Dt(v(x, y_min, t)) ~ 0.0,
-            Dt(v(x, y_max, t)) ~ 0.0, 
-            
-            u(x, y, t_min) ~ 16.0,
+            Dt(v(x, y_max, t)) ~ 0.0, u(x, y, t_min) ~ 16.0,
             v(x, y, t_min) ~ 16.0,
         ]
     end
@@ -166,7 +156,7 @@ end
 end
 
 @testset "Solve PDE" begin
-    pdesys = sys + icbc
+    pdesys = sys + domain
     dx = dy = 0.5
     discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order=2, grid_align=center_align)
     prob = discretize(pdesys, discretization)
@@ -176,7 +166,7 @@ end
 
 @testset "Simplify" begin
     @parameters x, t
-    icbc = ICBC(
+    domain = DomainInfo(
         periodicBC(x ∈ Interval(0, 1)),
         constIC(16.0, t ∈ Interval(0, 1)),
     )
@@ -193,8 +183,8 @@ end
         end
     end
 
-    sys_icbc = ExSys(t) + icbc
-    sys_mtk = get_mtk(sys_icbc)
+    sys_domain = ExSys(t) + domain
+    sys_mtk = get_mtk(sys_domain)
 
     discretization = MOLFiniteDifference([x => 10], t, approx_order=2)
     prob = discretize(sys_mtk, discretization)

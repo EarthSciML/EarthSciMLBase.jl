@@ -131,15 +131,15 @@ equations(structural_simplify(sirfinal))
 struct ComposedEarthSciMLSystem <: AbstractEarthSciMLSystem
     "Model components to be composed together"
     systems::Vector{AbstractEarthSciMLSystem}
-    "Initial and boundary conditions"
-    icbc
+    "Initial and boundary conditions and other domain information"
+    domaininfo
     """
-    A vector of functions where each function takes as an argument the resulting PDESystem after ICBCs are 
+    A vector of functions where each function takes as an argument the resulting PDESystem after DomainInfo is 
     added to this sytem, and returns a transformed PDESystem.
     """
     pdefunctions::AbstractVector
 
-    ComposedEarthSciMLSystem(systems::Vector{AbstractEarthSciMLSystem}, icbc, f::AbstractVector) = new(systems, icbc, f)
+    ComposedEarthSciMLSystem(systems::Vector{AbstractEarthSciMLSystem}, domaininfo, f::AbstractVector) = new(systems, domaininfo, f)
     ComposedEarthSciMLSystem(systems::AbstractEarthSciMLSystem...) = new([systems...], nothing, [])
 end
 
@@ -151,21 +151,21 @@ function Base.:(+)(composed::ComposedEarthSciMLSystem, sys::AbstractEarthSciMLSy
             push!(o, (s + sys).systems...)
         end
     end
-    ComposedEarthSciMLSystem(unique(o), composed.icbc, composed.pdefunctions)
+    ComposedEarthSciMLSystem(unique(o), composed.domaininfo, composed.pdefunctions)
 end
 
 function Base.:(+)(sys::AbstractEarthSciMLSystem, composed::ComposedEarthSciMLSystem)::ComposedEarthSciMLSystem
     composed + sys
 end
 
-function Base.:(+)(composed::ComposedEarthSciMLSystem, icbc::ICBC)::ComposedEarthSciMLSystem
-    @assert composed.icbc === nothing "Cannot add two sets ICBCs to a system."
-    ComposedEarthSciMLSystem(composed.systems, icbc, composed.pdefunctions)
+function Base.:(+)(composed::ComposedEarthSciMLSystem, domaininfo::DomainInfo)::ComposedEarthSciMLSystem
+    @assert composed.domaininfo === nothing "Cannot add two sets of DomainInfo to a system."
+    ComposedEarthSciMLSystem(composed.systems, domaininfo, composed.pdefunctions)
 end
-Base.:(+)(icbc::ICBC, composed::ComposedEarthSciMLSystem)::ComposedEarthSciMLSystem = composed + icbc
+Base.:(+)(di::DomainInfo, composed::ComposedEarthSciMLSystem)::ComposedEarthSciMLSystem = composed + di
 
-function Base.:(+)(sys::EarthSciMLODESystem, icbc::ICBC)::ComposedEarthSciMLSystem
-    ComposedEarthSciMLSystem(AbstractEarthSciMLSystem[sys], icbc, [])
+function Base.:(+)(sys::EarthSciMLODESystem, di::DomainInfo)::ComposedEarthSciMLSystem
+    ComposedEarthSciMLSystem(AbstractEarthSciMLSystem[sys], di, [])
 end
 
 function get_mtk(sys::ComposedEarthSciMLSystem)::ModelingToolkit.AbstractSystem
@@ -205,8 +205,8 @@ function get_mtk(sys::ComposedEarthSciMLSystem)::ModelingToolkit.AbstractSystem
         o = compose(mtksys...)
     end
 
-    if sys.icbc !== nothing
-        o += sys.icbc
+    if sys.domaininfo !== nothing
+        o += sys.domaininfo
         for f ∈ sys.pdefunctions
             o = f(o)
         end    

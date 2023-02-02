@@ -1,8 +1,8 @@
-export ICBC, ICBCcomponent, constIC, constBC, zerogradBC, periodicBC
+export DomainInfo, ICBCcomponent, constIC, constBC, zerogradBC, periodicBC
 
 """
 Initial and boundary condition components that can be combined to 
-create an ICBC object.
+create an DomainInfo object.
 
 $(METHODLIST)
 """
@@ -12,33 +12,50 @@ abstract type BCcomponent <: ICBCcomponent end
 
 
 """
-```julia
-ICBC(icbc::ICBCcomponent...)
-```
+$(SIGNATURES)
 
-Initial and boundary conditions for a ModelingToolkit.jl PDESystem. 
-It can be used with the `+` operator to add initial and boundary conditions to a
+Domain information for a ModelingToolkit.jl PDESystem. 
+It can be used with the `+` operator to add initial and boundary conditions 
+and coordinate transforms to a
 ModelingToolkit.jl ODESystem or Catalyst.jl ReactionSystem.
 
 $(FIELDS)
 
 """
-struct ICBC
+struct DomainInfo
+    """
+    Function that returns spatial derivatives of the partially-independent variables,
+    optionally performing a coordinate transformation first. 
+
+    Current function options are:
+    - `partialderivatives_identity` (the default): Returns partial derivatives without performing any coordinate transforms.
+    - `partialderivatives_lonlat2xymeters`: Returns partial derivatives after transforming any variables named `lat` and `lon` 
+    from degrees to cartesian meters, assuming a spherical Earth.    
+    """
+    partial_derivative_func::Function
+
     "The sets of initial and/or boundary conditions."
     icbc::Vector{ICBCcomponent}
 
-    ICBC(icbc::ICBCcomponent...) = new(ICBCcomponent[icbc...])
+    DomainInfo(icbc::ICBCcomponent...) = new(partialderivatives_identity, ICBCcomponent[icbc...])
+    DomainInfo(fdx::Function, icbc::ICBCcomponent...) = new(fdx, ICBCcomponent[icbc...])
 end
 
-function (icbc::ICBC)(states::AbstractVector)::Vector{Equation}
-    ic = icbc.icbc[findall(icbc -> isa(icbc, ICcomponent), icbc.icbc)]
+"""
+$(SIGNATURES)
+
+Return a vector of equations that define the initial and boundary conditions for the 
+given state variables.
+"""
+function icbc(di::DomainInfo, states::AbstractVector)::Vector{Equation}
+    ic = di.icbc[findall(icbc -> isa(icbc, ICcomponent), di.icbc)]
     @assert length(ic) == 1 "Only one independent domain is allowed."
 
-    bcs = icbc.icbc[findall(icbc -> isa(icbc, BCcomponent), icbc.icbc)]
+    bcs = di.icbc[findall(icbc -> isa(icbc, BCcomponent), di.icbc)]
     partialdomains = vcat([bc.partialdomains for bc ∈ bcs]...)
     @assert length(partialdomains) > 0 "At least one partial domain is required."
     @assert length(unique(partialdomains)) == length(partialdomains) "Each partial domain must have only one set of boundary conditions."
-    o = [icbc(states, ic[1].indepdomain, partialdomains) for icbc ∈ icbc.icbc]
+    o = [icbc(states, ic[1].indepdomain, partialdomains) for icbc ∈ di.icbc]
     vcat(o...)
 end
 
@@ -48,8 +65,8 @@ $(TYPEDSIGNATURES)
 Return the independent variable associated with these 
 initial and boundary conditions.
 """
-function ivar(icbc::ICBC)
-    ic = icbc.icbc[findall(icbc -> isa(icbc, ICcomponent), icbc.icbc)]
+function ivar(di::DomainInfo)
+    ic = di.icbc[findall(icbc -> isa(icbc, ICcomponent), di.icbc)]
     @assert length(ic) == 1 "Only one independent domain is allowed."
     return ic[1].indepdomain.variables
 end
@@ -60,8 +77,8 @@ $(TYPEDSIGNATURES)
 Return the partial independent variables associated with these 
 initial and boundary conditions.
 """
-function pvars(icbc::ICBC)
-    bcs = icbc.icbc[findall(icbc -> isa(icbc, BCcomponent), icbc.icbc)]
+function pvars(di::DomainInfo)
+    bcs = di.icbc[findall(icbc -> isa(icbc, BCcomponent), di.icbc)]
     partialdomains = vcat([bc.partialdomains for bc ∈ bcs]...)
     @assert length(partialdomains) > 0 "At least one partial domain is required."
     @assert length(unique(partialdomains)) == length(partialdomains) "Each partial domain must have only one set of boundary conditions."
@@ -225,7 +242,7 @@ initial or boundary conditions.
 """
 dims(icbc::ICcomponent) = Num[icbc.indepdomain.variables]
 dims(icbc::BCcomponent) = Num[domain.variables for domain in icbc.partialdomains]
-dims(icbc::ICBC) = unique(vcat(dims.(icbc.icbc)...))
+dims(di::DomainInfo) = unique(vcat(dims.(di.icbc)...))
 
 """
 $(TYPEDSIGNATURES)
@@ -234,10 +251,10 @@ Returns the domains associated with these initial or boundary conditions.
 """
 domains(icbc::ICcomponent) = [icbc.indepdomain]
 domains(icbc::BCcomponent) = icbc.partialdomains
-domains(icbc::ICBC) = unique(vcat(domains.(icbc.icbc)...))
+domains(di::DomainInfo) = unique(vcat(domains.(di.icbc)...))
 
-function Base.:(+)(sys::ModelingToolkit.ODESystem, icbc::ICBC)::ModelingToolkit.PDESystem
-    dimensions = dims(icbc)
+function Base.:(+)(sys::ModelingToolkit.ODESystem, di::DomainInfo)::ModelingToolkit.PDESystem
+    dimensions = dims(di)
     allvars = states(sys)
     statevars = states(structural_simplify(sys))
     # TODO(CT): Update once the MTK get_defaults function can get defaults for composed system.
@@ -247,19 +264,19 @@ function Base.:(+)(sys::ModelingToolkit.ODESystem, icbc::ICBC)::ModelingToolkit.
     if !all([p ∈ keys(defaults) for p in parameters(sys)])
         error("All parameters in the system of equations must have default values.")
     end
-    ivs = dims(icbc) # New dimensions are the independent variables.
+    ivs = dims(di) # New dimensions are the independent variables.
     dvs = add_dims(allvars, dimensions) # Add new dimensions to dependent variables.
     eqs = Vector{Equation}([add_dims(eq, allvars, dimensions) for eq in equations(sys)]) # Add new dimensions to equations.
-    PDESystem(eqs, icbc(statevars), domains(icbc), ivs, dvs, ps, name=nameof(sys), defaults=defaults)
+    PDESystem(eqs, icbc(di, statevars), domains(di), ivs, dvs, ps, name=nameof(sys), defaults=defaults)
 end
 
-Base.:(+)(icbc::ICBC, sys::ModelingToolkit.ODESystem)::ModelingToolkit.PDESystem = sys + icbc
+Base.:(+)(di::DomainInfo, sys::ModelingToolkit.ODESystem)::ModelingToolkit.PDESystem = sys + di
 
-function Base.:(+)(sys::Catalyst.ReactionSystem, icbc::ICBC)::ModelingToolkit.PDESystem
-    convert(ODESystem, sys; combinatoric_ratelaws=false) + icbc
+function Base.:(+)(sys::Catalyst.ReactionSystem, di::DomainInfo)::ModelingToolkit.PDESystem
+    convert(ODESystem, sys; combinatoric_ratelaws=false) + di
 end
 
-Base.:(+)(icbc::ICBC, sys::Catalyst.ReactionSystem)::ModelingToolkit.PDESystem = sys + icbc
+Base.:(+)(di::DomainInfo, sys::Catalyst.ReactionSystem)::ModelingToolkit.PDESystem = sys + di
 
 # TODO(CT): Delete once the MTK get_defaults function can get defaults for composed system.
 get_defaults_all(sys) = get_defaults_all(sys, "", 0)
