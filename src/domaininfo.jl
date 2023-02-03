@@ -259,14 +259,17 @@ function Base.:(+)(sys::ModelingToolkit.ODESystem, di::DomainInfo)::ModelingTool
     statevars = states(structural_simplify(sys))
     # TODO(CT): Update once the MTK get_defaults function can get defaults for composed system.
     # defaults = ModelingToolkit.get_defaults(sys)
+    toreplace, replacements = replacement_params(parameters(sys), pvars(di))
     defaults = get_defaults_all(sys)
     ps = [k => v for (k,v) in defaults] # Add parameters and their default values
-    if !all([p ∈ keys(defaults) for p in parameters(sys)])
-        error("All parameters in the system of equations must have default values.")
+    parameterstokeep = setdiff(parameters(sys), toreplace)
+    if !all([p ∈ keys(defaults) for p in parameterstokeep])
+        error("All parameters in the system of equations must have default values, but these ones don't: $(setdiff(parameterstokeep, keys(defaults))).")
     end
     ivs = dims(di) # New dimensions are the independent variables.
     dvs = add_dims(allvars, dimensions) # Add new dimensions to dependent variables.
-    eqs = Vector{Equation}([add_dims(eq, allvars, dimensions) for eq in equations(sys)]) # Add new dimensions to equations.
+    eqs = substitute(equations(sys), Dict(zip(toreplace, replacements))) # Substitute local coordinate parameters for global ones.
+    eqs = Vector{Equation}([add_dims(eq, allvars, dimensions) for eq in eqs]) # Add new dimensions to equations.
     PDESystem(eqs, icbc(di, statevars), domains(di), ivs, dvs, ps, name=nameof(sys), defaults=defaults)
 end
 
@@ -296,4 +299,21 @@ function get_defaults_all(sys, prefix, depth)
         dmap = merge(dmap, get_defaults_all(child, prefix, depth+1))
     end
     dmap
+end
+
+# Match local parameters with the global parameters of the same name.
+function replacement_params(localcoords::AbstractVector, globalcoords::AbstractVector)
+    gcstr = string.(globalcoords)
+    lcstr = string.(localcoords)
+    toreplace = []
+    replacements = []
+    for (i, gc) in enumerate(gcstr)
+        for (j, lc) in enumerate(lcstr)
+            if endswith(lc, "₊"*gc)
+                push!(toreplace, localcoords[j])
+                push!(replacements, globalcoords[i])
+            end
+        end
+    end
+    toreplace, replacements
 end

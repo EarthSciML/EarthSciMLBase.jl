@@ -191,3 +191,15 @@ end
     sol = solve(prob, Tsit5())
     @test sol.retcode == :Success
 end
+
+@testset "replacement_params" begin
+    globalcoords = @variables lat lon
+    localcoords = @variables model₊lat model₊lon model₊p
+
+    toreplace, replacements = EarthSciMLBase.replacement_params(localcoords, globalcoords)
+
+    want_toreplace = [model₊lat, model₊lon]
+    want_replacements = [lat, lon]
+    @test isequal(toreplace, want_toreplace)
+    @test isequal(replacements, want_replacements)
+end
