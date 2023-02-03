@@ -148,15 +148,22 @@ function Base.:(+)(composed::ComposedEarthSciMLSystem, sys::AbstractEarthSciMLSy
     for s in composed.systems
         push!(o, s)
         if applicable(+, s, sys)
-            push!(o, (s + sys).systems...)
+            c = s + sys
+            @assert c isa ComposedEarthSciMLSystem "The result of adding two systems together with `+` must be a ComposedEarthSciMLSystem. "*
+                            "This is not the case for $(typeof(s)) and $(typeof(sys)); it is instead a $(typeof(c))."
+            push!(o, c.systems...)
+            if c.domaininfo !== nothing
+                @assert composed.domaininfo === nothing "Cannot add two sets of DomainInfo to a system."
+                composed.domaininfo = c.domaininfo
+            end
+            push!(composed.pdefunctions, c.pdefunctions...)
         end
     end
     ComposedEarthSciMLSystem(unique(o), composed.domaininfo, composed.pdefunctions)
 end
 
-function Base.:(+)(sys::AbstractEarthSciMLSystem, composed::ComposedEarthSciMLSystem)::ComposedEarthSciMLSystem
-    composed + sys
-end
+Base.:(+)(sys::AbstractEarthSciMLSystem, composed::ComposedEarthSciMLSystem)::ComposedEarthSciMLSystem = composed + sys
+
 
 function Base.:(+)(composed::ComposedEarthSciMLSystem, domaininfo::DomainInfo)::ComposedEarthSciMLSystem
     @assert composed.domaininfo === nothing "Cannot add two sets of DomainInfo to a system."
