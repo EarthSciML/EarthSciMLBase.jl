@@ -31,7 +31,7 @@ function advection(vars, di::DomainInfo)
     @assert length(pvs) <= 3 "Advection is only implemented for 3 or fewer dimensions."
     uvars = (@variables meanwind₊u(..) meanwind₊v(..) meanwind₊w(..))[1:length(pvs)]
     varsdims = Num[v for v ∈ vars]
-    udims = Num[ui(pvs..., iv) for ui ∈ uvars]
+    udims = Num[ui(iv, pvs...) for ui ∈ uvars]
     δs = di.partial_derivative_func(pvs) # get partial derivative operators. May contain coordinate transforms.
     eqs = Equation[]
     for var ∈ varsdims

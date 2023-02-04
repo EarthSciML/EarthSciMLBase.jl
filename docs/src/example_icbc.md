@@ -26,11 +26,11 @@ eqs = [
 
 # Create constant initial conditions = 16.0 and boundary conditions = 4.0.
 icbc = DomainInfo(
+    constIC(4.0, t ∈ Interval(t_min, t_max)),
     constBC(16.0, 
         x ∈ Interval(x_min, x_max),
         y ∈ Interval(y_min, y_max),
     ),
-    constIC(4.0, t ∈ Interval(t_min, t_max)),
 )
 
 # Convert to PDESystem and add constant initial and boundary conditions.

@@ -16,10 +16,10 @@ end
     Dt = Differential(t)
     pd = partialderivatives_lonlat2xymeters([lon, lat, x, y, t])
 
-    haveeq = Dt(c(lon, lat, t)) ~ pd[1](c(lon, lat, t)) + pd[2](c(lon, lat, t))
+    haveeq = Dt(c(t, lon, lat)) ~ pd[1](c(t, lon, lat)) + pd[2](c(t, lon, lat))
 
-    wanteq = Dt(c(lon, lat, t)) ~ Differential(lon)(c(lon, lat, t)) / (40075.0e3 * cos(0.017453292519943295lat) / 360.0) +
-                                  Differential(lat)(c(lon, lat, t)) / 111.32e3
+    wanteq = Dt(c(t, lon, lat)) ~ Differential(lon)(c(t, lon, lat)) / (40075.0e3 * cos(0.017453292519943295lat) / 360.0) +
+                                  Differential(lat)(c(t, lon, lat)) / 111.32e3
 
     @test isequal(haveeq, wanteq)
 end
@@ -39,10 +39,10 @@ end
 
     domain = DomainInfo(
         partialderivatives_lonlat2xymeters,
+        constIC(0.0, t ∈ Interval(0.0f0, 3600.0f0)),
         periodicBC(lat ∈ Interval(-90.0f0, 90.0f0)),
         periodicBC(lon ∈ Interval(-180.0f0, 180.0f0)),
         zerogradBC(lev ∈ Interval(1.0f0, 10.0f0)),
-        constIC(0.0, t ∈ Interval(0.0f0, 3600.0f0)),
     )
 
     composed_sys = examplesys + domain + Advection()
@@ -52,9 +52,9 @@ end
     have_eq = equations(sys_mtk)
     @assert length(have_eq) == 1
     @variables examplesys₊c(..) meanwind₊u(..) meanwind₊v(..) meanwind₊w(..)
-    want_eq = Differential(t)(examplesys₊c(lat, lon, lev, t)) ~
-        (-Differential(lon)(examplesys₊c(lat, lon, lev, t)) * meanwind₊v(lat, lon, lev, t)) / (111319.44444444445cos(0.017453292519943295lat)) + sin(t) -
-        8.98311174991017e-6Differential(lat)(examplesys₊c(lat, lon, lev, t)) * meanwind₊u(lat, lon, lev, t) -
-        Differential(lev)(examplesys₊c(lat, lon, lev, t)) * meanwind₊w(lat, lon, lev, t)
+    want_eq = Differential(t)(examplesys₊c(t, lat, lon, lev)) ~
+        (-Differential(lon)(examplesys₊c(t, lat, lon, lev)) * meanwind₊v(t, lat, lon, lev)) / (111319.44444444445cos(0.017453292519943295lat)) + sin(t) -
+        8.98311174991017e-6Differential(lat)(examplesys₊c(t, lat, lon, lev)) * meanwind₊u(t, lat, lon, lev) -
+        Differential(lev)(examplesys₊c(t, lat, lon, lev)) * meanwind₊w(t, lat, lon, lev)
     @test isequal(have_eq[1], want_eq)
 end

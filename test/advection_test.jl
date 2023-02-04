@@ -17,7 +17,7 @@ using DomainSets, MethodOfLines, ModelingToolkit, DifferentialEquations
 
     @named sys1 = ExampleSys(t)
     @named sys2 = ExampleSys(t)
-    domain = DomainInfo(constBC(1.0, x ∈ Interval(0, 1.0)), constIC(0.0, t ∈ Interval(0, 1.0)))
+    domain = DomainInfo(constIC(0.0, t ∈ Interval(0, 1.0)), constBC(1.0, x ∈ Interval(0, 1.0)))
 
     combined = operator_compose(sys1, sys2)
     combined_pde = combined + domain + ConstantWind(t, 1.0) + Advection()

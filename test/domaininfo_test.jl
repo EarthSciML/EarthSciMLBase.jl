@@ -21,12 +21,12 @@ indepdomain = t ∈ Interval(t_min, t_max)
 partialdomains = [x ∈ Interval(x_min, x_max),
     y ∈ Interval(y_min, y_max)]
 
-domain = DomainInfo(constBC(16.0, partialdomains...), constIC(16.0, indepdomain))
+domain = DomainInfo(constIC(16.0, indepdomain), constBC(16.0, partialdomains...))
 
 @testset "dims" begin
     dims_result = EarthSciMLBase.dims(domain)
 
-    dims_want = [x, y, t]
+    dims_want = [t, x, y]
 
     @test isequal(dims_result, dims_want)
 end
@@ -35,9 +35,9 @@ end
     domains_result = EarthSciMLBase.domains(domain)
 
     domains_want = [
+        t ∈ Interval(t_min, t_max),
         x ∈ Interval(x_min, x_max),
         y ∈ Interval(y_min, y_max),
-        t ∈ Interval(t_min, t_max),
     ]
 
     @test isequal(domains_result, domains_want)
@@ -53,27 +53,31 @@ end
         x_max = y_max = 1.0
         t_max = 11.5
 
-        eqs = [Dt(u(x, y, t)) ~ -α * √abs(v(x, y, t)),
-            Dt(v(x, y, t)) ~ -α * √abs(u(x, y, t)),
+        eqs = [Dt(u(t, x, y)) ~ -α * √abs(v(t, x, y)),
+            Dt(v(t, x, y)) ~ -α * √abs(u(t, x, y)),
         ]
 
-        domains = [x ∈ Interval(x_min, x_max),
+        domains = [
+            t ∈ Interval(t_min, t_max),
+            x ∈ Interval(x_min, x_max),
             y ∈ Interval(y_min, y_max),
-            t ∈ Interval(t_min, t_max)]
+        ]
 
         # Periodic BCs
-        bcs = [
-            u(x_min, y, t) ~ 16.0,
-            u(x_max, y, t) ~ 16.0,
-            u(x, y_min, t) ~ 16.0,
-            u(x, y_max, t) ~ 16.0, v(x_min, y, t) ~ 16.0,
-            v(x_max, y, t) ~ 16.0,
-            v(x, y_min, t) ~ 16.0,
-            v(x, y_max, t) ~ 16.0, u(x, y, t_min) ~ 16.0,
-            v(x, y, t_min) ~ 16.0,
+        bcs = [ 
+            u(t_min, x, y) ~ 16.0,
+            v(t_min, x, y) ~ 16.0,
+            u(t, x_min, y) ~ 16.0,
+            u(t, x_max, y) ~ 16.0,
+            u(t, x, y_min) ~ 16.0,
+            u(t, x, y_max) ~ 16.0, 
+            v(t, x_min, y) ~ 16.0,
+            v(t, x_max, y) ~ 16.0,
+            v(t, x, y_min) ~ 16.0,
+            v(t, x, y_max) ~ 16.0,
         ]
 
-        @named pdesys = PDESystem(eqs, bcs, domains, [x, y, t], [u(x, y, t), v(x, y, t)], [α => 10.0])
+        @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, x, y)], [α => 10.0])
     end
 
     pde_result = sys + domain
@@ -92,28 +96,30 @@ end
         @variables m₁(..) m₂(..)
         Dt = Differential(t)
         eqs = [
-            Dt(m₁(x, y, t)) ~ -10.0 * m₁(x, y, t),
-            Dt(m₂(x, y, t)) ~ 10.0 * m₁(x, y, t),
+            Dt(m₁(t, x, y)) ~ -10.0 * m₁(t, x, y),
+            Dt(m₂(t, x, y)) ~ 10.0 * m₁(t, x, y),
         ]
 
         bcs = [
-            m₁(x_min, y, t) ~ 16.0,
-            m₁(x_max, y, t) ~ 16.0,
-            m₁(x, y_min, t) ~ 16.0,
-            m₁(x, y_max, t) ~ 16.0, m₂(x_min, y, t) ~ 16.0,
-            m₂(x_max, y, t) ~ 16.0,
-            m₂(x, y_min, t) ~ 16.0,
-            m₂(x, y_max, t) ~ 16.0, m₁(x, y, t_min) ~ 16.0,
-            m₂(x, y, t_min) ~ 16.0,
+            m₁(t_min, x, y) ~ 16.0,
+            m₂(t_min, x, y) ~ 16.0,
+            m₁(t, x_min, y) ~ 16.0,
+            m₁(t, x_max, y) ~ 16.0,
+            m₁(t, x, y_min) ~ 16.0,
+            m₁(t, x, y_max) ~ 16.0,
+            m₂(t, x_min, y) ~ 16.0,
+            m₂(t, x_max, y) ~ 16.0,
+            m₂(t, x, y_min) ~ 16.0,
+            m₂(t, x, y_max) ~ 16.0,
         ]
 
         dmns = [
+            t ∈ Interval(t_min, t_max),
             x ∈ Interval(x_min, x_max),
             y ∈ Interval(y_min, y_max),
-            t ∈ Interval(t_min, t_max),
         ]
 
-        PDESystem(eqs, bcs, dmns, [x, y, t], [m₁(x, y, t), m₂(x, y, t)], [], name=:sys)
+        PDESystem(eqs, bcs, dmns, [t, x, y], [m₁(t, x, y), m₂(t, x, y)], [], name=:sys)
     end
 
     rn = @reaction_network begin
@@ -131,9 +137,9 @@ end
 
 @testset "zero-grad and periodic" begin
     domain = DomainInfo(
+        constIC(16.0, indepdomain),
         periodicBC(x ∈ Interval(x_min, x_max)),
         zerogradBC(y ∈ Interval(y_min, y_max)),
-        constIC(16.0, indepdomain),
     )
     pdesys = sys + domain
 
@@ -142,13 +148,14 @@ end
         @variables u(..) v(..)
         Dt = Differential(t)
         [
-            u(x_min, y, t) ~ u(x_max, y, t),
-            v(x_min, y, t) ~ v(x_max, y, t),
-            Dt(u(x, y_min, t)) ~ 0.0,
-            Dt(u(x, y_max, t)) ~ 0.0,
-            Dt(v(x, y_min, t)) ~ 0.0,
-            Dt(v(x, y_max, t)) ~ 0.0, u(x, y, t_min) ~ 16.0,
-            v(x, y, t_min) ~ 16.0,
+            u(t_min, x, y) ~ 16.0,
+            v(t_min, x, y) ~ 16.0,
+            u(t, x_min, y) ~ u(t, x_max, y),
+            v(t, x_min, y) ~ v(t, x_max, y),
+            Dt(u(t, x, y_min)) ~ 0.0,
+            Dt(u(t, x, y_max)) ~ 0.0,
+            Dt(v(t, x, y_min)) ~ 0.0,
+            Dt(v(t, x, y_max)) ~ 0.0,
         ]
     end
 
@@ -160,15 +167,15 @@ end
     dx = dy = 0.5
     discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order=2, grid_align=center_align)
     prob = discretize(pdesys, discretization)
-    sol = solve(prob, TRBDF2(), saveat=0.1)
+    sol = solve(prob, Tsit5(), saveat=0.1)
     @test sol.retcode == :Success
 end
 
 @testset "Simplify" begin
     @parameters x, t
     domain = DomainInfo(
-        periodicBC(x ∈ Interval(0, 1)),
         constIC(16.0, t ∈ Interval(0, 1)),
+        periodicBC(x ∈ Interval(0, 1)),
     )
 
     struct ExSys <: EarthSciMLODESystem

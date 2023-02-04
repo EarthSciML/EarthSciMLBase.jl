@@ -77,9 +77,9 @@ plot(odesol)
 x_min = y_min = t_min = 0.0
 x_max = y_max = t_max = 1.0
 domain = DomainInfo(
+    constIC(4.0, t ∈ Interval(t_min, t_max)),
     periodicBC(x ∈ Interval(x_min, x_max)),
     zerogradBC(y ∈ Interval(y_min, y_max)),
-    constIC(4.0, t ∈ Interval(t_min, t_max)),
 )
 
 sys_pde = sys + domain + ConstantWind(t, 1.0, 1.0) + Advection()
@@ -97,10 +97,10 @@ discretization = MOLFiniteDifference([x=>10, y=>10], t, approx_order=2)
 # Plot the solution.
 discrete_x, discrete_y, discrete_t = pdesol[x], pdesol[y], pdesol[t]
 @variables sys1₊c₁(..) sys1₊c₂(..)
-solc1, solc2 = pdesol[sys1₊c₁(x, y, t)], pdesol[sys1₊c₂(x, y, t)]
+solc1, solc2 = pdesol[sys1₊c₁(t, x, y)], pdesol[sys1₊c₂(t, x, y)]
 anim = @animate for k in 1:length(discrete_t)
-    p1 = heatmap(solc1[1:end-1, 1:end-1, k], title="c₁ t=\$(discrete_t[k])", clim=(0,4.0), lab=:none)
-    p2 = heatmap(solc2[1:end-1, 1:end-1, k], title="c₂ t=\$(discrete_t[k])", clim=(0,7.0), lab=:none)
+    p1 = heatmap(solc1[k, 1:end-1, 1:end-1], title="c₁ t=\$(discrete_t[k])", clim=(0,4.0), lab=:none)
+    p2 = heatmap(solc2[k, 1:end-1, 1:end-1], title="c₂ t=\$(discrete_t[k])", clim=(0,7.0), lab=:none)
     plot(p1, p2, layout=(1,2), size=(800,400))
 end
 gif(anim, fps = 8)

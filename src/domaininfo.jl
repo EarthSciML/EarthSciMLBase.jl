@@ -19,6 +19,8 @@ It can be used with the `+` operator to add initial and boundary conditions
 and coordinate transforms to a
 ModelingToolkit.jl ODESystem or Catalyst.jl ReactionSystem.
 
+**NOTE**: The independent variable (usually time) must be first in the list of initial and boundary conditions.
+
 $(FIELDS)
 
 """
@@ -37,8 +39,16 @@ struct DomainInfo
     "The sets of initial and/or boundary conditions."
     icbc::Vector{ICBCcomponent}
 
-    DomainInfo(icbc::ICBCcomponent...) = new(partialderivatives_identity, ICBCcomponent[icbc...])
-    DomainInfo(fdx::Function, icbc::ICBCcomponent...) = new(fdx, ICBCcomponent[icbc...])
+    function DomainInfo(icbc::ICBCcomponent...) 
+        @assert length(icbc) > 0 "At least one initial or boundary condition is required."
+        @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
+        new(partialderivatives_identity, ICBCcomponent[icbc...])
+    end
+    function DomainInfo(fdx::Function, icbc::ICBCcomponent...) 
+        @assert length(icbc) > 0 "At least one initial or boundary condition is required."
+        @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
+        new(fdx, ICBCcomponent[icbc...])
+    end
 end
 
 """
@@ -103,12 +113,12 @@ end
 
 function (ic::constIC)(states::AbstractVector, indepdomain::Symbolics.VarDomainPairing, allpartialdomains::Vector{Symbolics.VarDomainPairing})
     dims = [domain.variables for domain in allpartialdomains]
-    statevars = add_dims(states, [dims...; indepdomain.variables])
+    statevars = add_dims(states, [indepdomain.variables, dims...])
     
     bcs = Equation[]
     
     for state ∈ statevars
-        push!(bcs, state.val.f(dims..., indepdomain.domain.left) ~ ic.val)
+        push!(bcs, state.val.f(indepdomain.domain.left, dims...) ~ ic.val)
     end
 
     bcs
@@ -134,7 +144,7 @@ end
 
 function (bc::constBC)(states::AbstractVector, indepdomain::Symbolics.VarDomainPairing, allpartialdomains::Vector{Symbolics.VarDomainPairing})
     dims = [domain.variables for domain in allpartialdomains]
-    statevars = add_dims(states, [dims...; indepdomain.variables])
+    statevars = add_dims(states, [indepdomain.variables, dims...])
     
     bcs = Equation[]
 
@@ -144,8 +154,8 @@ function (bc::constBC)(states::AbstractVector, indepdomain::Symbolics.VarDomainP
         for (j, i) ∈ enumerate(activepartialdomainindex)
             domain = bc.partialdomains[j]
             for edge ∈ [domain.domain.left, domain.domain.right]
-                args = Any[dims..., indepdomain.variables]
-                args[i] = edge
+                args = Any[indepdomain.variables, dims...]
+                args[i+1] = edge
                 push!(bcs, state.val.f(args...) ~ bc.val)
             end
         end
@@ -171,7 +181,7 @@ end
 
 function (bc::zerogradBC)(states::AbstractVector, indepdomain::Symbolics.VarDomainPairing, allpartialdomains::Vector{Symbolics.VarDomainPairing})
     dims = [domain.variables for domain in allpartialdomains]
-    statevars = add_dims(states, [dims...; indepdomain.variables])
+    statevars = add_dims(states, [indepdomain.variables, dims...])
     
     bcs = Equation[]
 
@@ -183,8 +193,8 @@ function (bc::zerogradBC)(states::AbstractVector, indepdomain::Symbolics.VarDoma
         for (j, i) ∈ enumerate(activepartialdomainindex)
             domain = bc.partialdomains[j]
             for edge ∈ [domain.domain.left, domain.domain.right]
-                args = Any[dims..., indepdomain.variables]
-                args[i] = edge
+                args = Any[indepdomain.variables, dims...]
+                args[i+1] = edge
                 push!(bcs, D(state.val.f(args...)) ~ 0.0)
             end
             j += 1
@@ -214,7 +224,7 @@ end
 
 function (bc::periodicBC)(states::AbstractVector, indepdomain::Symbolics.VarDomainPairing, allpartialdomains::Vector{Symbolics.VarDomainPairing})
     dims = [domain.variables for domain in allpartialdomains]
-    statevars = add_dims(states, [dims...; indepdomain.variables])
+    statevars = add_dims(states, [indepdomain.variables, dims...])
     
     bcs = Equation[]
 
@@ -223,10 +233,10 @@ function (bc::periodicBC)(states::AbstractVector, indepdomain::Symbolics.VarDoma
     for state ∈ statevars
         for (j, i) ∈ enumerate(activepartialdomainindex)
             domain = bc.partialdomains[j]
-            argsleft = Any[dims..., indepdomain.variables]
-            argsleft[i] = domain.domain.left
-            argsright = Any[dims..., indepdomain.variables]
-            argsright[i] = domain.domain.right
+            argsleft = Any[indepdomain.variables, dims...]
+            argsleft[i+1] = domain.domain.left
+            argsright = Any[indepdomain.variables, dims...]
+            argsright[i+1] = domain.domain.right
             push!(bcs, state.val.f(argsleft...) ~ state.val.f(argsright...))
         end
     end

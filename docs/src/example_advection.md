@@ -26,7 +26,7 @@ end
 @named sys = ExampleSys(t)
 
 # Create our initial and boundary conditions.
-domain = DomainInfo(constBC(1.0, x ∈ Interval(0, 1.0)), constIC(0.0, t ∈ Interval(0, 1.0)))
+domain = DomainInfo(constIC(0.0, t ∈ Interval(0, 1.0)), constBC(1.0, x ∈ Interval(0, 1.0)))
 
 # Convert our ODE system to a PDE system and add advection to each of the state variables.
 # We're also adding a constant wind in the x-direction, with a speed of 1.0.
@@ -42,9 +42,9 @@ discretization = MOLFiniteDifference([x=>10], t, approx_order=2)
 discrete_x = sol[x]
 discrete_t = sol[t]
 @variables sys₊y(..)
-soly = sol[sys₊y(x, t)]
+soly = sol[sys₊y(t, x)]
 anim = @animate for k in 1:length(discrete_t)
-    plot(soly[1:end, k], title="t=\$(discrete_t[k])", ylim=(0,2.5), lab=:none)
+    plot(soly[k, 1:end], title="t=\$(discrete_t[k])", ylim=(0,2.5), lab=:none)
 end
 gif(anim, fps = 8)
 ```
