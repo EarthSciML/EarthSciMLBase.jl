@@ -185,8 +185,6 @@ function (bc::zerogradBC)(states::AbstractVector, indepdomain::Symbolics.VarDoma
     
     bcs = Equation[]
 
-    D = Differential(indepdomain.variables)
-
     activepartialdomainindex = vcat((y -> findall(x -> x == y, allpartialdomains)).(bc.partialdomains)...)
 
     for state ∈ statevars
@@ -195,6 +193,7 @@ function (bc::zerogradBC)(states::AbstractVector, indepdomain::Symbolics.VarDoma
             for edge ∈ [domain.domain.left, domain.domain.right]
                 args = Any[indepdomain.variables, dims...]
                 args[i+1] = edge
+                D = Differential(dims[i])
                 push!(bcs, D(state.val.f(args...)) ~ 0.0)
             end
             j += 1

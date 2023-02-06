@@ -146,16 +146,16 @@ end
     want_bcs = let
         @parameters x y t
         @variables u(..) v(..)
-        Dt = Differential(t)
+        Dy = Differential(y)
         [
             u(t_min, x, y) ~ 16.0,
             v(t_min, x, y) ~ 16.0,
             u(t, x_min, y) ~ u(t, x_max, y),
             v(t, x_min, y) ~ v(t, x_max, y),
-            Dt(u(t, x, y_min)) ~ 0.0,
-            Dt(u(t, x, y_max)) ~ 0.0,
-            Dt(v(t, x, y_min)) ~ 0.0,
-            Dt(v(t, x, y_max)) ~ 0.0,
+            Dy(u(t, x, y_min)) ~ 0.0,
+            Dy(u(t, x, y_max)) ~ 0.0,
+            Dy(v(t, x, y_min)) ~ 0.0,
+            Dy(v(t, x, y_max)) ~ 0.0,
         ]
     end
 
