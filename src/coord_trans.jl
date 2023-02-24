@@ -25,10 +25,15 @@ Return the partial derivative operators corresponding to each of the given parti
 after converting variables named `lon` and `lat` from degrees to x and y meters, 
 assuming they represent longitude and latitude on a spherical Earth.
 """
-function partialderivatives_lonlat2xymeters(pvars::AbstractVector)
+function partialderivatives_lonlat2xymeters(pvars::AbstractVector; default_lat=0.0)
     latindex = varindex(pvars, :lat)
     lonindex = varindex(pvars, :lon)
-    lat = pvars[latindex]
+    if !isnothing(latindex)
+        lat = pvars[latindex]
+    else
+        lat = default_lat
+    end
+
 
     δs = Differential.(pvars)
 
