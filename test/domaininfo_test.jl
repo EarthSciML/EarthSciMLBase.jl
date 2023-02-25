@@ -1,6 +1,8 @@
 using EarthSciMLBase
 using ModelingToolkit, Catalyst
 using MethodOfLines, DifferentialEquations, DomainSets
+import SciMLBase
+
 
 @parameters x y t α = 10.0
 @variables u(t) v(t)
@@ -168,7 +170,7 @@ end
     discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order=2, grid_align=center_align)
     prob = discretize(pdesys, discretization)
     sol = solve(prob, Tsit5(), saveat=0.1)
-    @test sol.retcode == :Success
+    @test sol.retcode == SciMLBase.ReturnCode.Success
 end
 
 @testset "Simplify" begin
@@ -196,7 +198,7 @@ end
     discretization = MOLFiniteDifference([x => 10], t, approx_order=2)
     prob = discretize(sys_mtk, discretization)
     sol = solve(prob, Tsit5())
-    @test sol.retcode == :Success
+    @test sol.retcode == SciMLBase.ReturnCode.Success
 end
 
 @testset "replacement_params" begin

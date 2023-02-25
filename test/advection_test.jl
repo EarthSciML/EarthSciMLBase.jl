@@ -1,5 +1,6 @@
 using EarthSciMLBase
 using DomainSets, MethodOfLines, ModelingToolkit, DifferentialEquations
+import SciMLBase
 
 @testset "Composed System" begin
     @parameters t, x
@@ -31,5 +32,5 @@ using DomainSets, MethodOfLines, ModelingToolkit, DifferentialEquations
     discretization = MOLFiniteDifference([x => 6], t, approx_order=2)
     prob = discretize(combined_mtk, discretization)
     sol = solve(prob, Tsit5(), saveat=0.1)
-    @test sol.retcode == :Success
+    @test sol.retcode == SciMLBase.ReturnCode.Success
 end
