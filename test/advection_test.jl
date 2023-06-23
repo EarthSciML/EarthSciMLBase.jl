@@ -24,7 +24,7 @@ import SciMLBase
     combined_pde = combined + domain + ConstantWind(t, 1.0) + Advection()
     combined_mtk = get_mtk(combined_pde)
 
-    @test length(equations(combined_mtk)) == 5
+    @test length(equations(combined_mtk)) == 6
     @test length(combined_mtk.ivs) == 2
     @test length(combined_mtk.dvs) == 6
     @test length(combined_mtk.bcs) == 3
