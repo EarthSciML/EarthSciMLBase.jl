@@ -20,7 +20,7 @@ using Plots
 struct ExampleSys1 <: EarthSciMLODESystem
     sys
     function ExampleSys1(t; name)
-        @variables c₁(t)=5.0 c₂(t)=5.0
+        @species c₁(t)=5.0 c₂(t)=5.0
         new(convert(ODESystem, ReactionSystem(
             [Reaction(2.0, [c₁], [c₂])],
             t; name=name,
