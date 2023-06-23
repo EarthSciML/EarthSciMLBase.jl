@@ -38,7 +38,7 @@ equations(structural_simplify(combined_mtk))
 
 # output
 1-element Vector{Equation}:
- Differential(t)(sys1₊x(t)) ~ sys1₊p + sys2₊sys2_xˍt(t)
+ Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_xˍt(t)
 ```
 """
 function operator_compose(a::EarthSciMLODESystem, b::EarthSciMLODESystem)

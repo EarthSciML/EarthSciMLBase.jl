@@ -28,7 +28,7 @@ using Catalyst
     b = IOBuffer()
     show(b, eq)
     # The simplified equation should be D(x) = p + sys2_xˍt, where sys2_xˍt is also equal to p.
-    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys2₊sys2_xˍt(t)]"
+    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_xˍt(t)]"
 end
 
 @testset "Reaction-Deposition" begin
@@ -69,5 +69,5 @@ end
 
     b = IOBuffer()
     show(b, eq)
-    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(chem₊SO2(t)) ~ deposition₊deposition_SO2ˍt(t) - chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊O2(t)) ~ -chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊SO4(t)) ~ chem₊α*chem₊O2(t)*chem₊SO2(t)]"
+    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(chem₊SO2(t)) ~ chem₊deposition_SO2ˍt(t) - chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊O2(t)) ~ -chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊SO4(t)) ~ chem₊α*chem₊O2(t)*chem₊SO2(t)]"
 end

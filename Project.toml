@@ -1,7 +1,7 @@
 name = "EarthSciMLBase"
 uuid = "e53f1632-a13c-4728-9402-0c66d48804b0"
 authors = ["EarthSciML Authors and Contributors"]
-version = "0.4.1"
+version = "0.4.2"
 
 [deps]
 Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
@@ -14,7 +14,7 @@ Catalyst = "10, 11, 12, 13"
 DifferentialEquations = "7"
 DocStringExtensions = "0.9"
 DomainSets = "0.5, 0.6"
-MethodOfLines = "0.8"
+MethodOfLines = "0.9"
 ModelingToolkit = "8"
 Symbolics = "4, 5"
 julia = "1.6"

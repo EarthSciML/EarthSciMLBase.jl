@@ -123,9 +123,9 @@ equations(structural_simplify(sirfinal))
 
 # output
 3-element Vector{Equation}:
- Differential(t)(reqn₊R(t)) ~ reqn₊γ*ieqn₊I(t)
- Differential(t)(seqn₊S(t)) ~ (-seqn₊β*ieqn₊I(t)*seqn₊S(t)) / (ieqn₊I(t) + reqn₊R(t) + seqn₊S(t))
- Differential(t)(ieqn₊I(t)) ~ (ieqn₊β*ieqn₊I(t)*seqn₊S(t)) / (ieqn₊I(t) + reqn₊R(t) + seqn₊S(t)) - ieqn₊γ*ieqn₊I(t)
+ Differential(t)(reqn₊R(t)) ~ reqn₊γ*reqn₊I(t)
+ Differential(t)(seqn₊S(t)) ~ (-seqn₊β*seqn₊I(t)*seqn₊S(t)) / (seqn₊I(t) + seqn₊R(t) + seqn₊S(t))
+ Differential(t)(ieqn₊I(t)) ~ (ieqn₊β*ieqn₊I(t)*ieqn₊S(t)) / (ieqn₊I(t) + ieqn₊R(t) + ieqn₊S(t)) - ieqn₊γ*ieqn₊I(t)
 ```
 """
 struct ComposedEarthSciMLSystem <: AbstractEarthSciMLSystem
