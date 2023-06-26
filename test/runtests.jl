@@ -8,6 +8,7 @@ using Test, SafeTestsets
     @safetestset "Operator Compose" begin include("operator_compose_test.jl") end
     @safetestset "Advection" begin include("advection_test.jl") end
     @safetestset "Coordinate Transformation" begin include("coord_trans_test.jl") end
+    @safetestset "Parameter to Variable" begin include("param_to_var_test.jl") end
     @safetestset "Docs" begin 
         using Documenter
         using EarthSciMLBase

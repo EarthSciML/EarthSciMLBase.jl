@@ -302,6 +302,7 @@ function get_defaults_all(sys, prefix, depth)
     for (p, d) ∈ ModelingToolkit.get_defaults(sys)
         n = Symbol("$(prefix)$(p)")
         pp = (@parameters $(n))[1]
+        pp = add_metadata(pp, p)
         dmap[pp] = d
     end
     for child ∈ ModelingToolkit.get_systems(sys)

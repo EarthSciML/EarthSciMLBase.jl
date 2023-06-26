@@ -43,7 +43,7 @@ struct ExampleSys2 <: EarthSciMLODESystem
     end
 end
 
-# Specify what should happend when we couple the two systems together.
+# Specify what should happen when we couple the two systems together.
 # In this case, we want the the derivative of the composed system to 
 # be equal to the sum of the derivatives of the two systems.
 # We can do that using the `operator_compose` function 

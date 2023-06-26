@@ -1,11 +1,11 @@
 export partialderivatives_lonlat2xymeters
 
-# Convert degrees to radians
-deg2rad(x) = x * π / 180.0
 # Scaling factor for converting latitude to meters
-const lat2meters = 111.32e3
+@constants lat2meters = 111.32e3 * 180 / π [unit = u"m/rad"]
+
+@constants lon2m = 40075.0e3 / 2π [unit = u"m/rad"]
 # Return scaling factor for converting longitude to meters at given latitude
-lon2meters(lat) = 40075.0e3 * cos(deg2rad(lat)) / 360.0
+lon2meters(lat) = lon2m * cos(lat)
 # return index in vector of partial-independent variables of variable with given name
 varindex(pvars::AbstractVector, varname::Symbol) = findfirst(nameof.(pvars) .== varname)
 

@@ -55,12 +55,15 @@ function operator_compose(a::EarthSciMLODESystem, b::EarthSciMLODESystem)
                 bvar = String(Symbolics.tosymbol(b_eq.lhs, escape=false))
                 var1 = Symbol("$(bname)_$(bvar)")
                 term1 = (@variables $var1(iv))[1]
+                term1 = add_metadata(term1, b_eq.lhs)
                 a_eqs[i] = a_eq.lhs ~ a_eq.rhs + term1
                 b_eqs[j] = term1 ~ b_eq.rhs
                 var2 = Symbol("$(aname)₊$(bname)_$(bvar)")
                 term2 = (@variables $var2(iv))[1]
+                term2 = add_metadata(term2, b_eq.lhs)
                 var3 = Symbol("$(bname)₊$(bname)_$(bvar)")
                 term3 = (@variables $var3(iv))[1]
+                term3 = add_metadata(term3, b_eq.lhs)
                 push!(connections, term2 ~ term3)
                 
                 # Now set the dependent variables in the two systems to be equal.
@@ -69,7 +72,9 @@ function operator_compose(a::EarthSciMLODESystem, b::EarthSciMLODESystem)
                 adv_sym = Symbol("$(aname)₊$(dvsym)")
                 bdv_sym = Symbol("$(bname)₊$(dvsym)")
                 adv = (@variables $adv_sym(iv))[1]
+                adv = add_metadata(adv, dv)
                 bdv = (@variables $bdv_sym(iv))[1]
+                bdv = add_metadata(bdv, dv)
                 push!(connections, adv ~ bdv)
             end
         end

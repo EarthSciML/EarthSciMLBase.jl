@@ -7,7 +7,7 @@ Dt = Differential(t)
 eq = Dt(u) ~ 3k * u + q + 1
 eq2 = Dt(u) ~ 3k * u + 1
 
-wanteq = let 
+wanteq = let
     @parameters x y t k
     @variables u(..) q(..)
     Dt = Differential(t)
@@ -17,7 +17,7 @@ end
 @testset "Expression" begin
     exp = 3k * u + 1
 
-    wantexp = let 
+    wantexp = let
         @parameters x y t k
         @variables u(..)
         3k * u(x, y, t) + 1
@@ -35,7 +35,7 @@ end
 @testset "Equation 2" begin
     result = EarthSciMLBase.add_dims(eq2, [u], [x, y, t])
 
-    wanteq = let 
+    wanteq = let
         @parameters x y t k
         @variables u(..)
         Dt = Differential(t)

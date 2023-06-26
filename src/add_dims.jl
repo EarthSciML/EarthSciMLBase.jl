@@ -38,8 +38,9 @@ end
 function add_dims(vars::AbstractVector, dims::AbstractVector)
     syms = [Symbolics.tosymbol(x, escape=false) for x in vars]
     o = Num[]
-    for xx in syms
-        newvar = (@variables $xx(..))[1]
+    for (sym, var) in zip(syms, vars)
+        newvar = (@variables $sym(..))[1]
+        newvar = add_metadata(newvar, var)
         push!(o, newvar(dims...))
     end
     return o
