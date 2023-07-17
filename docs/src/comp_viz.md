@@ -18,7 +18,7 @@ struct SEqn <: EarthSciMLODESystem
     function SEqn(t) 
         @variables S(t), I(t), R(t)
         D = Differential(t)
-        N = S + I + Rc  
+        N = S + I + R
         @parameters β
         @named seqn = ODESystem([D(S) ~ -β*S*I/N])
         new(seqn)
