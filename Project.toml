@@ -1,11 +1,13 @@
 name = "EarthSciMLBase"
 uuid = "e53f1632-a13c-4728-9402-0c66d48804b0"
 authors = ["EarthSciML Authors and Contributors"]
-version = "0.5.0"
+version = "0.6.0"
 
 [deps]
 Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
+MetaGraphsNext = "fa8bd995-216d-47f1-8a91-f3b68fbeb377"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
@@ -15,6 +17,8 @@ Catalyst = "10, 11, 12, 13"
 DifferentialEquations = "7"
 DocStringExtensions = "0.9"
 DomainSets = "0.5, 0.6"
+Graphs = "1"
+MetaGraphsNext = "0.5"
 MethodOfLines = "0.9"
 ModelingToolkit = "8"
 Symbolics = "4, 5"

@@ -84,4 +84,15 @@ using ModelingToolkit
     b = IOBuffer()
     show(b, equations(sir_simple))
     @test String(take!(b)) == "Symbolics.Equation[Differential(t)(reqn₊R(t)) ~ reqn₊γ*reqn₊I(t), Differential(t)(seqn₊S(t)) ~ (-seqn₊β*seqn₊I(t)*seqn₊S(t)) / (seqn₊I(t) + seqn₊R(t) + seqn₊S(t)), Differential(t)(ieqn₊I(t)) ~ (ieqn₊β*ieqn₊I(t)*ieqn₊S(t)) / (ieqn₊I(t) + ieqn₊R(t) + ieqn₊S(t)) - ieqn₊γ*ieqn₊I(t)]"
+
+    @testset "Graph" begin
+        using MetaGraphsNext
+
+        g = graph(sir)
+        l = collect(labels(g))
+        el = collect(edge_labels(g))
+
+        @test sort(l) == sort([:seqn, :ieqn, :reqn])
+        @test length(el) == 3
+    end
 end
