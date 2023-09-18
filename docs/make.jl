@@ -23,7 +23,6 @@ makedocs(;
         ],
         "API Reference" => "api.md",
     ],
-    strict=true,
 )
 
 deploydocs(;
