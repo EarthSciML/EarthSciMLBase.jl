@@ -69,9 +69,10 @@ You can also download the
 ```
 ```@eval
 using TOML
+using Markdown
 version = TOML.parse(read("../../Project.toml",String))["version"]
 name = TOML.parse(read("../../Project.toml",String))["name"]
-link = "https://github.com/EarthSciML/"*name*".jl/tree/gh-pages/v"*version*"/assets/Manifest.toml"
+link = Markdown.MD("https://github.com/EarthSciML/"*name*".jl/tree/gh-pages/v"*version*"/assets/Manifest.toml")
 ```
 ```@raw html
 ">manifest</a> file and the
@@ -81,7 +82,7 @@ link = "https://github.com/EarthSciML/"*name*".jl/tree/gh-pages/v"*version*"/ass
 using TOML
 version = TOML.parse(read("../../Project.toml",String))["version"]
 name = TOML.parse(read("../../Project.toml",String))["name"]
-link = "https://github.com/EarthSciML/"*name*".jl/tree/gh-pages/v"*version*"/assets/Project.toml"
+link = Markdown.MD("https://github.com/EarthSciML/"*name*".jl/tree/gh-pages/v"*version*"/assets/Project.toml")
 ```
 ```@raw html
 ">project</a> file.
