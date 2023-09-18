@@ -80,6 +80,7 @@ link = Markdown.MD("https://github.com/EarthSciML/"*name*".jl/tree/gh-pages/v"*v
 ```
 ```@eval
 using TOML
+using Markdown
 version = TOML.parse(read("../../Project.toml",String))["version"]
 name = TOML.parse(read("../../Project.toml",String))["name"]
 link = Markdown.MD("https://github.com/EarthSciML/"*name*".jl/tree/gh-pages/v"*version*"/assets/Project.toml")
