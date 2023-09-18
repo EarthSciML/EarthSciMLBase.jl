@@ -74,15 +74,19 @@ equations(get_mtk(variable_loss))
  Differential(t)(temperature₊T(t)) ~ temperature₊Tc*sin(t / temperature₊tc)
 ```
 """
-function param_to_var(sys::ModelingToolkit.AbstractSystem, p::Symbol)
+function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
     params = parameters(sys)
-    iparam = findfirst(isequal(p), Symbol.(params))
-    param = params[iparam]
+    replace = Dict()
+    for p ∈ ps
+        iparam = findfirst(isequal(p), Symbol.(params))
+        param = params[iparam]
 
-    iv = ModelingToolkit.get_iv(sys)
-    newvar = (@variables $p(iv))[1]
-    newvar = add_metadata(newvar, param)
+        iv = ModelingToolkit.get_iv(sys)
+        newvar = (@variables $p(iv))[1]
+        newvar = add_metadata(newvar, param)
+        replace[param] = newvar
+    end
 
-    SymbolicUtils.substitute(sys, Dict(param => newvar))
+    SymbolicUtils.substitute(sys, replace)
 end
 

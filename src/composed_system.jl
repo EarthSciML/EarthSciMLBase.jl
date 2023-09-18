@@ -189,10 +189,15 @@ function get_mtk(sys::ComposedEarthSciMLSystem)::ModelingToolkit.AbstractSystem
         end
     end
 
+    if length(systems) == 0 && length(connectorsystems) > 0
+        error("Cannot compose only connector systems")
+    end
+
     # Create the connector system of equations.
     connector_eqs = vcat([s.eqs for s ∈ connectorsystems]...)
     if length(connector_eqs) > 0
-        @named connectors = ODESystem(connector_eqs)
+        iv = ModelingToolkit.get_iv(get_mtk(systems[1]))
+        @named connectors = ODESystem(connector_eqs, iv)
     end
 
     # Finalize the concrete systems.
