@@ -2,7 +2,7 @@ module EarthSciMLBase
 using ModelingToolkit, Symbolics, Catalyst
 using Graphs, MetaGraphsNext
 using DocStringExtensions
-using Unitful
+using DynamicQuantities
 
 include("add_dims.jl")
 include("domaininfo.jl")

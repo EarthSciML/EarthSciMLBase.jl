@@ -1,7 +1,7 @@
 using EarthSciMLBase
 using DomainSets, MethodOfLines, ModelingToolkit, DifferentialEquations
 import SciMLBase
-using Unitful
+using DynamicQuantities
 
 @testset "Composed System" begin
     @parameters t [unit=u"s"]

@@ -1,4 +1,4 @@
-using EarthSciMLBase, ModelingToolkit, Unitful, Symbolics
+using EarthSciMLBase, ModelingToolkit, DynamicQuantities, Symbolics
 
 @parameters α=1 [unit = u"kg", description="α description"] 
 @parameters β=2 [unit = u"kg*s", description="β description"]

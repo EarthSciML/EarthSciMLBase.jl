@@ -20,7 +20,7 @@ code below specifies a first-order loss equation, and then changes the temperatu
 determines the loss rate) with a temperature value that varies in time.
 
 ```jldoctest
-using ModelingToolkit, EarthSciMLBase, Unitful
+using ModelingToolkit, EarthSciMLBase, DynamicQuantities
 
 # Specify the original system with constant temperature.
 struct Loss <: EarthSciMLODESystem

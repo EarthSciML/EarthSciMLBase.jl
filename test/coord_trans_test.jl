@@ -1,6 +1,6 @@
 using EarthSciMLBase
 using ModelingToolkit, DomainSets
-using Unitful
+using DynamicQuantities
 
 @testset "varindex" begin
     @parameters lon lat x y t
