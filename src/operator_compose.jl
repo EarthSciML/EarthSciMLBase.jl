@@ -130,12 +130,12 @@ end
 @named sys1 = ExampleSys(t)
 @named sys2 = ExampleSys2(t)
 
-combined = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y => 6))
+combined = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y => 6.0))
 equations(structural_simplify(get_mtk(combined)))
 
 # output
 1-element Vector{Equation}:
- Differential(t)(sys1₊x(t)) ~ sys1₊p + 6sys1₊sys2_yˍt(t)
+ Differential(t)(sys1₊x(t)) ~ sys1₊p + 6.0sys1₊sys2_yˍt(t)
 ```
 """
 function operator_compose(a::EarthSciMLODESystem, b::EarthSciMLODESystem, translate=Dict())

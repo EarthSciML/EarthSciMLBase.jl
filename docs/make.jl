@@ -18,6 +18,7 @@ makedocs(;
         "Examples" => [
             "Composition and Visualization" => "comp_viz.md",
             "Initial and Boundary Conditions" => "example_icbc.md",
+            "Parameter replacement" => "param_to_var.md",
             "Advection" => "example_advection.md",
             "All together" => "example_all_together.md",
         ],

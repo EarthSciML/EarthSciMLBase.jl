@@ -79,11 +79,21 @@ using ModelingToolkit
     
     sirfinal = get_mtk(sir)
     
-    sir_simple = structural_simplify(sirfinal) 
+    sir_simple = structural_simplify(sirfinal)
 
-    b = IOBuffer()
-    show(b, equations(sir_simple))
-    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(reqn₊R(t)) ~ reqn₊γ*reqn₊I(t), Differential(t)(seqn₊S(t)) ~ (-seqn₊β*seqn₊I(t)*seqn₊S(t)) / (seqn₊I(t) + seqn₊R(t) + seqn₊S(t)), Differential(t)(ieqn₊I(t)) ~ (ieqn₊β*ieqn₊I(t)*ieqn₊S(t)) / (ieqn₊I(t) + ieqn₊R(t) + ieqn₊S(t)) - ieqn₊γ*ieqn₊I(t)]"
+    want_eqs = [
+        Differential(t)(reqn.R) ~ reqn.γ*reqn.I, 
+        Differential(t)(seqn.S) ~ (-seqn.β*seqn.I*seqn.S) / (seqn.I + seqn.R + seqn.S),
+        Differential(t)(ieqn.I) ~ (ieqn.β*ieqn.I*ieqn.S) / (ieqn.I + ieqn.R + ieqn.S) - ieqn.γ*ieqn.I,
+    ]
+
+    have_eqs = equations(sir_simple)
+    for eq in want_eqs
+        @test eq in have_eqs
+    end
+    for eq in have_eqs
+        @test eq in want_eqs
+    end
 
     @testset "Graph" begin
         using MetaGraphsNext
