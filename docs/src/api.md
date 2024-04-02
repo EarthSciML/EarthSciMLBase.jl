@@ -1,7 +1,3 @@
-```@meta
-CurrentModule = EarthSciMLBase
-```
-
 # API Index
 ```@index
 ```

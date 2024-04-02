@@ -1,7 +1,3 @@
-```@meta
-CurrentModule = EarthSciMLBase
-```
-
 # Advection Example
 
 ```@example

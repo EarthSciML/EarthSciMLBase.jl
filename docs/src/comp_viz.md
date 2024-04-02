@@ -1,7 +1,3 @@
-```@meta
-CurrentModule = EarthSciMLBase
-```
-
 # Example using composition and visualization
 
 ```@example

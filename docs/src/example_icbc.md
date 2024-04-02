@@ -1,7 +1,3 @@
-```@meta
-CurrentModule = EarthSciMLBase
-```
-
 # Initial and Boundary condition example
 
 ```@example

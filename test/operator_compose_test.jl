@@ -60,6 +60,28 @@ end
     @test String(take!(b)) == "Symbolics.Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_yˍt(t)]"
 end
 
+@testset "Non-ODE" begin
+    @parameters t
+    struct ExampleSysNonODE <: EarthSciMLODESystem
+        sys::ODESystem
+        function ExampleSysNonODE(t; name)
+            @variables y(t)
+            @parameters p
+            new(ODESystem([y ~ p], t; name))
+        end
+    end
+
+    @named sys1 = ExampleSys(t)
+    @named sys2 = ExampleSysNonODE(t)
+
+    combined = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
+    sys_combined = structural_simplify(get_mtk(combined))
+
+    @unpack x, p = sys1.sys
+    wanteq = Differential(t)(x) ~ p + sys2.sys.y
+    @test isequal(wanteq, only(equations(sys_combined)))
+end
+
 @testset "translated with conversion factor" begin
     @parameters t
     @named sys1 = ExampleSys(t)
@@ -69,9 +91,8 @@ end
 
     ox = get_mtk(combined)
     op = structural_simplify(ox)
-    eq = equations(op)
-
     b = IOBuffer()
+    eq = equations(op)
     show(b, eq)
     @test String(take!(b)) == "Symbolics.Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + 6.0sys1₊sys2_yˍt(t)]"
 end
