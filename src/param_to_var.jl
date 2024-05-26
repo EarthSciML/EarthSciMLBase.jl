@@ -30,7 +30,7 @@ function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
         param = params[iparam]
 
         iv = ModelingToolkit.get_iv(sys)
-        newvar = (@variables $p(iv))[1]
+        newvar = only(@variables $p(iv))
         newvar = add_metadata(newvar, param)
         replace[param] = newvar
     end

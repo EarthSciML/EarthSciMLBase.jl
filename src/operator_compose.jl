@@ -1,6 +1,19 @@
 export operator_compose
 
 """
+Return the dependent variable, which is the first argument of the term, 
+unless the term is a time derivative, in which case the dependent variable 
+is the argument of the time derivative.
+"""
+function get_dv(term, iv)
+    if operation(term) == Differential(iv)
+        return arguments(term)[1]
+    else
+        return term
+    end
+end
+
+"""
 $(SIGNATURES)
 
 Add a system scope to a variable name, for example so that 
@@ -35,9 +48,9 @@ function operator_compose(a::EarthSciMLODESystem, b::EarthSciMLODESystem, transl
     bname = String(nameof(b.sys))
     connections = Equation[]
     for (i, a_eq) ∈ enumerate(a_eqs)
-        adv = add_scope(a.sys, arguments(a_eq.lhs)[1], iv) # dependent variable
+        adv = add_scope(a.sys, get_dv(a_eq.lhs, iv), iv) # dependent variable
         if adv ∉ keys(translate) # If adv is not in the translation dictionary, then assume it is the same in both systems.
-            bdv, conv = add_scope(b.sys, arguments(a_eq.lhs)[1], iv), 1
+            bdv, conv = add_scope(b.sys, get_dv(a_eq.lhs, iv), iv), 1
         else
             tt = translate[adv]
             if length(tt) == 1 # Handle the optional inclusion of a conversion factor.
@@ -49,39 +62,44 @@ function operator_compose(a::EarthSciMLODESystem, b::EarthSciMLODESystem, transl
             end
         end
         for (j, b_eq) ∈ enumerate(b_eqs)
-            if isequal(bdv, add_scope(b.sys, b_eq.lhs, iv))
-                # The LHS of this equation matches the dependent variable of interest, 
-                # so we just add bdv to the RHS of the other equation.
-                a_eqs[i] = a_eq.lhs ~ a_eq.rhs + bdv * conv
-            elseif isequal(bdv, add_scope(b.sys, arguments(b_eq.lhs)[1], iv)) && operation(b_eq.lhs) == Differential(iv)
-                # The LHS of this equation is the time derivative of the dependent variable of interest,
-                # so create a new variable to represent the time derivative of the dependent variable
+            if isequal(bdv, add_scope(b.sys, get_dv(b_eq.lhs, iv), iv))
+                # The dependent variable of the LHS of this equation matches the dependent 
+                # variable of interest,
+                # so create a new variable to represent the dependent variable
                 # of interest and add it to the RHS of the other equation, and then also set the two
                 # dependent variables to be equal.
                 bvar = String(Symbolics.tosymbol(b_eq.lhs, escape=false))
-                var1 = Symbol("$(bname)_$(bvar)")
-                term1 = (@variables $var1(iv))[1]
-                term1 = add_metadata(term1, b_eq.lhs)
-                a_eqs[i] = a_eq.lhs ~ a_eq.rhs + term1 * conv
-                b_eqs[j] = term1 ~ b_eq.rhs
-                var2 = Symbol("$(aname)₊", var1)
-                term2 = (@variables $var2(iv))[1]
-                term2 = add_metadata(term2, b_eq.lhs)
-                var3 = Symbol("$(bname)₊", var1)
-                term3 = (@variables $var3(iv))[1]
-                term3 = add_metadata(term3, b_eq.lhs)
-                push!(connections, term2 ~ term3)
+                if operation(b_eq.lhs) == Differential(iv)
+                    # The LHS of this equation is the time derivative of the dependent variable of interest,
+                    var1 = Symbol("$(bname)_ddt_$(bvar)")
+                    term1 = (@variables $var1(iv))[1]
+                    term1 = add_metadata(term1, b_eq.lhs)
+                    b_eqs[j] = term1 ~ b_eq.rhs
 
-                # Now set the dependent variables in the two systems to be equal.
-                push!(connections, adv ~ bdv * conv)
+                    var2 = Symbol("$(aname)₊", var1)
+                    term2 = (@variables $var2(iv))[1]
+                    term2 = add_metadata(term2, b_eq.lhs)
+                    var3 = Symbol("$(bname)₊", var1)
+                    term3 = (@variables $var3(iv))[1]
+                    term3 = add_metadata(term3, b_eq.lhs)
+                    push!(connections, term2 ~ term3)
+                    a_eqs[i] = a_eq.lhs ~ a_eq.rhs + term1 * conv
+                    # Now set the dependent variables in the two systems to be equal.
+                    push!(connections, adv ~ bdv * conv)
+                else # The LHS of this equation is the dependent variable of interest.
+                    var1 = Symbol("$(bname)_$(bvar)")
+                    term1 = (@variables $var1(iv))[1]
+                    term1 = add_metadata(term1, b_eq.lhs)
+                    var2 = Symbol("$(aname)₊", var1)
+                    term2 = (@variables $var2(iv))[1]
+                    term2 = add_metadata(term2, b_eq.lhs)
+                    a_eqs[i] = a_eq.lhs ~ a_eq.rhs + term1
+                    push!(connections, term2 ~ bdv * conv)
+                end
             end
         end
     end
-
-    ComposedEarthSciMLSystem(
-        ConnectorSystem(connections, a, b),
-        a, b,
-    )
+    ConnectorSystem(connections, a, b)
 end
 
 # PDESystems don't have a compose function, so we just add the equations together
