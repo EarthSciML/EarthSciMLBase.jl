@@ -3,7 +3,6 @@ using ModelingToolkit, Catalyst
 using MethodOfLines, DifferentialEquations, DomainSets
 import SciMLBase
 
-
 @parameters x y t α = 10.0
 @variables u(t) v(t)
 Dt = Differential(t)
@@ -66,13 +65,13 @@ end
         ]
 
         # Periodic BCs
-        bcs = [ 
+        bcs = [
             u(t_min, x, y) ~ 16.0,
             v(t_min, x, y) ~ 16.0,
             u(t, x_min, y) ~ 16.0,
             u(t, x_max, y) ~ 16.0,
             u(t, x, y_min) ~ 16.0,
-            u(t, x, y_max) ~ 16.0, 
+            u(t, x, y_max) ~ 16.0,
             v(t, x_min, y) ~ 16.0,
             v(t, x_max, y) ~ 16.0,
             v(t, x, y_min) ~ 16.0,
