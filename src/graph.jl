@@ -11,13 +11,13 @@ function graph(sys::ComposedEarthSciMLSystem)::MetaGraphsNext.MetaGraph
         edge_data_type=ConnectorSystem,
     )
     for sys ∈ sys.systems # First do nodes
-        if isa(sys, EarthSciMLODESystem)
-            g[nameof(sys.sys)] = sys
-        end
+        g[nameof(sys.sys)] = sys
     end
-    for sys ∈ sys.systems # Now do edges.
-        if isa(sys, ConnectorSystem)
-            g[nameof(sys.from.sys), nameof(sys.to.sys)] = sys
+    for sysa ∈ sys.systems # Now do edges.
+        for sysb ∈ sys.systems
+            if applicable(couple, sysa, sysb)
+                g[nameof(sysa.sys), nameof(sysb.sys)] = couple(sysa, sysb)
+            end
         end
     end
     g

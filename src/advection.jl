@@ -14,8 +14,8 @@ function meanwind_vars(t, pvars; prefix="", multidim=false)
         # set metadata
         uv = add_metadata(uv, pv)
         numerator = ModelingToolkit.get_unit(uv)
-        uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableUnit, numerator/denominator)
-        uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableDescription, 
+        uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableUnit, numerator / denominator)
+        uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableDescription,
             "Mean wind speed in the $(pv) direction.")
         push!(uvars, uv)
     end
@@ -66,15 +66,16 @@ end
 
 function Base.:(+)(c::ComposedEarthSciMLSystem, _::Advection)::ComposedEarthSciMLSystem
     @assert isa(c.domaininfo, DomainInfo) "The system must have initial and boundary conditions (i.e. DomainInfo) to add advection."
-    
+
     # Add in a model component to allow the specification of the wind velocity.
-    c += MeanWind(ivar(c.domaininfo), pvars(c.domaininfo))
-    
+    push!(c.systems, MeanWind(ivar(c.domaininfo), pvars(c.domaininfo)))
+
     function f(sys::ModelingToolkit.PDESystem)
         eqs = advection(sys.dvs, c.domaininfo)
         operator_compose!(sys, eqs)
     end
-    ComposedEarthSciMLSystem(c.systems, c.domaininfo, [c.pdefunctions; f])
+    push!(c.pdefunctions, f)
+    c
 end
 Base.:(+)(a::Advection, c::ComposedEarthSciMLSystem)::ComposedEarthSciMLSystem = c + a
 
@@ -95,7 +96,7 @@ struct ConstantWind <: EarthSciMLODESystem
             sym = Symbol("v_$i")
             uv = (@variables $sym(t))[1]
             uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableUnit, unit(val))
-            uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableDescription, 
+            uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableDescription,
                 "Constant wind speed in the $(i)$(counts[i]) direction.")
             push!(uvars, uv)
         end
@@ -104,21 +105,19 @@ struct ConstantWind <: EarthSciMLODESystem
             u = unit(vals[i])
             v = ustrip(vals[i])
             sym = Symbol("c_v$i")
-            c = (@constants $sym = v [unit=u])[1]
+            c = (@constants $sym = v [unit = u])[1]
             push!(uvals, c)
         end
         eqs = Symbolics.scalarize(uvars .~ uvals)
         new(ODESystem(eqs, t, uvars, []; name=:constantwind), length(vals))
     end
 end
-function Base.:(+)(mw::MeanWind, w::ConstantWind)::ComposedEarthSciMLSystem
+function couple(mw::MeanWind, w::ConstantWind)
     # Create new systems so that the variables are correctly scoped.
     @named a = ODESystem(Equation[], ModelingToolkit.get_iv(mw.sys), [], [], systems=[mw.sys])
     @named b = ODESystem(Equation[], ModelingToolkit.get_iv(w.sys), [], [], systems=[w.sys])
-    eqs = Symbolics.scalarize(states(a) .~ states(b))
-    ComposedEarthSciMLSystem(ConnectorSystem(
-        eqs,
+    ConnectorSystem(
+        Symbolics.scalarize(states(a) .~ states(b)),
         mw, w,
-    ))
+    )
 end
-Base.:(+)(w::ConstantWind, mw::MeanWind)::ComposedEarthSciMLSystem = mw + w

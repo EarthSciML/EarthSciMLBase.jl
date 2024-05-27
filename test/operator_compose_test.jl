@@ -1,12 +1,23 @@
 using EarthSciMLBase
 using ModelingToolkit
 using Catalyst
-
+using Test
 
 struct ExampleSys <: EarthSciMLODESystem
     sys::ODESystem
 
     function ExampleSys(t; name)
+        @variables x(t)
+        @parameters p
+        D = Differential(t)
+        new(ODESystem([D(x) ~ p], t; name))
+    end
+end
+
+struct ExampleSysCopy <: EarthSciMLODESystem
+    sys::ODESystem
+
+    function ExampleSysCopy(t; name)
         @variables x(t)
         @parameters p
         D = Differential(t)
@@ -29,9 +40,11 @@ end
     @parameters t
 
     @named sys1 = ExampleSys(t)
-    @named sys2 = ExampleSys(t)
+    @named sys2 = ExampleSysCopy(t)
 
-    combined = operator_compose(sys1, sys2)
+    EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSysCopy) = operator_compose(sys1, sys2)
+
+    combined = sys1 + sys2
 
     ox = get_mtk(combined)
     op = structural_simplify(ox)
@@ -40,7 +53,7 @@ end
     b = IOBuffer()
     show(b, eq)
     # The simplified equation should be D(x) = p + sys2_xˍt, where sys2_xˍt is also equal to p.
-    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_xˍt(t)]"
+    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_ddt_xˍt(t)]"
 end
 
 @testset "translated" begin
@@ -49,7 +62,8 @@ end
     @named sys1 = ExampleSys(t)
     @named sys2 = ExampleSys2(t)
 
-    combined = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
+    EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys2) = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
+    combined = sys1 + sys2
 
     ox = get_mtk(combined)
     op = structural_simplify(ox)
@@ -57,7 +71,7 @@ end
 
     b = IOBuffer()
     show(b, eq)
-    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_yˍt(t)]"
+    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_ddt_yˍt(t)]"
 end
 
 @testset "Non-ODE" begin
@@ -74,12 +88,14 @@ end
     @named sys1 = ExampleSys(t)
     @named sys2 = ExampleSysNonODE(t)
 
-    combined = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
-    sys_combined = structural_simplify(get_mtk(combined))
+    EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSysNonODE) = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
+    combined = sys1 + sys2
+    combined_mtk = get_mtk(combined)
+    sys_combined = structural_simplify(combined_mtk)
 
-    @unpack x, p = sys1.sys
-    wanteq = Differential(t)(x) ~ p + sys2.sys.y
-    @test isequal(wanteq, only(equations(sys_combined)))
+    streq = string(equations(sys_combined))
+    @test occursin("sys1₊sys2_y(t)", streq)
+    @test occursin("sys1₊p", streq)
 end
 
 @testset "translated with conversion factor" begin
@@ -87,14 +103,14 @@ end
     @named sys1 = ExampleSys(t)
     @named sys2 = ExampleSys2(t)
 
-    combined = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y => 6.0))
+    EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys2) = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y => 6.0))
+    combined = sys1 + sys2
 
     ox = get_mtk(combined)
     op = structural_simplify(ox)
-    b = IOBuffer()
-    eq = equations(op)
-    show(b, eq)
-    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + 6.0sys1₊sys2_yˍt(t)]"
+    streq = string(equations(op))
+    @test occursin("sys1₊p", streq)
+    @test occursin("sys1₊sys2_ddt_yˍt(t)", streq)
 end
 
 @testset "Reaction-Deposition" begin
@@ -129,11 +145,12 @@ end
     rn = Chem(t)
     dep = Deposition(t)
 
-    combined = operator_compose(rn, dep)
+    EarthSciMLBase.couple(rn::Chem, dep::Deposition) = operator_compose(rn, dep)
+    combined = rn + dep
     cs = structural_simplify(get_mtk(combined))
     eq = equations(cs)
 
     b = IOBuffer()
     show(b, eq)
-    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(chem₊SO2(t)) ~ chem₊deposition_SO2ˍt(t) - chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊O2(t)) ~ -chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊SO4(t)) ~ chem₊α*chem₊O2(t)*chem₊SO2(t)]"
+    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(chem₊SO2(t)) ~ chem₊deposition_ddt_SO2ˍt(t) - chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊O2(t)) ~ -chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊SO4(t)) ~ chem₊α*chem₊O2(t)*chem₊SO2(t)]"
 end

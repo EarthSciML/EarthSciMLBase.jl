@@ -1,4 +1,4 @@
-export AbstractEarthSciMLSystem, EarthSciMLODESystem, ComposedEarthSciMLSystem, ConnectorSystem, get_mtk 
+export AbstractEarthSciMLSystem, EarthSciMLODESystem, ComposedEarthSciMLSystem, ConnectorSystem, get_mtk
 
 """
 One or more ModelingToolkit systems of equations. EarthSciML uses custom types to allow 
@@ -47,7 +47,7 @@ function Base.:(+)(composed::ComposedEarthSciMLSystem, sys::EarthSciMLODESystem)
 end
 
 Base.:(+)(sys::EarthSciMLODESystem, composed::ComposedEarthSciMLSystem)::ComposedEarthSciMLSystem = composed + sys
-Base.:(+)(a::EarthSciMLODESystem, b::EarthSciMLODESystem)::ComposedEarthSciMLSystem = ComposedEarthSciMLSystem(a, b)
+Base.:(+)(systems::EarthSciMLODESystem...)::ComposedEarthSciMLSystem = ComposedEarthSciMLSystem(systems...)
 
 function Base.:(+)(composed::ComposedEarthSciMLSystem, domaininfo::DomainInfo)::ComposedEarthSciMLSystem
     @assert composed.domaininfo === nothing "Cannot add two sets of DomainInfo to a system."
@@ -60,43 +60,32 @@ function Base.:(+)(sys::EarthSciMLODESystem, di::DomainInfo)::ComposedEarthSciML
 end
 Base.:(+)(di::DomainInfo, sys::EarthSciMLODESystem)::ComposedEarthSciMLSystem = sys + di
 
+"""
+Couple two systems together. This function should be overloaded for each pair of 
+systems that can be coupled together.
+
+In the `get_mtk` method of `ComposedEarthSciMLSystem`, this function is called to
+make any edits needed to the two systems before they are composed together,
+and also to return a `ConnectorSystem` that represents the coupling of the two systems.
+"""
+couple() = error("not implemented")
+
 function get_mtk(sys::ComposedEarthSciMLSystem; name=:model)::ModelingToolkit.AbstractSystem
-    # Separate the connector systems from the concrete systems.
     connector_eqs = []
     for (i, a) ∈ enumerate(sys.systems)
         for (j, b) ∈ enumerate(sys.systems)
             if applicable(couple, a, b)
                 cs = couple(a, b)
-                @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a ConnectorSystem. "*
-                                "This is not the case for $(typeof(a)) and $(typeof(b)); it is instead a $(typeof(cs))."
+                @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a ConnectorSystem. " *
+                                               "This is not the case for $(typeof(a)) and $(typeof(b)); it is instead a $(typeof(cs))."
                 sys.systems[i], a = cs.from, cs.from
                 sys.systems[j], b = cs.to, cs.to
                 append!(connector_eqs, cs.eqs)
             end
         end
     end
-    # systems = []
-    # connectorsystems = []
-    # for s ∈ sys.systems
-    #     if isa(s, ConnectorSystem)
-    #         push!(connectorsystems, s)
-    #     elseif isa(s, EarthSciMLODESystem)
-    #         push!(systems, s)
-    #     else
-    #         error("Cannot compose system of type $(typeof(s))")
-    #     end
-    # end
-
-    # if length(systems) == 0 && length(connectorsystems) > 0
-    #     error("Cannot compose only connector systems")
-    # end
-
-    # Create the connector system of equations.
-    #connector_eqs = vcat([s.eqs for s ∈ connectorsystems]...)
-    #if length(connectors) > 0
-        iv = ModelingToolkit.get_iv(get_mtk(first(sys.systems)))
-        connectors = ODESystem(connector_eqs, iv; name=name)
-    #end
+    iv = ModelingToolkit.get_iv(get_mtk(first(sys.systems)))
+    connectors = ODESystem(connector_eqs, iv; name=name)
 
     # Finalize the concrete systems.
     mtksys = [get_mtk(s) for s ∈ sys.systems]
@@ -105,9 +94,13 @@ function get_mtk(sys::ComposedEarthSciMLSystem; name=:model)::ModelingToolkit.Ab
 
     if sys.domaininfo !== nothing
         o += sys.domaininfo
+    end
+
+    if length(sys.pdefunctions) > 0
+        @assert sys.domaininfo !== nothing "Cannot apply PDE functions to a system without domain information."
         for f ∈ sys.pdefunctions
             o = f(o)
-        end    
+        end
     end
     return o
 end
@@ -117,10 +110,8 @@ A connector for two systems.
 
 $(FIELDS)
 """
-struct ConnectorSystem <: AbstractEarthSciMLSystem
+struct ConnectorSystem
     eqs::Vector{Equation}
     from::AbstractEarthSciMLSystem
     to::AbstractEarthSciMLSystem
 end
-
-get_mtk(_::ConnectorSystem) = error("Cannot convert a connector system to ModelingToolkit")
