@@ -39,10 +39,21 @@ struct ExampleSys <: EarthSciMLODESystem
     end
 end
 
-@named sys1 = ExampleSys(t)
-@named sys2 = ExampleSys(t)
+struct ExampleSys2 <: EarthSciMLODESystem
+    sys::ODESystem
 
-EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys) = operator_compose(sys1, sys2)
+    function ExampleSys2(t; name)
+        @variables x(t)
+        @parameters p
+        D = Differential(t)
+        new(ODESystem([D(x) ~ 2p], t; name))
+    end
+end
+
+@named sys1 = ExampleSys(t)
+@named sys2 = ExampleSys2(t)
+
+EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys2) = operator_compose(sys1, sys2)
 
 combined = sys1 + sys2
 
@@ -65,9 +76,9 @@ This example demonstrates a case where one variable in the first system is equal
 
 
 ```@example operator_compose
-struct ExampleSys2 <: EarthSciMLODESystem
+struct ExampleSys3 <: EarthSciMLODESystem
     sys::ODESystem
-    function ExampleSys2(t; name)
+    function ExampleSys3(t; name)
         @variables y(t)
         @parameters p
         D = Differential(t)
@@ -76,9 +87,9 @@ struct ExampleSys2 <: EarthSciMLODESystem
 end
 
 @named sys1 = ExampleSys(t)
-@named sys2 = ExampleSys2(t)
+@named sys2 = ExampleSys3(t)
 
-function EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys2)
+function EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys3)
     operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
 end
 
@@ -127,7 +138,7 @@ Finally, this last example shows the fourth case, where a conversion factor is i
 
 ```@example operator_compose
 @named sys1 = ExampleSys(t)
-@named sys2 = ExampleSys2(t)
+@named sys2 = ExampleSysNonODE(t)
 
 function EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSysNonODE)
     operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y => 6.0))
