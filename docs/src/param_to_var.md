@@ -5,7 +5,7 @@ with one specified by another system that does change in time (or space). For ex
 code below specifies a first-order loss equation, and then changes the temperature (which 
 determines the loss rate) with a temperature value that varies in time.
 
-As an example, we will create a loss equation that depends on the temperature, starting with a constant temperature. We will then create a temperature equation that varies in time, and use the `param_to_var` function to replace the constant temperature in the loss equation with the time-varying temperature.
+As an example, we will create a loss equation that depends on the temperature, starting with a constant temperature. We will then create a temperature equation that varies in time, and use the [`param_to_var`](@ref) function to replace the constant temperature in the loss equation with the time-varying temperature.
 
 So first, let's specify the original system with constant temperature.
 
