@@ -4,7 +4,11 @@ CurrentModule = EarthSciMLBase
 
 # Example using different components of EarthSciMLBase together
 
-```@example
+This example shows how to define and couple different components of EarthSciMLBase together to create a more complex model. First, we create several model components.
+
+Our first example system is a simple reaction system:
+
+```@example ex1
 using EarthSciMLBase
 using ModelingToolkit, Catalyst, DomainSets, MethodOfLines, DifferentialEquations
 using Plots
@@ -12,11 +16,6 @@ using Plots
 # Create our independent variable `t` and our partially-independent variables `x` and `y`.
 @parameters t x y
 
-# Create our ODE systems of equations as subtypes of `EarthSciMLODESystem`.
-# Creating our system in this way allows us to convert it to a PDE system 
-# using just the `+` operator as shown below.
-
-# Our first example system is a simple reaction system.
 struct ExampleSys1 <: EarthSciMLODESystem
     sys
     function ExampleSys1(t; name)
@@ -27,9 +26,12 @@ struct ExampleSys1 <: EarthSciMLODESystem
         ), combinatoric_ratelaws=false))
     end
 end
+nothing # hide
+```
 
-# Our second example system is a simple ODE system,
-# with the same two variables.
+Our second example system is a simple ODE system, with the same two variables.
+
+```@example ex1
 struct ExampleSys2 <: EarthSciMLODESystem
     sys
     function ExampleSys2(t; name)
@@ -42,38 +44,54 @@ struct ExampleSys2 <: EarthSciMLODESystem
         ))
     end
 end
+nothing # hide
+```
 
-# Specify what should happen when we couple the two systems together.
-# In this case, we want the the derivative of the composed system to 
-# be equal to the sum of the derivatives of the two systems.
-# We can do that using the `operator_compose` function 
-# from this package.
-function Base.:(+)(sys1::ExampleSys1, sys2::ExampleSys2)
-    operator_compose(sys1, sys2)
-end
+Now, we specify what should happen when we couple the two systems together.
+In this case, we want the the derivative of the composed system to 
+be equal to the sum of the derivatives of the two systems.
+We can do that using the [`operator_compose`](@ref) function 
+from this package.
 
-# Once we specify all of the above, it is simple to create our 
-# two individual systems and then couple them together. 
+```@example ex1
+EarthSciMLBase.couple(sys1::ExampleSys1, sys2::ExampleSys2) = operator_compose(sys1, sys2)
+nothing # hide
+```
+
+Once we specify all of the above, it is simple to create our two individual systems and then couple them together. 
+
+```@example ex1
 @named sys1 = ExampleSys1(t)
 @named sys2 = ExampleSys2(t)
 sys = sys1 + sys2
+```
 
-# At this point we have an ODE system that is composed of two other ODE systems.
-# We can inspect its equations and observed variables using the `equations` and `observed` functions.
+At this point we have an ODE system that is composed of two other ODE systems.
+We can inspect its observed variables using the `observed` function.
+
+```@example ex1
 simplified_sys = structural_simplify(get_mtk(sys))
-equations(simplified_sys)
-observed(simplified_sys)
+```
 
-# We can also run simulations using this system:
+```@example ex1
+observed(simplified_sys)
+```
+
+We can also run simulations using this system:
+
+```@example ex1
 odeprob = ODEProblem(simplified_sys, [], (0.0,10.0), [])
 odesol = solve(odeprob)
 plot(odesol)
+```
 
-# Once we've confirmed that our model works in a 0D "box model" setting,
-# we can expand it to 1, 2, or 3 dimensions using by adding in initial 
-# and boundary conditions.
-# We will also add in advection using constant-velocity wind fields
-# add the same time.
+Once we've confirmed that our model works in a 0D "box model" setting,
+we can expand it to 1, 2, or 3 dimensions using by adding in initial 
+and boundary conditions.
+We will also add in advection using constant-velocity wind fields
+add the same time.
+
+```@example ex1
 x_min = y_min = t_min = 0.0
 x_max = y_max = t_max = 1.0
 domain = DomainInfo(
@@ -84,12 +102,22 @@ domain = DomainInfo(
 
 sys_pde = sys + domain + ConstantWind(t, 1.0, 1.0) + Advection()
 
-# Now we can inspect this new system that we've created:
 sys_pde_mtk = get_mtk(sys_pde)
-equations(sys_pde_mtk)
-sys_pde_mtk.dvs
+```
 
-# Finally, we can run a simulation using this system:
+Now we can inspect this new system that we've created:
+
+```@example ex1
+equations(sys_pde_mtk)
+```
+
+```@example ex1
+sys_pde_mtk.dvs
+```
+
+Finally, we can run a simulation using this system:
+
+```@example ex1
 discretization = MOLFiniteDifference([x=>10, y=>10], t, approx_order=2)
 @time pdeprob = discretize(sys_pde_mtk, discretization)
 @time pdesol = solve(pdeprob, Tsit5(), saveat=0.1)

@@ -44,14 +44,11 @@ end
 Now, we specify how to compose the two systems using `param_to_var`.
 
 ```@example param_to_var
-function Base.:(+)(loss::Loss, temp::Temperature)
+function EarthSciMLBase.couple(loss::Loss, temp::Temperature)
     loss = Loss(param_to_var(loss.sys, :T))
     losseqn = loss.sys
     teqn = temp.sys
-    ComposedEarthSciMLSystem(
-        ConnectorSystem([losseqn.T ~ teqn.T], loss, temp), 
-        loss, temp,
-    )
+    ConnectorSystem([losseqn.T ~ teqn.T], loss, temp)
 end
 ```
 
