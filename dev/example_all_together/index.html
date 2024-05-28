@@ -1,32 +1,23 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>All Together · EarthSciMLBase.jl</title><meta name="title" content="All Together · EarthSciMLBase.jl"/><meta property="og:title" content="All Together · EarthSciMLBase.jl"/><meta property="twitter:title" content="All Together · EarthSciMLBase.jl"/><meta name="description" content="Documentation for EarthSciMLBase.jl."/><meta property="og:description" content="Documentation for EarthSciMLBase.jl."/><meta property="twitter:description" content="Documentation for EarthSciMLBase.jl."/><meta property="og:url" content="https://EarthSciML.github.io/EarthSciMLBase.jl/example_all_together/"/><meta property="twitter:url" content="https://EarthSciML.github.io/EarthSciMLBase.jl/example_all_together/"/><link rel="canonical" href="https://EarthSciML.github.io/EarthSciMLBase.jl/example_all_together/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">EarthSciMLBase.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><span class="tocitem">Examples</span><ul><li><a class="tocitem" href="../param_to_var/">Parameter Replacement</a></li><li><a class="tocitem" href="../operator_compose/">Operator Composition</a></li><li><a class="tocitem" href="../comp_viz/">Composition and Visualization</a></li><li><a class="tocitem" href="../example_icbc/">Initial and Boundary Conditions</a></li><li><a class="tocitem" href="../example_advection/">Advection</a></li><li class="is-active"><a class="tocitem" href>All Together</a></li></ul></li><li><a class="tocitem" href="../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li class="is-active"><a href>All Together</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>All Together</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/EarthSciML/EarthSciMLBase.jl/blob/main/docs/src/example_all_together.md#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Example-using-different-components-of-EarthSciMLBase-together"><a class="docs-heading-anchor" href="#Example-using-different-components-of-EarthSciMLBase-together">Example using different components of EarthSciMLBase together</a><a id="Example-using-different-components-of-EarthSciMLBase-together-1"></a><a class="docs-heading-anchor-permalink" href="#Example-using-different-components-of-EarthSciMLBase-together" title="Permalink"></a></h1><pre><code class="language-julia hljs">using EarthSciMLBase
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>All Together · EarthSciMLBase.jl</title><meta name="title" content="All Together · EarthSciMLBase.jl"/><meta property="og:title" content="All Together · EarthSciMLBase.jl"/><meta property="twitter:title" content="All Together · EarthSciMLBase.jl"/><meta name="description" content="Documentation for EarthSciMLBase.jl."/><meta property="og:description" content="Documentation for EarthSciMLBase.jl."/><meta property="twitter:description" content="Documentation for EarthSciMLBase.jl."/><meta property="og:url" content="https://EarthSciML.github.io/EarthSciMLBase.jl/example_all_together/"/><meta property="twitter:url" content="https://EarthSciML.github.io/EarthSciMLBase.jl/example_all_together/"/><link rel="canonical" href="https://EarthSciML.github.io/EarthSciMLBase.jl/example_all_together/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">EarthSciMLBase.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../composition/">Composition</a></li><li><a class="tocitem" href="../operator_compose/">Operator Composition</a></li><li><a class="tocitem" href="../param_to_var/">Parameter Replacement</a></li><li><a class="tocitem" href="../icbc/">Initial and Boundary Conditions</a></li><li><a class="tocitem" href="../advection/">Advection</a></li><li><span class="tocitem">Examples</span><ul><li class="is-active"><a class="tocitem" href>All Together</a></li></ul></li><li><a class="tocitem" href="../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li class="is-active"><a href>All Together</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>All Together</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/EarthSciML/EarthSciMLBase.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/EarthSciML/EarthSciMLBase.jl/blob/main/docs/src/example_all_together.md#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Example-using-different-components-of-EarthSciMLBase-together"><a class="docs-heading-anchor" href="#Example-using-different-components-of-EarthSciMLBase-together">Example using different components of EarthSciMLBase together</a><a id="Example-using-different-components-of-EarthSciMLBase-together-1"></a><a class="docs-heading-anchor-permalink" href="#Example-using-different-components-of-EarthSciMLBase-together" title="Permalink"></a></h1><p>This example shows how to define and couple different components of EarthSciMLBase together to create a more complex model. First, we create several model components.</p><p>Our first example system is a simple reaction system:</p><pre><code class="language-julia hljs">using EarthSciMLBase
 using ModelingToolkit, Catalyst, DomainSets, MethodOfLines, DifferentialEquations
 using Plots
 
 # Create our independent variable `t` and our partially-independent variables `x` and `y`.
 @parameters t x y
 
-# Create our ODE systems of equations as subtypes of `EarthSciMLODESystem`.
-# Creating our system in this way allows us to convert it to a PDE system
-# using just the `+` operator as shown below.
-
-# Our first example system is a simple reaction system.
 struct ExampleSys1 &lt;: EarthSciMLODESystem
     sys
-    function ExampleSys1(t; name)
+    function ExampleSys1(t; name=:sys1)
         @species c₁(t)=5.0 c₂(t)=5.0
         new(convert(ODESystem, ReactionSystem(
             [Reaction(2.0, [c₁], [c₂])],
             t; name=name,
         ), combinatoric_ratelaws=false))
     end
-end
-
-# Our second example system is a simple ODE system,
-# with the same two variables.
-struct ExampleSys2 &lt;: EarthSciMLODESystem
+end</code></pre><p>Our second example system is a simple ODE system, with the same two variables.</p><pre><code class="language-julia hljs">struct ExampleSys2 &lt;: EarthSciMLODESystem
     sys
-    function ExampleSys2(t; name)
+    function ExampleSys2(t; name=:sys2)
         @variables c₁(t)=5.0 c₂(t)=5.0
         @parameters p₁=1.0 p₂=0.5
         D = Differential(t)
@@ -35,40 +26,23 @@ struct ExampleSys2 &lt;: EarthSciMLODESystem
             t; name=name,
         ))
     end
-end
-
-# Specify what should happen when we couple the two systems together.
-# In this case, we want the the derivative of the composed system to
-# be equal to the sum of the derivatives of the two systems.
-# We can do that using the `operator_compose` function
-# from this package.
-function Base.:(+)(sys1::ExampleSys1, sys2::ExampleSys2)
-    operator_compose(sys1, sys2)
-end
-
-# Once we specify all of the above, it is simple to create our
-# two individual systems and then couple them together.
-@named sys1 = ExampleSys1(t)
+end</code></pre><p>Now, we specify what should happen when we couple the two systems together. In this case, we want the the derivative of the composed system to  be equal to the sum of the derivatives of the two systems. We can do that using the <a href="../api/#EarthSciMLBase.operator_compose"><code>operator_compose</code></a> function  from this package.</p><pre><code class="language-julia hljs">EarthSciMLBase.couple(sys1::ExampleSys1, sys2::ExampleSys2) = operator_compose(sys1, sys2)</code></pre><p>Once we specify all of the above, it is simple to create our two individual systems and then couple them together. </p><pre><code class="language-julia hljs">@named sys1 = ExampleSys1(t)
 @named sys2 = ExampleSys2(t)
-sys = sys1 + sys2
-
-# At this point we have an ODE system that is composed of two other ODE systems.
-# We can inspect its equations and observed variables using the `equations` and `observed` functions.
-simplified_sys = structural_simplify(get_mtk(sys))
-equations(simplified_sys)
-observed(simplified_sys)
-
-# We can also run simulations using this system:
-odeprob = ODEProblem(simplified_sys, [], (0.0,10.0), [])
+sys = sys1 + sys2</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ComposedEarthSciMLSystem(EarthSciMLODESystem[Main.ExampleSys1(ModelingToolkit.ODESystem(0x000000000000000d, Symbolics.Equation[Differential(t)(c₁(t)) ~ -2.0c₁(t), Differential(t)(c₂(t)) ~ 2.0c₁(t)], t, SymbolicUtils.BasicSymbolic{Real}[c₁(t), c₂(t)], Any[], nothing, Dict{Any, Any}(:c₂ =&gt; c₂(t), :c₁ =&gt; c₁(t)), Any[], Symbolics.Equation[], Base.RefValue{Vector{Symbolics.Num}}(Symbolics.Num[]), Base.RefValue{Any}(Matrix{Symbolics.Num}(undef, 0, 0)), Base.RefValue{Any}(Matrix{Symbolics.Num}(undef, 0, 0)), Base.RefValue{Matrix{Symbolics.Num}}(Matrix{Symbolics.Num}(undef, 0, 0)), Base.RefValue{Matrix{Symbolics.Num}}(Matrix{Symbolics.Num}(undef, 0, 0)), :sys1, ModelingToolkit.ODESystem[], Dict{Any, Any}(c₁(t) =&gt; 5.0, c₂(t) =&gt; 5.0), nothing, nothing, nothing, ModelingToolkit.SymbolicContinuousCallback[ModelingToolkit.SymbolicContinuousCallback(Symbolics.Equation[], Symbolics.Equation[])], ModelingToolkit.SymbolicDiscreteCallback[], nothing, nothing, nothing, nothing, false, nothing, nothing, nothing, nothing)), Main.ExampleSys2(ModelingToolkit.ODESystem(0x000000000000000e, Symbolics.Equation[Differential(t)(c₁(t)) ~ -p₁, Differential(t)(c₂(t)) ~ p₂], t, SymbolicUtils.BasicSymbolic{Real}[c₁(t), c₂(t)], SymbolicUtils.BasicSymbolic{Real}[p₁, p₂], nothing, Dict{Any, Any}(:c₂ =&gt; c₂(t), :c₁ =&gt; c₁(t), :p₂ =&gt; p₂, :p₁ =&gt; p₁), Any[], Symbolics.Equation[], Base.RefValue{Vector{Symbolics.Num}}(Symbolics.Num[]), Base.RefValue{Any}(Matrix{Symbolics.Num}(undef, 0, 0)), Base.RefValue{Any}(Matrix{Symbolics.Num}(undef, 0, 0)), Base.RefValue{Matrix{Symbolics.Num}}(Matrix{Symbolics.Num}(undef, 0, 0)), Base.RefValue{Matrix{Symbolics.Num}}(Matrix{Symbolics.Num}(undef, 0, 0)), :sys2, ModelingToolkit.ODESystem[], Dict{Any, Any}(c₁(t) =&gt; 5.0, p₂ =&gt; 0.5, c₂(t) =&gt; 5.0, p₁ =&gt; 1.0), nothing, nothing, nothing, ModelingToolkit.SymbolicContinuousCallback[ModelingToolkit.SymbolicContinuousCallback(Symbolics.Equation[], Symbolics.Equation[])], ModelingToolkit.SymbolicDiscreteCallback[], nothing, nothing, nothing, nothing, false, nothing, nothing, nothing, nothing))], nothing, Any[])</code></pre><p>At this point we have an ODE system that is composed of two other ODE systems. We can inspect its observed variables using the <code>observed</code> function.</p><pre><code class="language-julia hljs">simplified_sys = structural_simplify(get_mtk(sys))</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} sys1_{+}c_1\left( t \right)}{\mathrm{d}t} =&amp; sys1_{+}sys2_{ddt\_c_{1}ˍt}\left( t \right) - 2 sys1_{+}c_1\left( t \right) \\
+\frac{\mathrm{d} sys1_{+}c_2\left( t \right)}{\mathrm{d}t} =&amp; sys1_{+}sys2_{ddt\_c_{2}ˍt}\left( t \right) + 2 sys1_{+}c_1\left( t \right)
+\end{align}
+ \]</p><pre><code class="language-julia hljs">observed(simplified_sys)</code></pre><p class="math-container">\[ \begin{align}
+sys2_{+}sys2_{ddt\_c_{1}ˍt}\left( t \right) =&amp;  - sys2_{+}p_1 \\
+sys2_{+}c_1\left( t \right) =&amp; sys1_{+}c_1\left( t \right) \\
+sys2_{+}sys2_{ddt\_c_{2}ˍt}\left( t \right) =&amp; sys2_{+}p_2 \\
+sys2_{+}c_2\left( t \right) =&amp; sys1_{+}c_2\left( t \right) \\
+sys1_{+}sys2_{ddt\_c_{1}ˍt}\left( t \right) =&amp; sys2_{+}sys2_{ddt\_c_{1}ˍt}\left( t \right) \\
+sys1_{+}sys2_{ddt\_c_{2}ˍt}\left( t \right) =&amp; sys2_{+}sys2_{ddt\_c_{2}ˍt}\left( t \right)
+\end{align}
+ \]</p><p>We can also run simulations using this system:</p><pre><code class="language-julia hljs">odeprob = ODEProblem(simplified_sys, [], (0.0,10.0), [])
 odesol = solve(odeprob)
-plot(odesol)
-
-# Once we&#39;ve confirmed that our model works in a 0D &quot;box model&quot; setting,
-# we can expand it to 1, 2, or 3 dimensions using by adding in initial
-# and boundary conditions.
-# We will also add in advection using constant-velocity wind fields
-# add the same time.
-x_min = y_min = t_min = 0.0
+plot(odesol)</code></pre><img src="6f7885ae.svg" alt="Example block output"/><p>Once we&#39;ve confirmed that our model works in a 0D &quot;box model&quot; setting, we can expand it to 1, 2, or 3 dimensions using by adding in initial  and boundary conditions. We will also add in advection using constant-velocity wind fields add the same time.</p><pre><code class="language-julia hljs">x_min = y_min = t_min = 0.0
 x_max = y_max = t_max = 1.0
 domain = DomainInfo(
     constIC(4.0, t ∈ Interval(t_min, t_max)),
@@ -76,15 +50,51 @@ domain = DomainInfo(
     zerogradBC(y ∈ Interval(y_min, y_max)),
 )
 
-sys_pde = sys + domain + ConstantWind(t, 1.0, 1.0) + Advection()
+sys_pde = ExampleSys1(t) + ExampleSys2(t) + domain + ConstantWind(t, 1.0, 1.0) + Advection()
 
-# Now we can inspect this new system that we&#39;ve created:
-sys_pde_mtk = get_mtk(sys_pde)
-equations(sys_pde_mtk)
-sys_pde_mtk.dvs
-
-# Finally, we can run a simulation using this system:
-discretization = MOLFiniteDifference([x=&gt;10, y=&gt;10], t, approx_order=2)
+sys_pde_mtk = get_mtk(sys_pde)</code></pre><p class="math-container">\[ \begin{align}
+sys1_{+}sys2_{ddt\_c_{1}ˍt}\left( t, x, y \right) =&amp; sys2_{+}sys2_{ddt\_c_{1}ˍt}\left( t, x, y \right) \\
+sys1_{+}c_1\left( t, x, y \right) =&amp; sys2_{+}c_1\left( t, x, y \right) \\
+sys1_{+}sys2_{ddt\_c_{2}ˍt}\left( t, x, y \right) =&amp; sys2_{+}sys2_{ddt\_c_{2}ˍt}\left( t, x, y \right) \\
+sys1_{+}c_2\left( t, x, y \right) =&amp; sys2_{+}c_2\left( t, x, y \right) \\
+meanwind_{+}v_{x}\left( t, x, y \right) =&amp; constantwind_{+}v_{1}\left( t, x, y \right) \\
+meanwind_{+}v_{y}\left( t, x, y \right) =&amp; constantwind_{+}v_{2}\left( t, x, y \right) \\
+\frac{\mathrm{d}}{\mathrm{d}t} sys1_{+}c_1\left( t, x, y \right) =&amp;  - 2 sys1_{+}c_1\left( t, x, y \right) + sys1_{+}sys2_{ddt\_c_{1}ˍt}\left( t, x, y \right) - \frac{\mathrm{d}}{\mathrm{d}x} sys1_{+}c_1\left( t, x, y \right) meanwind_{+}v_{x}\left( t, x, y \right) - \frac{\mathrm{d}}{\mathrm{d}y} sys1_{+}c_1\left( t, x, y \right) meanwind_{+}v_{y}\left( t, x, y \right) \\
+\frac{\mathrm{d}}{\mathrm{d}t} sys1_{+}c_2\left( t, x, y \right) =&amp; 2 sys1_{+}c_1\left( t, x, y \right) + sys1_{+}sys2_{ddt\_c_{2}ˍt}\left( t, x, y \right) - meanwind_{+}v_{x}\left( t, x, y \right) \frac{\mathrm{d}}{\mathrm{d}x} sys1_{+}c_2\left( t, x, y \right) - \frac{\mathrm{d}}{\mathrm{d}y} sys1_{+}c_2\left( t, x, y \right) meanwind_{+}v_{y}\left( t, x, y \right) \\
+sys2_{+}sys2_{ddt\_c_{1}ˍt}\left( t, x, y \right) =&amp;  - sys2_{+}p_1 \\
+sys2_{+}sys2_{ddt\_c_{2}ˍt}\left( t, x, y \right) =&amp; sys2_{+}p_2 \\
+constantwind_{+}v_{1}\left( t, x, y \right) =&amp; constantwind_{+}c_{v1} \\
+constantwind_{+}v_{2}\left( t, x, y \right) =&amp; constantwind_{+}c_{v2}
+\end{align}
+ \]</p><p>Now we can inspect this new system that we&#39;ve created:</p><pre><code class="language-julia hljs">sys_pde_mtk.dvs</code></pre><p class="math-container">\[ \begin{equation}
+\left[
+\begin{array}{c}
+sys1_{+}sys2_{ddt\_c_{1}ˍt}\left( t, x, y \right) \\
+sys2_{+}sys2_{ddt\_c_{1}ˍt}\left( t, x, y \right) \\
+sys1_{+}c_1\left( t, x, y \right) \\
+sys2_{+}c_1\left( t, x, y \right) \\
+sys1_{+}sys2_{ddt\_c_{2}ˍt}\left( t, x, y \right) \\
+sys2_{+}sys2_{ddt\_c_{2}ˍt}\left( t, x, y \right) \\
+sys1_{+}c_2\left( t, x, y \right) \\
+sys2_{+}c_2\left( t, x, y \right) \\
+meanwind_{+}v_{x}\left( t, x, y \right) \\
+constantwind_{+}v_{1}\left( t, x, y \right) \\
+meanwind_{+}v_{y}\left( t, x, y \right) \\
+constantwind_{+}v_{2}\left( t, x, y \right) \\
+\end{array}
+\right]
+\end{equation}
+ \]</p><pre><code class="language-julia hljs">sys_pde_mtk.bcs</code></pre><p class="math-container">\[ \begin{align}
+sys1_{+}c_1\left( 0, x, y \right) =&amp; 4 \\
+sys1_{+}c_2\left( 0, x, y \right) =&amp; 4 \\
+sys1_{+}c_1\left( t, 0, y \right) =&amp; sys1_{+}c_1\left( t, 1, y \right) \\
+sys1_{+}c_2\left( t, 0, y \right) =&amp; sys1_{+}c_2\left( t, 1, y \right) \\
+\frac{\mathrm{d}}{\mathrm{d}y} sys1_{+}c_1\left( t, x, 0 \right) =&amp; 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} sys1_{+}c_1\left( t, x, 1 \right) =&amp; 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} sys1_{+}c_2\left( t, x, 0 \right) =&amp; 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} sys1_{+}c_2\left( t, x, 1 \right) =&amp; 0
+\end{align}
+ \]</p><p>Finally, we can run a simulation using this system:</p><pre><code class="language-julia hljs">discretization = MOLFiniteDifference([x=&gt;10, y=&gt;10], t, approx_order=2)
 @time pdeprob = discretize(sys_pde_mtk, discretization)
 @time pdesol = solve(pdeprob, Tsit5(), saveat=0.1)
 
@@ -97,4 +107,4 @@ anim = @animate for k in 1:length(discrete_t)
     p2 = heatmap(solc2[k, 1:end-1, 1:end-1], title=&quot;c₂ t=\$(discrete_t[k])&quot;, clim=(0,7.0), lab=:none)
     plot(p1, p2, layout=(1,2), size=(800,400))
 end
-gif(anim, fps = 8)</code></pre><img src="3d8d8bbf.gif" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../example_advection/">« Advection</a><a class="docs-footer-nextpage" href="../api/">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.3.0 on <span class="colophon-date" title="Tuesday 2 April 2024 16:49">Tuesday 2 April 2024</span>. Using Julia version 1.10.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+gif(anim, fps = 8)</code></pre><img src="3d8d8bbf.gif" alt="Example block output"/><p>Because our system is a system of ordinary differential equations rather than partial differential equations, all of the grid cells in the animation above have the same value. Refer to the <a href="../advection/#Advection">advection example</a> for an example of a system of partial differential equations.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../advection/">« Advection</a><a class="docs-footer-nextpage" href="../api/">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.4.1 on <span class="colophon-date" title="Tuesday 28 May 2024 14:23">Tuesday 28 May 2024</span>. Using Julia version 1.10.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
