@@ -18,7 +18,7 @@ using Plots
 
 struct ExampleSys1 <: EarthSciMLODESystem
     sys
-    function ExampleSys1(t; name)
+    function ExampleSys1(t; name=:sys1)
         @species c₁(t)=5.0 c₂(t)=5.0
         new(convert(ODESystem, ReactionSystem(
             [Reaction(2.0, [c₁], [c₂])],
@@ -34,7 +34,7 @@ Our second example system is a simple ODE system, with the same two variables.
 ```@example ex1
 struct ExampleSys2 <: EarthSciMLODESystem
     sys
-    function ExampleSys2(t; name)
+    function ExampleSys2(t; name=:sys2)
         @variables c₁(t)=5.0 c₂(t)=5.0
         @parameters p₁=1.0 p₂=0.5
         D = Differential(t)
@@ -100,7 +100,7 @@ domain = DomainInfo(
     zerogradBC(y ∈ Interval(y_min, y_max)),
 )
 
-sys_pde = sys + domain + ConstantWind(t, 1.0, 1.0) + Advection()
+sys_pde = ExampleSys1(t) + ExampleSys2(t) + domain + ConstantWind(t, 1.0, 1.0) + Advection()
 
 sys_pde_mtk = get_mtk(sys_pde)
 ```
@@ -108,11 +108,11 @@ sys_pde_mtk = get_mtk(sys_pde)
 Now we can inspect this new system that we've created:
 
 ```@example ex1
-equations(sys_pde_mtk)
+sys_pde_mtk.dvs
 ```
 
 ```@example ex1
-sys_pde_mtk.dvs
+sys_pde_mtk.bcs
 ```
 
 Finally, we can run a simulation using this system:
