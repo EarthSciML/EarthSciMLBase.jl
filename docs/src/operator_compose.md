@@ -6,7 +6,7 @@ In models, typically the emission and removal are considered separate processes 
 model components.
 However, when we want to combine these two components into a single model, we need to be able to compose them together.
 
-We can use the `operator_compose` function for this. It composes to systems of equations together by adding the right-hand side terms together of equations that have matching left-hand sides.
+We can use the [`operator_compose`](@ref operator_compose) function for this. It composes to systems of equations together by adding the right-hand side terms together of equations that have matching left-hand sides.
 The left hand sides of two equations will be considered matching if:
 
 1. They are both time derivatives of the same variable.
@@ -42,7 +42,9 @@ end
 @named sys1 = ExampleSys(t)
 @named sys2 = ExampleSys(t)
 
-combined = operator_compose(sys1, sys2)
+EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys) = operator_compose(sys1, sys2)
+
+combined = sys1 + sys2
 
 combined_mtk = get_mtk(combined)
 ```
@@ -76,7 +78,11 @@ end
 @named sys1 = ExampleSys(t)
 @named sys2 = ExampleSys2(t)
 
-combined = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
+function EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys2)
+    operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
+end
+
+combined = sys1 + sys2
 combined_simplified = structural_simplify(get_mtk(combined))
 ```
 
@@ -103,7 +109,11 @@ end
 @named sys1 = ExampleSys(t)
 @named sys2 = ExampleSysNonODE(t)
 
-combined = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
+function EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSysNonODE)
+    operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
+end
+
+combined = sys1 + sys2
 sys_combined = structural_simplify(get_mtk(combined))
 ```
 
@@ -119,7 +129,11 @@ Finally, this last example shows the fourth case, where a conversion factor is i
 @named sys1 = ExampleSys(t)
 @named sys2 = ExampleSys2(t)
 
-combined = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y => 6.0))
+function EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSysNonODE)
+    operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y => 6.0))
+end
+
+combined = sys1 + sys2
 combined_simplified = structural_simplify(get_mtk(combined))
 ```
 

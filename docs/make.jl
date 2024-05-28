@@ -15,12 +15,12 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Composition" => "composition.md",
+        "Operator Composition" => "operator_compose.md",
+        "Parameter Replacement" => "param_to_var.md",
+        "Initial and Boundary Conditions" => "icbc.md",
+        "Advection" => "advection.md",
         "Examples" => [
-            "Parameter Replacement" => "param_to_var.md",
-            "Operator Composition" => "operator_compose.md",
-            "Composition and Visualization" => "comp_viz.md",
-            "Initial and Boundary Conditions" => "example_icbc.md",
-            "Advection" => "example_advection.md",
             "All Together" => "example_all_together.md",
         ],
         "API Reference" => "api.md",
