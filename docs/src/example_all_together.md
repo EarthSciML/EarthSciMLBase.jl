@@ -133,3 +133,6 @@ anim = @animate for k in 1:length(discrete_t)
 end
 gif(anim, fps = 8)
 ```
+
+Because our system is a system of ordinary differential equations rather than partial differential equations, all of the grid cells in the animation above have the same value.
+Refer to the [advection example](@ref Advection) for an example of a system of partial differential equations.
