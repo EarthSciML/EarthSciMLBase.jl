@@ -30,7 +30,7 @@ A model component that represents the mean wind velocity, where
 """
 function MeanWind(pvars...)
     uvars = meanwind_vars(t, pvars)
-    ODESystem(Equation[], t, uvars, []; name=:meanwind)
+    ODESystem(Equation[], t, uvars, []; name=systemname(:meanwind))
 end
 
 """
@@ -101,7 +101,7 @@ function ConstantWind(vals...)
         push!(uvals, c)
     end
     eqs = convert(Vector{Equation}, Symbolics.scalarize(uvars .~ uvals))
-    ODESystem(eqs, t, uvars, []; name=:constantwind)
+    ODESystem(eqs, t, uvars, []; name=systemname(:constantwind))
 end
 
 register_coupling(MeanWind(), ConstantWind()) do mw, w

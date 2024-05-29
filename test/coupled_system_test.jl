@@ -141,4 +141,13 @@ end
         @test occursin("b₊jNO2(t) ~ a₊j_NO2(t)", obstr)
         @test occursin("b₊c_NO2(t) ~ c₊NO2(t)", obstr)
     end
+
+    @testset "Stable evaluation" begin
+        sys = couple(A(), B(), C())
+        eqs1 = string(equations(get_mtk(sys)))
+        @test occursin("b₊c_NO2(t)", eqs1)
+        eqs2 = string(equations(get_mtk(sys)))
+        @test occursin("b₊c_NO2(t)", eqs2)
+        @test eqs1 == eqs2
+    end
 end
