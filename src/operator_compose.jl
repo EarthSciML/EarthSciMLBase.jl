@@ -40,17 +40,17 @@ The left hand sides of two equations will be considered matching if:
 4. There is an entry in the optional `translate` dictionary that maps the dependent variable in the first system to the dependent variable in the second system, with a conversion factor, e.g. `Dict(sys1.sys.x => sys2.sys.y => 6)`.
 
 """
-function operator_compose(a::EarthSciMLODESystem, b::EarthSciMLODESystem, translate=Dict())
-    a_eqs = equations(a.sys)
-    b_eqs = equations(b.sys)
-    iv = ModelingToolkit.get_iv(a.sys) # independent variable
-    aname = String(nameof(a.sys))
-    bname = String(nameof(b.sys))
+function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESystem, translate=Dict())
+    a_eqs = equations(a)
+    b_eqs = equations(b)
+    iv = ModelingToolkit.get_iv(a) # independent variable
+    aname = String(nameof(a))
+    bname = String(nameof(b))
     connections = Equation[]
     for (i, a_eq) ∈ enumerate(a_eqs)
-        adv = add_scope(a.sys, get_dv(a_eq.lhs, iv), iv) # dependent variable
+        adv = add_scope(a, get_dv(a_eq.lhs, iv), iv) # dependent variable
         if adv ∉ keys(translate) # If adv is not in the translation dictionary, then assume it is the same in both systems.
-            bdv, conv = add_scope(b.sys, get_dv(a_eq.lhs, iv), iv), 1
+            bdv, conv = add_scope(b, get_dv(a_eq.lhs, iv), iv), 1
         else
             tt = translate[adv]
             if length(tt) == 1 # Handle the optional inclusion of a conversion factor.
@@ -62,7 +62,7 @@ function operator_compose(a::EarthSciMLODESystem, b::EarthSciMLODESystem, transl
             end
         end
         for (j, b_eq) ∈ enumerate(b_eqs)
-            if isequal(bdv, add_scope(b.sys, get_dv(b_eq.lhs, iv), iv))
+            if isequal(bdv, add_scope(b, get_dv(b_eq.lhs, iv), iv))
                 # The dependent variable of the LHS of this equation matches the dependent 
                 # variable of interest,
                 # so create a new variable to represent the dependent variable
