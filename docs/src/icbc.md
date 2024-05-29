@@ -9,20 +9,19 @@ To demonstrate how to do this, we will use the following simple system of ordina
 using EarthSciMLBase
 using ModelingToolkit
 
-struct ExampleSys <: EarthSciMLODESystem
-    sys::ODESystem
+@parameters x y t
 
-    function ExampleSys(t; name=:example)
-        @variables u(t) v(t)
-        Dt = Differential(t)
-        eqs = [
-            Dt(u) ~ √abs(v),
-            Dt(v) ~ √abs(u),
-        ]
-        new(ODESystem(eqs, t; name))
-    end
+function ExampleSys(t)
+    @variables u(t) v(t)
+    Dt = Differential(t)
+    eqs = [
+        Dt(u) ~ √abs(v),
+        Dt(v) ~ √abs(u),
+    ]
+    ODESystem(eqs, t; name=:Docs₊Example)
 end
-nothing # hide
+
+ExampleSys(t)
 ```
 Next, we specify our initial and boundary conditions using the [`DomainInfo`](@ref) type.
 We initialize [`DomainInfo`](@ref) with sets of initial and boundary conditions.
@@ -30,8 +29,6 @@ In the example below, we set constant initial conditions using [`constIC`](@ref)
 
 ```@example icbc
 using DomainSets
-
-@parameters x y t
 
 x_min = y_min = t_min = 0.0
 x_max = y_max = t_max = 1.0
@@ -49,10 +46,10 @@ nothing # hide
 
 It is also possible to use periodic boundary conditions with [`periodicBC`](@ref) and zero-gradient boundary conditions with [`zerogradBC`](@ref).
 
-Finally, we combine our initial and boundary conditions with our system of equations using the `+` operator.
+Finally, we combine our initial and boundary conditions with our system of equations using the [`couple`](@ref) function.
 
 ```@example icbc
-model = ExampleSys(t) + icbc
+model = couple(ExampleSys(t), icbc)
 
 eq_sys = get_mtk(model)
 ```

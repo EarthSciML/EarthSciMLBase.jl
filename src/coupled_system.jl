@@ -4,25 +4,12 @@ export CoupledSystem, ConnectorSystem, get_mtk, register_coupling, couple, syste
 function systemhash(sys::ModelingToolkit.AbstractSystem)
     name = nameof(sys)
     if !occursin("₊", string(name))
-        @warn "The name of each system should be formatted like `module₊name`, " *
-              "for example by using the `EarthSciMLBase.systemname` function to create the name. " *
-              "The name of the system `$name` does not meet this criteria."
+        @warn "The name of each system should be formatted like `Module₊Name`. " *
+              "The name of the system `$name` does not meet this criteria. " *
+              "If the system is part of the `MyModule` module, the proper name would be `MyModule₊$name`."
     end
     name
 end
-
-macro calling_module()
-    return esc(:@__MODULE__)
-end
-
-"""
-$(SIGNATURES)
-
-Create a name for a system, formatted like `module₊name`, so 
-`systemname(:myname)` called within the module `MyModule` 
-will return `MyModule₊myname`.
-"""
-systemname(name::Symbol) = Symbol(@calling_module, :₊, name)
 
 """
 A system for composing together other systems using the [`couple`](@ref) function.
@@ -123,6 +110,9 @@ function get_mtk(sys::CoupledSystem; name=:model)::ModelingToolkit.AbstractSyste
                                                "This is not the case for $(nameof(a)) and $(nameof(b)); it is instead a $(typeof(cs))."
                 systems[i], a = cs.from, cs.from
                 systems[j], b = cs.to, cs.to
+                for eq ∈ cs.eqs
+                    @assert ModelingToolkit.validate(eq) "invalids units in coupling equation: $eq. See warnings for details."
+                end
                 append!(connector_eqs, cs.eqs)
             end
         end

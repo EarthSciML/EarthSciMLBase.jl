@@ -4,6 +4,8 @@ using Test
 using Catalyst
 using Unitful
 
+@parameters t [unit = u"s"]
+
 @testset "Composed System" begin
     function SEqn()
         @variables S(t), I(t), R(t)

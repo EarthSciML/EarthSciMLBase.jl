@@ -11,14 +11,14 @@ using Unitful
         @variables y(t) [unit = u"kg"]
         @parameters p = 1.0 [unit = u"kg/s"]
         D = Differential(t)
-        ODESystem([D(y) ~ p], t; name=:examplesys)
+        ODESystem([D(y) ~ p], t; name=:Docs₊examplesys)
     end
 
     function ExampleSysCopy()
         @variables y(t) [unit = u"kg"]
         @parameters p = 1.0 [unit = u"kg/s"]
         D = Differential(t)
-        ODESystem([D(y) ~ p], t; name=:examplesyscopy)
+        ODESystem([D(y) ~ p], t; name=:Docs₊examplesyscopy)
     end
 
     sys1 = ExampleSys()
@@ -30,7 +30,7 @@ using Unitful
     end
 
     combined = couple(sys1, sys2)
-    combined_pde = couple(combined, domain, ConstantWind(1.0u"m/s"), Advection())
+    combined_pde = couple(combined, domain, ConstantWind(t, 1.0u"m/s"), Advection())
     combined_mtk = get_mtk(combined_pde)
 
     @test length(equations(combined_mtk)) == 6
@@ -38,8 +38,13 @@ using Unitful
     @test length(combined_mtk.dvs) == 6
     @test length(combined_mtk.bcs) == 3
 
-    @test occursin("- Differential(x)(examplesys₊y(t, x))*meanwind₊v_x(t, x)", 
-        string(equations(combined_mtk)))
+    for eq in equations(combined_mtk)
+        @info eq
+    end
+    @test occursin("- EarthSciMLBase₊MeanWind₊v_x(t, x)*Differential(x)(Docs₊examplesys₊y(t, x))", 
+        string(equations(combined_mtk))) || 
+        occursin("- Differential(x)(Docs₊examplesys₊y(t, x))*EarthSciMLBase₊MeanWind₊v_x(t, x)", 
+            string(equations(combined_mtk)))
 
     @test_broken begin # Test fails because PDEs don't currently work with units.
         discretization = MOLFiniteDifference([x => 6], t, approx_order=2)
