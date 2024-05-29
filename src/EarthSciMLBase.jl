@@ -4,9 +4,6 @@ using Graphs, MetaGraphsNext
 using DocStringExtensions
 using Unitful
 
-export t
-@parameters t [unit = u"s"]
-
 include("add_dims.jl")
 include("domaininfo.jl")
 include("coupled_system.jl")

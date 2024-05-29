@@ -28,9 +28,9 @@ $(SIGNATURES)
 A model component that represents the mean wind velocity, where
 `pvars` is the partial dependent variables for the domain.
 """
-function MeanWind(pvars...)
+function MeanWind(t, pvars...)
     uvars = meanwind_vars(t, pvars)
-    ODESystem(Equation[], t, uvars, []; name=systemname(:meanwind))
+    ODESystem(Equation[], t, uvars, []; name=:EarthSciMLBase₊MeanWind)
 end
 
 """
@@ -47,7 +47,7 @@ struct Advection end
 function advection(vars, di::DomainInfo)
     iv = ivar(di)
     pvs = pvars(di)
-    uvars = meanwind_vars(iv, pvs; prefix="meanwind₊", multidim=true)
+    uvars = meanwind_vars(iv, pvs; prefix="EarthSciMLBase₊MeanWind₊", multidim=true)
     varsdims = Num[v for v ∈ vars]
     udims = Num[ui(iv, pvs...) for ui ∈ uvars]
     δs = di.partial_derivative_func(pvs) # get partial derivative operators. May contain coordinate transforms.
@@ -64,7 +64,7 @@ function couple(c::CoupledSystem, _::Advection)::CoupledSystem
     @assert isa(c.domaininfo, DomainInfo) "The system must have initial and boundary conditions (i.e. DomainInfo) to add advection."
 
     # Add in a model component to allow the specification of the wind velocity.
-    push!(c.systems, MeanWind(pvars(c.domaininfo)...))
+    push!(c.systems, MeanWind(ivar(c.domaininfo), pvars(c.domaininfo)...))
 
     function f(sys::ModelingToolkit.PDESystem)
         eqs = advection(sys.dvs, c.domaininfo)
@@ -81,7 +81,7 @@ $(SIGNATURES)
 Construct a constant wind velocity model component with the given wind speed(s), which
 should include units. For example, `ConstantWind(t, 1u"m/s", 2u"m/s")`.
 """
-function ConstantWind(vals...)
+function ConstantWind(t, vals...)
     counts = ["st", "nd", "rd", "th", "th", "th", "th"]
     uvars = Num[]
     for (i, val) ∈ enumerate(vals)
@@ -101,10 +101,11 @@ function ConstantWind(vals...)
         push!(uvals, c)
     end
     eqs = convert(Vector{Equation}, Symbolics.scalarize(uvars .~ uvals))
-    ODESystem(eqs, t, uvars, []; name=systemname(:constantwind))
+    ODESystem(eqs, t, uvars, []; name=:EarthSciMLBase₊ConstantWind)
 end
 
-register_coupling(MeanWind(), ConstantWind()) do mw, w
+@parameters t # TODO(CT): Delete when updating to MTK v9
+register_coupling(MeanWind(t), ConstantWind(t)) do mw, w
     # Create new systems so that the variables are correctly scoped.
     @named a = ODESystem(Equation[], ModelingToolkit.get_iv(mw), [], [], systems=[mw])
     @named b = ODESystem(Equation[], ModelingToolkit.get_iv(w), [], [], systems=[w])
