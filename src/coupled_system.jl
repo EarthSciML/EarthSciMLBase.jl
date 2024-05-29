@@ -1,9 +1,28 @@
-export CoupledSystem, ConnectorSystem, get_mtk, register_coupling, couple
+export CoupledSystem, ConnectorSystem, get_mtk, register_coupling, couple, systemname
 
 """ Return a unique identifier for a system. """
 function systemhash(sys::ModelingToolkit.AbstractSystem)
-    nameof(sys)
+    name = nameof(sys)
+    if !occursin("₊", string(name))
+        @warn "The name of each system should be formatted like `module₊name`, " *
+              "for example by using the `EarthSciMLBase.systemname` function to create the name. " *
+              "The name of the system `$name` does not meet this criteria."
+    end
+    name
 end
+
+macro calling_module()
+    return esc(:@__MODULE__)
+end
+
+"""
+$(SIGNATURES)
+
+Create a name for a system, formatted like `module₊name`, so 
+`systemname(:myname)` called within the module `MyModule` 
+will return `MyModule₊myname`.
+"""
+systemname(name::Symbol) = Symbol(@calling_module, :₊, name)
 
 """
 A system for composing together other systems using the [`couple`](@ref) function.
@@ -64,7 +83,7 @@ function couple(systems...)::CoupledSystem
 end
 
 "A registery for functions to couple systems together, defined by their [system hashes](@ref systemhash)."
-const coupling_registry = Dict{Tuple{Symbol, Symbol}, Function}()
+const coupling_registry = Dict{Tuple{Symbol,Symbol},Function}()
 
 """
     $(SIGNATURES)
