@@ -4,112 +4,112 @@ using ModelingToolkit
 
 @parameters t
 
-struct ExampleSys &lt;: EarthSciMLODESystem
-    sys::ODESystem
-
-    function ExampleSys(t; name)
-        @variables x(t)
-        @parameters p
-        D = Differential(t)
-        new(ODESystem([D(x) ~ p], t; name))
-    end
+function ExampleSys(t)
+    @variables x(t)
+    @parameters p
+    D = Differential(t)
+    ODESystem([D(x) ~ p], t; name=:Docs₊ExampleSys)
 end
 
-struct ExampleSys2 &lt;: EarthSciMLODESystem
-    sys::ODESystem
-
-    function ExampleSys2(t; name)
-        @variables x(t)
-        @parameters p
-        D = Differential(t)
-        new(ODESystem([D(x) ~ 2p], t; name))
-    end
+ExampleSys(t)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} x\left( t \right)}{\mathrm{d}t} =&amp; p
+\end{align}
+ \]</p><pre><code class="language-julia hljs">function ExampleSys2(t)
+    @variables x(t)
+    @parameters p
+    D = Differential(t)
+    ODESystem([D(x) ~ 2p], t; name=:Docs₊ExampleSys2)
 end
 
-@named sys1 = ExampleSys(t)
-@named sys2 = ExampleSys2(t)
+ExampleSys2(t)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} x\left( t \right)}{\mathrm{d}t} =&amp; 2 p
+\end{align}
+ \]</p><pre><code class="language-julia hljs">sys1 = ExampleSys(t)
+sys2 = ExampleSys2(t)
 
-EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys2) = operator_compose(sys1, sys2)
+register_coupling(ExampleSys(t), ExampleSys2(t)) do sys1, sys2
+    operator_compose(sys1, sys2)
+end
 
-combined = sys1 + sys2
+combined = couple(sys1, sys2)
 
 combined_mtk = get_mtk(combined)</code></pre><p class="math-container">\[ \begin{align}
-sys1_{+}sys2_{ddt\_xˍt}\left( t \right) =&amp; sys2_{+}sys2_{ddt\_xˍt}\left( t \right) \\
-sys1_{+}x\left( t \right) =&amp; sys2_{+}x\left( t \right) \\
-\frac{\mathrm{d} sys1_{+}x\left( t \right)}{\mathrm{d}t} =&amp; sys1_{+}p + sys1_{+}sys2_{ddt\_xˍt}\left( t \right) \\
-sys2_{+}sys2_{ddt\_xˍt}\left( t \right) =&amp; 2 sys2_{+}p
+Docs_{+}ExampleSys_{+}Docs_{+}ExampleSys2_{ddt\_xˍt}\left( t \right) =&amp; Docs_{+}ExampleSys2_{+}Docs_{+}ExampleSys2_{ddt\_xˍt}\left( t \right) \\
+Docs_{+}ExampleSys_{+}x\left( t \right) =&amp; Docs_{+}ExampleSys2_{+}x\left( t \right) \\
+\frac{\mathrm{d} Docs_{+}ExampleSys_{+}x\left( t \right)}{\mathrm{d}t} =&amp; Docs_{+}ExampleSys_{+}p + Docs_{+}ExampleSys_{+}Docs_{+}ExampleSys2_{ddt\_xˍt}\left( t \right) \\
+Docs_{+}ExampleSys2_{+}Docs_{+}ExampleSys2_{ddt\_xˍt}\left( t \right) =&amp; 2 Docs_{+}ExampleSys2_{+}p
 \end{align}
  \]</p><p>The simplified equation should be D(x) = p + sys2_xˍt:</p><pre><code class="language-julia hljs">combined_simplified = structural_simplify(combined_mtk)</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} sys1_{+}x\left( t \right)}{\mathrm{d}t} =&amp; sys1_{+}p + sys1_{+}sys2_{ddt\_xˍt}\left( t \right)
+\frac{\mathrm{d} Docs_{+}ExampleSys_{+}x\left( t \right)}{\mathrm{d}t} =&amp; Docs_{+}ExampleSys_{+}p + Docs_{+}ExampleSys_{+}Docs_{+}ExampleSys2_{ddt\_xˍt}\left( t \right)
 \end{align}
  \]</p><p>where sys2_xˍt is also equal to p:</p><pre><code class="language-julia hljs">observed(combined_simplified)</code></pre><p class="math-container">\[ \begin{align}
-sys2_{+}sys2_{ddt\_xˍt}\left( t \right) =&amp; 2 sys2_{+}p \\
-sys2_{+}x\left( t \right) =&amp; sys1_{+}x\left( t \right) \\
-sys1_{+}sys2_{ddt\_xˍt}\left( t \right) =&amp; sys2_{+}sys2_{ddt\_xˍt}\left( t \right)
+Docs_{+}ExampleSys2_{+}Docs_{+}ExampleSys2_{ddt\_xˍt}\left( t \right) =&amp; 2 Docs_{+}ExampleSys2_{+}p \\
+Docs_{+}ExampleSys2_{+}x\left( t \right) =&amp; Docs_{+}ExampleSys_{+}x\left( t \right) \\
+Docs_{+}ExampleSys_{+}Docs_{+}ExampleSys2_{ddt\_xˍt}\left( t \right) =&amp; Docs_{+}ExampleSys2_{+}Docs_{+}ExampleSys2_{ddt\_xˍt}\left( t \right)
 \end{align}
- \]</p><h3 id="Example-with-non-matching-variables"><a class="docs-heading-anchor" href="#Example-with-non-matching-variables">Example with non-matching variables</a><a id="Example-with-non-matching-variables-1"></a><a class="docs-heading-anchor-permalink" href="#Example-with-non-matching-variables" title="Permalink"></a></h3><p>This example demonstrates a case where one variable in the first system is equal to another variable in the second system:</p><pre><code class="language-julia hljs">struct ExampleSys3 &lt;: EarthSciMLODESystem
-    sys::ODESystem
-    function ExampleSys3(t; name)
-        @variables y(t)
-        @parameters p
-        D = Differential(t)
-        new(ODESystem([D(y) ~ p], t; name))
-    end
+ \]</p><h3 id="Example-with-non-matching-variables"><a class="docs-heading-anchor" href="#Example-with-non-matching-variables">Example with non-matching variables</a><a id="Example-with-non-matching-variables-1"></a><a class="docs-heading-anchor-permalink" href="#Example-with-non-matching-variables" title="Permalink"></a></h3><p>This example demonstrates a case where one variable in the first system is equal to another variable in the second system:</p><pre><code class="language-julia hljs">function ExampleSys3(t)
+    @variables y(t)
+    @parameters p
+    D = Differential(t)
+    ODESystem([D(y) ~ p], t; name=:Docs₊ExampleSys3)
 end
 
-@named sys1 = ExampleSys(t)
-@named sys2 = ExampleSys3(t)
+sys1 = ExampleSys(t)
+sys2 = ExampleSys3(t)
 
-function EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys3)
-    operator_compose(sys1, sys2, Dict(sys1.sys.x =&gt; sys2.sys.y))
+register_coupling(ExampleSys(t), ExampleSys3(t)) do sys1, sys2
+    operator_compose(sys1, sys2, Dict(sys1.x =&gt; sys2.y))
 end
 
-combined = sys1 + sys2
+combined = couple(sys1, sys2)
 combined_simplified = structural_simplify(get_mtk(combined))</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} sys1_{+}x\left( t \right)}{\mathrm{d}t} =&amp; sys1_{+}p + sys1_{+}sys2_{ddt\_yˍt}\left( t \right)
+\frac{\mathrm{d} Docs_{+}ExampleSys_{+}x\left( t \right)}{\mathrm{d}t} =&amp; Docs_{+}ExampleSys_{+}p + Docs_{+}ExampleSys_{+}Docs_{+}ExampleSys3_{ddt\_yˍt}\left( t \right)
 \end{align}
  \]</p><pre><code class="language-julia hljs">observed(combined_simplified)</code></pre><p class="math-container">\[ \begin{align}
-sys2_{+}sys2_{ddt\_yˍt}\left( t \right) =&amp; sys2_{+}p \\
-sys2_{+}y\left( t \right) =&amp; sys1_{+}x\left( t \right) \\
-sys1_{+}sys2_{ddt\_yˍt}\left( t \right) =&amp; sys2_{+}sys2_{ddt\_yˍt}\left( t \right)
+Docs_{+}ExampleSys3_{+}Docs_{+}ExampleSys3_{ddt\_yˍt}\left( t \right) =&amp; Docs_{+}ExampleSys3_{+}p \\
+Docs_{+}ExampleSys3_{+}y\left( t \right) =&amp; Docs_{+}ExampleSys_{+}x\left( t \right) \\
+Docs_{+}ExampleSys_{+}Docs_{+}ExampleSys3_{ddt\_yˍt}\left( t \right) =&amp; Docs_{+}ExampleSys3_{+}Docs_{+}ExampleSys3_{ddt\_yˍt}\left( t \right)
 \end{align}
- \]</p><h3 id="Example-with-a-non-ODE-system"><a class="docs-heading-anchor" href="#Example-with-a-non-ODE-system">Example with a non-ODE system</a><a id="Example-with-a-non-ODE-system-1"></a><a class="docs-heading-anchor-permalink" href="#Example-with-a-non-ODE-system" title="Permalink"></a></h3><p>In the second case above, we might have a variable in the second system that is equal to a rate, but it is not a time derivative. This could happen if we are extracting emissions from a file, and those emissions are already in units of kg/s, or something similar. The example below demonstrates this case.  (Note that this case can also be used with the conversion factors shown in the last example.)</p><pre><code class="language-julia hljs">struct ExampleSysNonODE &lt;: EarthSciMLODESystem
-    sys::ODESystem
-    function ExampleSysNonODE(t; name)
-        @variables y(t)
-        @parameters p
-        new(ODESystem([y ~ p], t; name))
-    end
+ \]</p><h3 id="Example-with-a-non-ODE-system"><a class="docs-heading-anchor" href="#Example-with-a-non-ODE-system">Example with a non-ODE system</a><a id="Example-with-a-non-ODE-system-1"></a><a class="docs-heading-anchor-permalink" href="#Example-with-a-non-ODE-system" title="Permalink"></a></h3><p>In the second case above, we might have a variable in the second system that is equal to a rate, but it is not a time derivative. This could happen if we are extracting emissions from a file, and those emissions are already in units of kg/s, or something similar. The example below demonstrates this case.  (Note that this case can also be used with the conversion factors shown in the last example.)</p><pre><code class="language-julia hljs">function ExampleSysNonODE(t)
+    @variables y(t)
+    @parameters p
+    ODESystem([y ~ p], t; name=:Docs₊ExampleSysNonODE)
 end
 
-@named sys1 = ExampleSys(t)
-@named sys2 = ExampleSysNonODE(t)
+sys1 = ExampleSys(t)
+sys2 = ExampleSysNonODE(t)
 
-function EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSysNonODE)
-    operator_compose(sys1, sys2, Dict(sys1.sys.x =&gt; sys2.sys.y))
+register_coupling(ExampleSys(t), ExampleSysNonODE(t)) do sys1, sys2
+    operator_compose(sys1, sys2, Dict(sys1.x =&gt; sys2.y))
 end
 
-combined = sys1 + sys2
+combined = couple(sys1, sys2)
 sys_combined = structural_simplify(get_mtk(combined))</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} sys1_{+}x\left( t \right)}{\mathrm{d}t} =&amp; sys1_{+}p + sys1_{+}sys2_{y}\left( t \right)
+\frac{\mathrm{d} Docs_{+}ExampleSys_{+}x\left( t \right)}{\mathrm{d}t} =&amp; Docs_{+}ExampleSys_{+}p + Docs_{+}ExampleSys_{+}Docs_{+}ExampleSysNonODE_{y}\left( t \right)
 \end{align}
  \]</p><pre><code class="language-julia hljs">observed(sys_combined)</code></pre><p class="math-container">\[ \begin{align}
-sys2_{+}y\left( t \right) =&amp; sys2_{+}p \\
-sys1_{+}sys2_{y}\left( t \right) =&amp; sys2_{+}y\left( t \right)
+Docs_{+}ExampleSysNonODE_{+}y\left( t \right) =&amp; Docs_{+}ExampleSysNonODE_{+}p \\
+Docs_{+}ExampleSys_{+}Docs_{+}ExampleSysNonODE_{y}\left( t \right) =&amp; Docs_{+}ExampleSysNonODE_{+}y\left( t \right)
 \end{align}
- \]</p><h3 id="Example-with-non-matching-variables-and-a-conversion-factor"><a class="docs-heading-anchor" href="#Example-with-non-matching-variables-and-a-conversion-factor">Example with non-matching variables and a conversion factor</a><a id="Example-with-non-matching-variables-and-a-conversion-factor-1"></a><a class="docs-heading-anchor-permalink" href="#Example-with-non-matching-variables-and-a-conversion-factor" title="Permalink"></a></h3><p>Finally, this last example shows the fourth case, where a conversion factor is included in the translation dictionary.</p><pre><code class="language-julia hljs">@named sys1 = ExampleSys(t)
-@named sys2 = ExampleSysNonODE(t)
-
-function EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSysNonODE)
-    operator_compose(sys1, sys2, Dict(sys1.sys.x =&gt; sys2.sys.y =&gt; 6.0))
+ \]</p><h3 id="Example-with-non-matching-variables-and-a-conversion-factor"><a class="docs-heading-anchor" href="#Example-with-non-matching-variables-and-a-conversion-factor">Example with non-matching variables and a conversion factor</a><a id="Example-with-non-matching-variables-and-a-conversion-factor-1"></a><a class="docs-heading-anchor-permalink" href="#Example-with-non-matching-variables-and-a-conversion-factor" title="Permalink"></a></h3><p>Finally, this last example shows the fourth case, where a conversion factor is included in the translation dictionary.</p><pre><code class="language-julia hljs">function ExampleSysNonODE2(t)
+    @variables y(t)
+    @parameters p
+    ODESystem([y ~ p], t; name=:Docs₊ExampleSysNonODE2)
 end
 
-combined = sys1 + sys2
+sys1 = ExampleSys(t)
+sys2 = ExampleSysNonODE2(t)
+
+register_coupling(ExampleSys(t), ExampleSysNonODE2(t)) do sys1, sys2
+    operator_compose(sys1, sys2, Dict(sys1.x =&gt; sys2.y =&gt; 6.0))
+end
+
+combined = couple(sys1, sys2)
 combined_simplified = structural_simplify(get_mtk(combined))</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} sys1_{+}x\left( t \right)}{\mathrm{d}t} =&amp; sys1_{+}p + sys1_{+}sys2_{y}\left( t \right)
+\frac{\mathrm{d} Docs_{+}ExampleSys_{+}x\left( t \right)}{\mathrm{d}t} =&amp; Docs_{+}ExampleSys_{+}p + Docs_{+}ExampleSys_{+}Docs_{+}ExampleSysNonODE2_{y}\left( t \right)
 \end{align}
  \]</p><pre><code class="language-julia hljs">observed(combined_simplified)</code></pre><p class="math-container">\[ \begin{align}
-sys2_{+}y\left( t \right) =&amp; sys2_{+}p \\
-sys1_{+}sys2_{y}\left( t \right) =&amp; 6 sys2_{+}y\left( t \right)
+Docs_{+}ExampleSysNonODE2_{+}y\left( t \right) =&amp; Docs_{+}ExampleSysNonODE2_{+}p \\
+Docs_{+}ExampleSys_{+}Docs_{+}ExampleSysNonODE2_{y}\left( t \right) =&amp; 6 Docs_{+}ExampleSysNonODE2_{+}y\left( t \right)
 \end{align}
- \]</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../composition/">« Composition</a><a class="docs-footer-nextpage" href="../param_to_var/">Parameter Replacement »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.4.1 on <span class="colophon-date" title="Tuesday 28 May 2024 14:23">Tuesday 28 May 2024</span>. Using Julia version 1.10.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ \]</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../composition/">« Composition</a><a class="docs-footer-nextpage" href="../param_to_var/">Parameter Replacement »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.4.1 on <span class="colophon-date" title="Wednesday 29 May 2024 23:12">Wednesday 29 May 2024</span>. Using Julia version 1.10.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
