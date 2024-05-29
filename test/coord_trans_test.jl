@@ -36,17 +36,14 @@ end
     @parameters lev [unit=u"m"]
     @parameters t [unit=u"s"]
 
-    struct Example <: EarthSciMLODESystem
-        sys
-        function Example(t; name)
-            @variables c(t) = 5.0 [unit=u"kg"]
-            @constants t_c = 1.0 [unit=u"s"] # constant to make `sin` unitless
-            @constants c_c = 1.0 [unit=u"kg/s"] # constant to make equation units work out
-            D = Differential(t)
-            new(ODESystem([D(c) ~ sin(t/t_c)*c_c], t, name=name))
-        end
+    function Example()
+        @variables c(t) = 5.0 [unit=u"kg"]
+        @constants t_c = 1.0 [unit=u"s"] # constant to make `sin` unitless
+        @constants c_c = 1.0 [unit=u"kg/s"] # constant to make equation units work out
+        D = Differential(t)
+        ODESystem([D(c) ~ sin(t/t_c)*c_c], t, name=:examplesys)
     end
-    @named examplesys = Example(t)
+    examplesys = Example()
 
     deg2rad(x) = x * π / 180.0
     domain = DomainInfo(
@@ -57,7 +54,7 @@ end
         zerogradBC(lev ∈ Interval(1.0f0, 10.0f0)),
     )
 
-    composed_sys = examplesys + domain + Advection()
+    composed_sys = couple(examplesys, domain, Advection())
 
     sys_mtk = get_mtk(composed_sys)
 

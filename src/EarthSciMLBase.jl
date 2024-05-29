@@ -4,9 +4,12 @@ using Graphs, MetaGraphsNext
 using DocStringExtensions
 using Unitful
 
+export t
+@parameters t [unit = u"s"]
+
 include("add_dims.jl")
 include("domaininfo.jl")
-include("composed_system.jl")
+include("coupled_system.jl")
 include("operator_compose.jl")
 include("advection.jl")
 include("coord_trans.jl")
