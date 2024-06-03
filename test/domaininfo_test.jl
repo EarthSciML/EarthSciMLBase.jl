@@ -179,19 +179,16 @@ end
         periodicBC(x ∈ Interval(0, 1)),
     )
 
-    struct ExSys <: EarthSciMLODESystem
-        sys
-        function ExSys(t)
-            @variables u(t) v(t)
-            D = Differential(t)
-            new(ODESystem([
-                    v ~ 2u,
-                    D(v) ~ v
-                ], t; name=:sys))
-        end
+    function ExSys()
+        @variables u(t) v(t)
+        D = Differential(t)
+        ODESystem([
+                v ~ 2u,
+                D(v) ~ v
+            ], t; name=:sys)
     end
 
-    sys_domain = ExSys(t) + domain
+    sys_domain = couple(ExSys(), domain)
     sys_mtk = get_mtk(sys_domain)
 
     discretization = MOLFiniteDifference([x => 10], t, approx_order=2)
