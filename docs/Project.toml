@@ -13,4 +13,10 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
+Catalyst = "13"
+Documenter = "1"
+DifferentialEquations = "7"
+GraphMakie = "0.5"
 MethodOfLines = "0.11"
+ModelingToolkit = "8"
+Symbolics = "5"
