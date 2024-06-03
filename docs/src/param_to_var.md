@@ -12,52 +12,48 @@ So first, let's specify the original system with constant temperature.
 ```@example param_to_var
 using ModelingToolkit, EarthSciMLBase, Unitful
 
-struct Loss <: EarthSciMLODESystem
-    sys::ODESystem
-    Loss(sys::ModelingToolkit.ODESystem) = new(sys)
-    function Loss(t)
-        @variables A(t)=1 [unit=u"kg"]
-        @parameters k=1 [unit=u"s^-1"]
-        @parameters T=300 [unit=u"K"]
-        @constants T₀=300 [unit=u"K"]
-        eq = Differential(t)(A) ~ -k*exp(T/T₀) * A
-        new(ODESystem([eq]; name=:loss))
-    end
+@variables t [unit=u"s", description="time"]
+
+function Loss(t)
+    @variables A(t)=1 [unit=u"kg"]
+    @parameters k=1 [unit=u"s^-1"]
+    @parameters T=300 [unit=u"K"]
+    @constants T₀=300 [unit=u"K"]
+    eq = Differential(t)(A) ~ -k*exp(T/T₀) * A
+    ODESystem([eq]; name=:Docs₊Loss)
 end
+
+Loss(t)
 ```
 
 Next, we specify the temperature that varies in time.
 
 ```@example param_to_var
-struct Temperature <: EarthSciMLODESystem
-    sys::ODESystem
-    function Temperature(t)
-        @variables T(t)=300 [unit=u"K"]
-        @constants Tc=1.0 [unit=u"K/s"]
-        @constants tc=1.0 [unit=u"s"]
-        eq = Differential(t)(T) ~ sin(t/tc)*Tc
-        new(ODESystem([eq]; name=:temperature))
-    end
+function Temperature(t)
+    @variables T(t)=300 [unit=u"K"]
+    @constants Tc=1.0 [unit=u"K/s"]
+    @constants tc=1.0 [unit=u"s"]
+    eq = Differential(t)(T) ~ sin(t/tc)*Tc
+    ODESystem([eq]; name=:Docs₊Temperature)
 end
+
+Temperature(t)
 ```
 
 Now, we specify how to compose the two systems using `param_to_var`.
 
 ```@example param_to_var
-function EarthSciMLBase.couple(loss::Loss, temp::Temperature)
-    loss = Loss(param_to_var(loss.sys, :T))
-    losseqn = loss.sys
-    teqn = temp.sys
-    ConnectorSystem([losseqn.T ~ teqn.T], loss, temp)
+register_coupling(Loss(t), Temperature(t)) do loss, temp
+    loss = param_to_var(loss, :T)
+    ConnectorSystem([loss.T ~ temp.T], loss, temp)
 end
 ```
 
 Finally, we create the system components and the composed system.
 ```@example param_to_var
-@variables t [unit=u"s", description="time"]
 l = Loss(t)
 t = Temperature(t)
-variable_loss = l+t
+variable_loss = couple(l, t)
 
 get_mtk(variable_loss)
 ```
