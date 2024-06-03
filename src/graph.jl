@@ -1,22 +1,26 @@
 export graph
 
 """
-Create a graph from a ComposedEarthSciMLSystem using the MetaGraphsNext package.
+Create a graph from a CoupledSystem using the MetaGraphsNext package.
 """
-function graph(sys::ComposedEarthSciMLSystem)::MetaGraphsNext.MetaGraph
+function graph(sys::CoupledSystem)::MetaGraphsNext.MetaGraph
     g = MetaGraphsNext.MetaGraph(
         Graphs.Graph();
         label_type=Symbol,
-        vertex_data_type=EarthSciMLODESystem,
+        vertex_data_type=ModelingToolkit.ODESystem,
         edge_data_type=ConnectorSystem,
     )
-    for sys ∈ sys.systems # First do nodes
-        g[nameof(sys.sys)] = sys
+    systems = copy(sys.systems)
+    hashes = systemhash.(systems)
+    for sys ∈ systems # First do nodes
+        g[nameof(sys)] = sys
     end
-    for sysa ∈ sys.systems # Now do edges.
-        for sysb ∈ sys.systems
-            if applicable(couple, sysa, sysb)
-                g[nameof(sysa.sys), nameof(sysb.sys)] = couple(sysa, sysb)
+    for (i, a) ∈ enumerate(systems) # Now do edges.
+        for (j, b) ∈ enumerate(systems)
+            if (hashes[i], hashes[j]) ∈ keys(coupling_registry)
+                f = coupling_registry[hashes[i], hashes[j]]
+                cs = f(deepcopy(a), deepcopy(b))
+                g[nameof(a), nameof(b)] = cs
             end
         end
     end

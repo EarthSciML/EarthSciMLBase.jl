@@ -3,48 +3,37 @@ using ModelingToolkit
 using Catalyst
 using Test
 
-struct ExampleSys <: EarthSciMLODESystem
-    sys::ODESystem
-
-    function ExampleSys(t; name)
-        @variables x(t)
-        @parameters p
-        D = Differential(t)
-        new(ODESystem([D(x) ~ p], t; name))
-    end
+@parameters t
+function ExampleSys()
+    @variables x(t)
+    @parameters p
+    D = Differential(t)
+    ODESystem([D(x) ~ p], t; name=:sys1)
 end
 
-struct ExampleSysCopy <: EarthSciMLODESystem
-    sys::ODESystem
-
-    function ExampleSysCopy(t; name)
-        @variables x(t)
-        @parameters p
-        D = Differential(t)
-        new(ODESystem([D(x) ~ p], t; name))
-    end
+function ExampleSysCopy()
+    @variables x(t)
+    @parameters p
+    D = Differential(t)
+    ODESystem([D(x) ~ p], t; name=:syscopy)
 end
 
-struct ExampleSys2 <: EarthSciMLODESystem
-    sys::ODESystem
-
-    function ExampleSys2(t; name)
-        @variables y(t)
-        @parameters p
-        D = Differential(t)
-        new(ODESystem([D(y) ~ p], t; name))
-    end
+function ExampleSys2(; name=:sys2)
+    @variables y(t)
+    @parameters p
+    D = Differential(t)
+    ODESystem([D(y) ~ p], t; name=name)
 end
 
 @testset "basic" begin
-    @parameters t
+    sys1 = ExampleSys()
+    sys2 = ExampleSysCopy()
 
-    @named sys1 = ExampleSys(t)
-    @named sys2 = ExampleSysCopy(t)
+    register_coupling(sys1, sys2) do s1, s2
+        operator_compose(s1, s2)
+    end
 
-    EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSysCopy) = operator_compose(sys1, sys2)
-
-    combined = sys1 + sys2
+    combined = couple(sys1, sys2)
 
     ox = get_mtk(combined)
     op = structural_simplify(ox)
@@ -53,17 +42,18 @@ end
     b = IOBuffer()
     show(b, eq)
     # The simplified equation should be D(x) = p + sys2_xˍt, where sys2_xˍt is also equal to p.
-    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_ddt_xˍt(t)]"
+    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊syscopy_ddt_xˍt(t)]"
 end
 
 @testset "translated" begin
-    @parameters t
+    sys1 = ExampleSys()
+    sys2 = ExampleSys2()
 
-    @named sys1 = ExampleSys(t)
-    @named sys2 = ExampleSys2(t)
+    register_coupling(sys1, sys2) do s1, s2
+        operator_compose(s1, s2, Dict(s1.x => s2.y))
+    end
 
-    EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys2) = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
-    combined = sys1 + sys2
+    combined = couple(sys1, sys2)
 
     ox = get_mtk(combined)
     op = structural_simplify(ox)
@@ -75,78 +65,75 @@ end
 end
 
 @testset "Non-ODE" begin
-    @parameters t
-    struct ExampleSysNonODE <: EarthSciMLODESystem
-        sys::ODESystem
-        function ExampleSysNonODE(t; name)
-            @variables y(t)
-            @parameters p
-            new(ODESystem([y ~ p], t; name))
-        end
+    function ExampleSysNonODE()
+        @variables y(t)
+        @parameters p
+        ODESystem([y ~ p], t; name=:sysnonode)
     end
 
-    @named sys1 = ExampleSys(t)
-    @named sys2 = ExampleSysNonODE(t)
+    sys1 = ExampleSys()
+    sys2 = ExampleSysNonODE()
 
-    EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSysNonODE) = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
-    combined = sys1 + sys2
+    register_coupling(sys1, sys2) do s1, s2
+        operator_compose(s1, s2, Dict(s1.x => s2.y))
+    end
+
+    combined = couple(sys1, sys2)
     combined_mtk = get_mtk(combined)
     sys_combined = structural_simplify(combined_mtk)
 
     streq = string(equations(sys_combined))
-    @test occursin("sys1₊sys2_y(t)", streq)
+    @test occursin("sys1₊sysnonode_y(t)", streq)
     @test occursin("sys1₊p", streq)
 end
 
 @testset "translated with conversion factor" begin
-    @parameters t
-    @named sys1 = ExampleSys(t)
-    @named sys2 = ExampleSys2(t)
+    sys1 = ExampleSys()
+    sys2 = ExampleSys2(; name=:sys22)
 
-    EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys2) = operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y => 6.0))
-    combined = sys1 + sys2
+    register_coupling(sys1, sys2) do s1, s2
+        operator_compose(s1, s2, Dict(s1.x => s2.y => 6.0))
+    end
+    
+    combined = couple(sys1, sys2)
 
     ox = get_mtk(combined)
     op = structural_simplify(ox)
     streq = string(equations(op))
     @test occursin("sys1₊p", streq)
-    @test occursin("sys1₊sys2_ddt_yˍt(t)", streq)
+    @test occursin("sys1₊sys22_ddt_yˍt(t)", streq)
 end
 
 @testset "Reaction-Deposition" begin
-    struct Chem <: EarthSciMLODESystem
-        sys::ODESystem
-        rxn_sys::ReactionSystem
-        function Chem(t)
-            @species SO2(t) O2(t) SO4(t)
-            @parameters α β
-            rxns = [
-                Reaction(α, [SO2, O2], [SO4], [1, 1], [1])
-            ]
-            rxn_sys = ReactionSystem(rxns, t; name=:chem)
-            new(convert(ODESystem, rxn_sys; combinatoric_ratelaws=false), rxn_sys)
-        end
+    function Chem()
+        @species SO2(t) O2(t) SO4(t)
+        @parameters α β
+        rxns = [
+            Reaction(α, [SO2, O2], [SO4], [1, 1], [1])
+        ]
+        ReactionSystem(rxns, t; name=:chem)
     end
 
-    struct Deposition <: EarthSciMLODESystem
-        sys::ODESystem
-        function Deposition(t)
-            @variables SO2(t)
-            @parameters k = 2
-            D = Differential(t)
+    function Deposition()
+        @variables SO2(t)
+        @parameters k = 2
+        D = Differential(t)
 
-            eqs = [
-                D(SO2) ~ -k * SO2
-            ]
-            new(ODESystem(eqs, t, [SO2], [k]; name=:deposition))
-        end
+        eqs = [
+            D(SO2) ~ -k * SO2
+        ]
+        ODESystem(eqs, t, [SO2], [k]; name=:deposition)
     end
-    @variables t
-    rn = Chem(t)
-    dep = Deposition(t)
 
-    EarthSciMLBase.couple(rn::Chem, dep::Deposition) = operator_compose(rn, dep)
-    combined = rn + dep
+    rn = Chem()
+    dep = Deposition()
+
+    register_coupling(rn, dep) do r, d
+        r = convert(ODESystem, r)
+        operator_compose(r, d)
+    end
+
+    combined = couple(rn, dep)
     cs = structural_simplify(get_mtk(combined))
     eq = equations(cs)
 
