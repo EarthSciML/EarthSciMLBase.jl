@@ -23,7 +23,7 @@ jobs:
           path-to-signatures: signatures.json
           path-to-document: https://github.com/EarthSciML/cla/blob/main/CLA.md
           branch: main
-          allowlist: dependabot[bot]
+          allowlist: dependabot[bot],compathelper
           custom-pr-sign-comment: I have reviewed and hereby sign the CLA
           create-file-commit-message: Create signatures.json
           signed-commit-message: '$contributorName signed the CLA in $pullRequestNo'
