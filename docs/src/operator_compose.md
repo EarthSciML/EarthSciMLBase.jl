@@ -28,34 +28,36 @@ using ModelingToolkit
 
 @parameters t
 
-struct ExampleSys <: EarthSciMLODESystem
-    sys::ODESystem
-
-    function ExampleSys(t; name)
-        @variables x(t)
-        @parameters p
-        D = Differential(t)
-        new(ODESystem([D(x) ~ p], t; name))
-    end
+function ExampleSys(t)
+    @variables x(t)
+    @parameters p
+    D = Differential(t)
+    ODESystem([D(x) ~ p], t; name=:Docs₊ExampleSys)
 end
 
-struct ExampleSys2 <: EarthSciMLODESystem
-    sys::ODESystem
+ExampleSys(t)
+```
 
-    function ExampleSys2(t; name)
-        @variables x(t)
-        @parameters p
-        D = Differential(t)
-        new(ODESystem([D(x) ~ 2p], t; name))
-    end
+```@example operator_compose
+function ExampleSys2(t)
+    @variables x(t)
+    @parameters p
+    D = Differential(t)
+    ODESystem([D(x) ~ 2p], t; name=:Docs₊ExampleSys2)
 end
 
-@named sys1 = ExampleSys(t)
-@named sys2 = ExampleSys2(t)
+ExampleSys2(t)
+```
 
-EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys2) = operator_compose(sys1, sys2)
+```@example operator_compose
+sys1 = ExampleSys(t)
+sys2 = ExampleSys2(t)
 
-combined = sys1 + sys2
+register_coupling(ExampleSys(t), ExampleSys2(t)) do sys1, sys2
+    operator_compose(sys1, sys2)
+end
+
+combined = couple(sys1, sys2)
 
 combined_mtk = get_mtk(combined)
 ```
@@ -76,24 +78,21 @@ This example demonstrates a case where one variable in the first system is equal
 
 
 ```@example operator_compose
-struct ExampleSys3 <: EarthSciMLODESystem
-    sys::ODESystem
-    function ExampleSys3(t; name)
-        @variables y(t)
-        @parameters p
-        D = Differential(t)
-        new(ODESystem([D(y) ~ p], t; name))
-    end
+function ExampleSys3(t)
+    @variables y(t)
+    @parameters p
+    D = Differential(t)
+    ODESystem([D(y) ~ p], t; name=:Docs₊ExampleSys3)
 end
 
-@named sys1 = ExampleSys(t)
-@named sys2 = ExampleSys3(t)
+sys1 = ExampleSys(t)
+sys2 = ExampleSys3(t)
 
-function EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSys3)
-    operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
+register_coupling(ExampleSys(t), ExampleSys3(t)) do sys1, sys2
+    operator_compose(sys1, sys2, Dict(sys1.x => sys2.y))
 end
 
-combined = sys1 + sys2
+combined = couple(sys1, sys2)
 combined_simplified = structural_simplify(get_mtk(combined))
 ```
 
@@ -108,23 +107,20 @@ This could happen if we are extracting emissions from a file, and those emission
 (Note that this case can also be used with the conversion factors shown in the last example.)
 
 ```@example operator_compose
-struct ExampleSysNonODE <: EarthSciMLODESystem
-    sys::ODESystem
-    function ExampleSysNonODE(t; name)
-        @variables y(t)
-        @parameters p
-        new(ODESystem([y ~ p], t; name))
-    end
+function ExampleSysNonODE(t)
+    @variables y(t)
+    @parameters p
+    ODESystem([y ~ p], t; name=:Docs₊ExampleSysNonODE)
 end
 
-@named sys1 = ExampleSys(t)
-@named sys2 = ExampleSysNonODE(t)
+sys1 = ExampleSys(t)
+sys2 = ExampleSysNonODE(t)
 
-function EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSysNonODE)
-    operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y))
+register_coupling(ExampleSys(t), ExampleSysNonODE(t)) do sys1, sys2
+    operator_compose(sys1, sys2, Dict(sys1.x => sys2.y))
 end
 
-combined = sys1 + sys2
+combined = couple(sys1, sys2)
 sys_combined = structural_simplify(get_mtk(combined))
 ```
 
@@ -137,14 +133,20 @@ observed(sys_combined)
 Finally, this last example shows the fourth case, where a conversion factor is included in the translation dictionary.
 
 ```@example operator_compose
-@named sys1 = ExampleSys(t)
-@named sys2 = ExampleSysNonODE(t)
-
-function EarthSciMLBase.couple(sys1::ExampleSys, sys2::ExampleSysNonODE)
-    operator_compose(sys1, sys2, Dict(sys1.sys.x => sys2.sys.y => 6.0))
+function ExampleSysNonODE2(t)
+    @variables y(t)
+    @parameters p
+    ODESystem([y ~ p], t; name=:Docs₊ExampleSysNonODE2)
 end
 
-combined = sys1 + sys2
+sys1 = ExampleSys(t)
+sys2 = ExampleSysNonODE2(t)
+
+register_coupling(ExampleSys(t), ExampleSysNonODE2(t)) do sys1, sys2
+    operator_compose(sys1, sys2, Dict(sys1.x => sys2.y => 6.0))
+end
+
+combined = couple(sys1, sys2)
 combined_simplified = structural_simplify(get_mtk(combined))
 ```
 

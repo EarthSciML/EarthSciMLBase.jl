@@ -9,24 +9,24 @@ Advection is implemented with the [`Advection`](@ref) type.
 To demonstrate how this can work, we will start with a simple system of equations:
 
 ```@example advection
-using EarthSciMLBase, ModelingToolkit
+using EarthSciMLBase, ModelingToolkit, Unitful
 
-struct ExampleSys <: EarthSciMLODESystem
-    sys::ODESystem
-    function ExampleSys(t; name=:example)
-        @variables y(t)
-        @parameters p=2.0
-        D = Differential(t)
-        new(ODESystem([D(y) ~ p], t; name))
-    end
+@parameters t
+
+function ExampleSys(t)
+    @variables y(t)
+    @parameters p=2.0
+    D = Differential(t)
+    ODESystem([D(y) ~ p], t; name=:Docs₊ExampleSys)
 end
-nothing # hide
+
+ExampleSys(t)
 ```
 
 We also need to create our initial and boundary conditions.
 ```@example advection
 using DomainSets
-@parameters t, x
+@parameters x
 domain = DomainInfo(constIC(0.0, t ∈ Interval(0, 1.0)), constBC(1.0, x ∈ Interval(0, 1.0)))
 nothing # hide
 ```
@@ -35,7 +35,7 @@ Now we convert add advection to each of the state variables.
 We're also adding a constant wind ([`ConstantWind`](@ref)) in the x-direction, with a speed of 1.0.
 
 ```@example advection
-sys_advection = ExampleSys(t) + domain + ConstantWind(t, 1.0) + Advection()
+sys_advection = couple(ExampleSys(t), domain, ConstantWind(t, 1.0), Advection())
 sys_mtk = get_mtk(sys_advection)
 ```
 

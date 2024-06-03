@@ -36,17 +36,14 @@ end
     @parameters lev [unit=u"m"]
     @parameters t [unit=u"s"]
 
-    struct Example <: EarthSciMLODESystem
-        sys
-        function Example(t; name)
-            @variables c(t) = 5.0 [unit=u"kg"]
-            @constants t_c = 1.0 [unit=u"s"] # constant to make `sin` unitless
-            @constants c_c = 1.0 [unit=u"kg/s"] # constant to make equation units work out
-            D = Differential(t)
-            new(ODESystem([D(c) ~ sin(t/t_c)*c_c], t, name=name))
-        end
+    function Example()
+        @variables c(t) = 5.0 [unit=u"kg"]
+        @constants t_c = 1.0 [unit=u"s"] # constant to make `sin` unitless
+        @constants c_c = 1.0 [unit=u"kg/s"] # constant to make equation units work out
+        D = Differential(t)
+        ODESystem([D(c) ~ sin(t/t_c)*c_c], t, name=:examplesys)
     end
-    @named examplesys = Example(t)
+    examplesys = Example()
 
     deg2rad(x) = x * π / 180.0
     domain = DomainInfo(
@@ -57,17 +54,17 @@ end
         zerogradBC(lev ∈ Interval(1.0f0, 10.0f0)),
     )
 
-    composed_sys = examplesys + domain + Advection()
+    composed_sys = couple(examplesys, domain, Advection())
 
     sys_mtk = get_mtk(composed_sys)
 
     have_eq = equations(sys_mtk)
     @assert length(have_eq) == 1
-    @variables examplesys₊c(..) meanwind₊v_lon(..) meanwind₊v_lat(..) meanwind₊v_lev(..)
+    @variables examplesys₊c(..) EarthSciMLBase₊MeanWind₊v_lon(..) EarthSciMLBase₊MeanWind₊v_lat(..) EarthSciMLBase₊MeanWind₊v_lev(..)
     @constants examplesys₊t_c=1.0 examplesys₊c_c=1.0
     want_eq = Differential(t)(examplesys₊c(t, lat, lon, lev)) ~ examplesys₊c_c*sin(t / examplesys₊t_c) + 
-        (-meanwind₊v_lat(t, lat, lon, lev)*Differential(lat)(examplesys₊c(t, lat, lon, lev))) / EarthSciMLBase.lat2meters + 
-        (-meanwind₊v_lon(t, lat, lon, lev)*Differential(lon)(examplesys₊c(t, lat, lon, lev))) / (EarthSciMLBase.lon2m*cos(lat)) - 
-        meanwind₊v_lev(t, lat, lon, lev)*Differential(lev)(examplesys₊c(t, lat, lon, lev))
+        (-EarthSciMLBase₊MeanWind₊v_lat(t, lat, lon, lev)*Differential(lat)(examplesys₊c(t, lat, lon, lev))) / EarthSciMLBase.lat2meters + 
+        (-EarthSciMLBase₊MeanWind₊v_lon(t, lat, lon, lev)*Differential(lon)(examplesys₊c(t, lat, lon, lev))) / (EarthSciMLBase.lon2m*cos(lat)) - 
+        EarthSciMLBase₊MeanWind₊v_lev(t, lat, lon, lev)*Differential(lev)(examplesys₊c(t, lat, lon, lev))
     @test isequal(have_eq[1], want_eq)
 end
