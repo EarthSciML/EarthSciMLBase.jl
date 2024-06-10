@@ -34,7 +34,7 @@ This package contains types and functions designed to simplify the process of co
 
 ## Reproducibility
 ```@raw html
-<details><summary>The documentation of this SciML package was built using these direct dependencies,</summary>
+<details><summary>The documentation of this EarthSciML package was built using these direct dependencies,</summary>
 ```
 ```@example
 using Pkg # hide
