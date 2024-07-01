@@ -13,6 +13,7 @@ using Unitful
 
 @parameters lon [unit = u"rad"]
 @parameters lat [unit = u"rad"]
+@parameters t [unit = u"s"]
 @parameters lev
 
 partialderivatives_δxyδlonlat([lev, lon, lat])
