@@ -111,7 +111,7 @@ function get_mtk(sys::CoupledSystem; name=:model)::ModelingToolkit.AbstractSyste
                 systems[i], a = cs.from, cs.from
                 systems[j], b = cs.to, cs.to
                 for eq ∈ cs.eqs
-                    @assert ModelingToolkit.validate(eq) "invalids units in coupling equation: $eq. See warnings for details."
+                    @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
                 end
                 append!(connector_eqs, cs.eqs)
             end

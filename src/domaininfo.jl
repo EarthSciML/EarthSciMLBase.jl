@@ -1,4 +1,4 @@
-export DomainInfo, ICBCcomponent, constIC, constBC, zerogradBC, periodicBC
+export DomainInfo, ICBCcomponent, constIC, constBC, zerogradBC, periodicBC, partialderivatives
 
 """
 Initial and boundary condition components that can be combined to 
@@ -29,25 +29,32 @@ struct DomainInfo
     Function that returns spatial derivatives of the partially-independent variables,
     optionally performing a coordinate transformation first. 
 
-    Current function options are:
-    - `partialderivatives_identity` (the default): Returns partial derivatives without performing any coordinate transforms.
-    - `partialderivatives_lonlat2xymeters`: Returns partial derivatives after transforming any variables named `lat` and `lon` 
-    from degrees to cartesian meters, assuming a spherical Earth.    
+    Current function options in this package are:
+    - `partialderivatives_δxyδlonlat`: Returns partial derivatives after transforming any variables named `lat` and `lon` 
+    from degrees to cartesian meters, assuming a spherical Earth.
+
+    Other packages may implement additional functions. They are encouraged to use function names starting 
+    with `partialderivatives_`.
     """
-    partial_derivative_func::Function
+    partial_derivative_funcs::Vector{Function}
 
     "The sets of initial and/or boundary conditions."
     icbc::Vector{ICBCcomponent}
 
-    function DomainInfo(icbc::ICBCcomponent...) 
+    function DomainInfo(icbc::ICBCcomponent...)
         @assert length(icbc) > 0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        new(partialderivatives_identity, ICBCcomponent[icbc...])
+        new([], ICBCcomponent[icbc...])
     end
     function DomainInfo(fdx::Function, icbc::ICBCcomponent...) 
         @assert length(icbc) > 0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        new(fdx, ICBCcomponent[icbc...])
+        new([fdx], ICBCcomponent[icbc...])
+    end
+    function DomainInfo(fdxs::Vector{Function}, icbc::ICBCcomponent...) 
+        @assert length(icbc) > 0 "At least one initial or boundary condition is required."
+        @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
+        new(fdxs, ICBCcomponent[icbc...])
     end
 end
 
@@ -93,6 +100,45 @@ function pvars(di::DomainInfo)
     @assert length(partialdomains) > 0 "At least one partial domain is required."
     @assert length(unique(partialdomains)) == length(partialdomains) "Each partial domain must have only one set of boundary conditions."
     return [domain.variables for domain in partialdomains]
+end
+
+"""
+$(TYPEDSIGNATURES)
+
+Return transform factor to multiply each partial derivative operator by,
+for example to convert from degrees to meters.
+"""
+function partialderivative_transforms(di::DomainInfo)
+    xs = pvars(di)
+    fs = Dict()
+    for f in di.partial_derivative_funcs
+        for (k, v) ∈ f(xs)
+            @assert k ∉ keys(fs) "Multiple transforms were specified for $(xs[k])."
+            fs[k] = v
+        end
+    end
+    ts = []
+    for i ∈ eachindex(xs)
+        if i in keys(fs)
+            push!(ts, fs[i])
+        else
+            push!(ts, 1.0)
+        end
+    end
+    ts
+end
+
+
+"""
+$(TYPEDSIGNATURES)
+
+Return the partial derivative operators for the given domain.
+"""
+function partialderivatives(di::DomainInfo)
+    xs = pvars(di)
+    δs = Differential.(xs)
+    ts = partialderivative_transforms(di)
+    [(x)->(δs[i](x) * ts[i]) for i ∈ eachindex(xs)]
 end
 
 """
