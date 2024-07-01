@@ -1,20 +1,22 @@
 export Advection, MeanWind, ConstantWind
 
-function meanwind_vars(t, pvars; prefix="", multidim=false)
+function meanwind_vars(t, domain::DomainInfo; prefix="", multidim=false)
     uvars = []
+    pvs = pvars(domain)
+    δs = partialderivatives(domain)
     denominator = ModelingToolkit.get_unit(t)
-    for pv ∈ pvars
+    for (i, pv) ∈ enumerate(pvs)
         sym = Symbol("$(prefix)v_$(pv)")
         if multidim # Multi-dimensional variable
             uv = (@variables $sym(..))[1]
         else
             uv = (@variables $sym(t))[1]
         end
-
+        δ = δs[i].ts[i] # get the partial derivative operator for the variable
+        unit = ModelingToolkit.get_unit(pv) / ModelingToolkit.get_unit(δ) / denominator
         # set metadata
         uv = add_metadata(uv, pv)
-        numerator = ModelingToolkit.get_unit(uv)
-        uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableUnit, numerator / denominator)
+        uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableUnit, unit)
         uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableDescription,
             "Mean wind speed in the $(pv) direction.")
         push!(uvars, uv)
@@ -28,10 +30,12 @@ $(SIGNATURES)
 A model component that represents the mean wind velocity, where
 `pvars` is the partial dependent variables for the domain.
 """
-function MeanWind(t, pvars...)
-    uvars = meanwind_vars(t, pvars)
+function MeanWind(t, domain::DomainInfo)
+    uvars = meanwind_vars(t, domain)
     ODESystem(Equation[], t, uvars, []; name=:EarthSciMLBase₊MeanWind)
 end
+# Dummy function for coupling
+MeanWind(t) = ODESystem(Equation[], t, [], []; name=:EarthSciMLBase₊MeanWind)
 
 """
 $(SIGNATURES)
@@ -47,7 +51,7 @@ struct Advection end
 function advection(vars, di::DomainInfo)
     iv = ivar(di)
     pvs = pvars(di)
-    uvars = meanwind_vars(iv, pvs; prefix="EarthSciMLBase₊MeanWind₊", multidim=true)
+    uvars = meanwind_vars(iv, di; prefix="EarthSciMLBase₊MeanWind₊", multidim=true)
     varsdims = Num[v for v ∈ vars]
     udims = Num[ui(iv, pvs...) for ui ∈ uvars]
     δs = partialderivatives(di) # get partial derivative operators. May contain coordinate transforms.
@@ -64,7 +68,7 @@ function couple(c::CoupledSystem, _::Advection)::CoupledSystem
     @assert isa(c.domaininfo, DomainInfo) "The system must have initial and boundary conditions (i.e. DomainInfo) to add advection."
 
     # Add in a model component to allow the specification of the wind velocity.
-    push!(c.systems, MeanWind(ivar(c.domaininfo), pvars(c.domaininfo)...))
+    push!(c.systems, MeanWind(ivar(c.domaininfo), c.domaininfo))
 
     function f(sys::ModelingToolkit.PDESystem)
         eqs = advection(sys.dvs, c.domaininfo)
