@@ -50,7 +50,7 @@ function advection(vars, di::DomainInfo)
     uvars = meanwind_vars(iv, pvs; prefix="EarthSciMLBase₊MeanWind₊", multidim=true)
     varsdims = Num[v for v ∈ vars]
     udims = Num[ui(iv, pvs...) for ui ∈ uvars]
-    δs = di.partial_derivative_func(pvs) # get partial derivative operators. May contain coordinate transforms.
+    δs = partialderivatives(di) # get partial derivative operators. May contain coordinate transforms.
     eqs = Equation[]
     for var ∈ varsdims
         rhs = sum(vcat([-wind * δs[i](var) for (i, wind) ∈ enumerate(udims)]))

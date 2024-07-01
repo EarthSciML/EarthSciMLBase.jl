@@ -21,6 +21,7 @@ makedocs(;
         "Parameter Replacement" => "param_to_var.md",
         "Initial and Boundary Conditions" => "icbc.md",
         "Advection" => "advection.md",
+        "Coordinate Transforms" => "coord_transforms.md",
         "Examples" => [
             "All Together" => "example_all_together.md",
         ],

@@ -38,9 +38,6 @@ using Unitful
     @test length(combined_mtk.dvs) == 6
     @test length(combined_mtk.bcs) == 3
 
-    for eq in equations(combined_mtk)
-        @info eq
-    end
     @test occursin("- EarthSciMLBase₊MeanWind₊v_x(t, x)*Differential(x)(Docs₊examplesys₊y(t, x))", 
         string(equations(combined_mtk))) || 
         occursin("- Differential(x)(Docs₊examplesys₊y(t, x))*EarthSciMLBase₊MeanWind₊v_x(t, x)", 

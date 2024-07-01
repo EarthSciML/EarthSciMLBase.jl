@@ -1,4 +1,4 @@
-export partialderivatives_lonlat2xymeters
+export partialderivatives_δxyδlonlat
 
 # Scaling factor for converting latitude to meters
 @constants lat2meters = 111.32e3 * 180 / π [unit = u"m/rad"]
@@ -12,20 +12,12 @@ varindex(pvars::AbstractVector, varname::Symbol) = findfirst(nameof.(pvars) .== 
 """
 $(SIGNATURES)
 
-Return the partial derivative operators corresponding to each of the given partial-independent variables.
-"""
-function partialderivatives_identity(pvars::AbstractVector)
-    Differential.(pvars)
-end
-
-"""
-$(SIGNATURES)
-
-Return the partial derivative operators corresponding to each of the given partial-independent variables
+Return partial derivative operator transform factors corresponding 
+for the given partial-independent variables
 after converting variables named `lon` and `lat` from degrees to x and y meters, 
 assuming they represent longitude and latitude on a spherical Earth.
 """
-function partialderivatives_lonlat2xymeters(pvars::AbstractVector; default_lat=0.0)
+function partialderivatives_δxyδlonlat(pvars::AbstractVector; default_lat=0.0)
     latindex = varindex(pvars, :lat)
     lonindex = varindex(pvars, :lon)
     if !isnothing(latindex)
@@ -34,21 +26,8 @@ function partialderivatives_lonlat2xymeters(pvars::AbstractVector; default_lat=0
         lat = default_lat
     end
 
-
-    δs = Differential.(pvars)
-
-    Dx(var) = δs[lonindex](var) / lon2meters(lat)
-    Dy(var) = δs[latindex](var) / lat2meters
-
-    δs2 = []
-    for i in 1:length(δs)
-        if i == lonindex
-            push!(δs2, Dx)
-        elseif i == latindex
-            push!(δs2, Dy)
-        else
-            push!(δs2, δs[i])
-        end
-    end
-    return δs2
+    Dict(
+        lonindex => 1.0 / lon2meters(lat),
+        latindex => 1.0 / lat2meters
+    )
 end
