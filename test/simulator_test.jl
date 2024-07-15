@@ -1,11 +1,11 @@
 using Test
 
-mutable struct ExampleOp <: Operator
-    α # Multiplier from ODESystem
+struct ExampleOp <: Operator
+    α::Num # Multiplier from ODESystem
 end
 
 function run!(op::ExampleOp, s::Simulator, t)
-    f = s.obs_fs[op.α]
+    f = s.obs_fs[s.obs_fs_idx[op.α]]
     for ix ∈ 1:size(s.u, 1)
         for (i, c1) ∈ enumerate(s.grid[1])
             for (j, c2) ∈ enumerate(s.grid[2])
@@ -67,8 +67,8 @@ sim = Simulator(csys, [0.1, 0.1, 1], Tsit5(); abstol=1e-12, reltol=1e-12)
 @test 1 / (sim.tf_fs[2](0.0, 0.0, 0.0, 0.0) * 180 / π) ≈ 111320.00000000001
 @test sim.tf_fs[3](0.0, 0.0, 0.0, 0.0) == 1.0
 
-@test sim.obs_fs[sys.windspeed](0.0, 1.0, 3.0, 2.0) == 6.0
-@test sim.obs_fs[op.α](0.0, 1.0, 3.0, 2.0) == 6.0
+@test sim.obs_fs[sim.obs_fs_idx[sys.windspeed]](0.0, 1.0, 3.0, 2.0) == 6.0
+@test sim.obs_fs[sim.obs_fs_idx[op.α]](0.0, 1.0, 3.0, 2.0) == 6.0
 
 run!(op, sim, 0.0)
 

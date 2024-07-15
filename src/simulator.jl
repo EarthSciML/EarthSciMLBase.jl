@@ -7,11 +7,13 @@ Specify a simulator for large-scale model runs.
 
 $(TYPEDFIELDS)
 """
-struct Simulator{T}
+struct Simulator{T,IT,FT1,FT2}
     "The system to be integrated"
     sys::CoupledSystem
     "The ModelingToolkit version of the system"
     sys_mtk::ODESystem
+    "Information about the spatiotemporal simulation domain"
+    domaininfo::DomainInfo{T}
     "The system state"
     u::Array{T,4}
     "The system state derivative"
@@ -23,16 +25,18 @@ struct Simulator{T}
     "The indexes of the partial independent variables in the system parameter value vector"
     pvidx::Vector{Int}
     "The discretized values of the partial independent variables"
-    grid::Vector{AbstractRange{T}}
+    grid::Vector{StepRangeLen{T,Base.TwicePrecision{T},Base.TwicePrecision{T},Int64}}
     "Functions to get the current values of the observed variables with input arguments of time and the partial independent variables"
-    obs_fs::Dict{Any,Function}
+    obs_fs::FT1
+    "Indexes for the obs_fs functions"
+    obs_fs_idx::Dict{Num,Int}
     "Functions to get the current values of the coordinate transforms with input arguments of time and the partial independent variables"
-    tf_fs::Vector{Function}
+    tf_fs::FT2
 
     "Internal integrators"
-    integrators::Vector{OrdinaryDiffEq.ODEIntegrator}
+    integrators::Vector{IT}
     "Internal chunks of grid cells for each integrator"
-    IIchunks
+    IIchunks::Vector{SubArray{CartesianIndex{3},1,Base.ReshapedArray{CartesianIndex{3},1,CartesianIndices{3,Tuple{Base.OneTo{Int64},Base.OneTo{Int64},Base.OneTo{Int64}}},Tuple{Base.SignedMultiplicativeInverse{Int64},Base.SignedMultiplicativeInverse{Int64}}},Tuple{UnitRange{Int64}},false}}
 
     function Simulator(sys::CoupledSystem, Δs::AbstractVector{T2}, algorithm; kwargs...) where {T2<:AbstractFloat}
         @assert !isnothing(sys.domaininfo) "The system must have a domain specified; see documentation for EarthSciMLBase.DomainInfo."
@@ -52,10 +56,13 @@ struct Simulator{T}
         pvidx = [findfirst(isequal(p), parameters(mtk_sys)) for p in pv]
 
         # Get functions for observed variables
-        obs_fs = Dict()
-        for x ∈ [eq.lhs for eq ∈ observed(mtk_sys)]
-            obs_fs[x] = observed_function(mtk_sys, x, [iv, pv...])
+        obs_fs_idx = Dict()
+        obs_fs = []
+        for (i, x) ∈ enumerate([eq.lhs for eq ∈ observed(mtk_sys)])
+            obs_fs_idx[x] = i
+            push!(obs_fs, observed_function(mtk_sys, x, [iv, pv...]))
         end
+        obs_fs = Tuple(obs_fs)
 
         # Get functions for coordinate transforms
         tf_fs = []
@@ -63,6 +70,7 @@ struct Simulator{T}
         for tf ∈ partialderivative_transforms(sys.domaininfo)
             push!(tf_fs, observed_function(mtk_sys, 🌈🐉🏒, [iv, pv...], extra_eqs=[🌈🐉🏒 ~ tf]))
         end
+        tf_fs = Tuple(tf_fs)
 
         T = utype(sys.domaininfo)
 
@@ -77,28 +85,23 @@ struct Simulator{T}
             save_start=false, save_end=false, initialize_save=false; kwargs...)
                        for _ in 1:length(IIchunks)]
 
-        new{T}(sys, mtk_sys, u, du, pvals, uvals, pvidx, grd, obs_fs, tf_fs, integrators, IIchunks)
+        new{T,typeof(integrators[1]),typeof(obs_fs),typeof(tf_fs)}(sys, mtk_sys, sys.domaininfo, u, du, pvals, uvals, pvidx, grd, obs_fs, obs_fs_idx, tf_fs, integrators, IIchunks)
     end
 end
 
-function ode_step!(s::Simulator{T}, time::T, step_length::T) where {T}
+function ode_step!(s::Simulator{T,IT,FT,FT2}, time::T, step_length::T) where {T,IT,FT,FT2}
     tasks = map(1:length(s.IIchunks)) do ithread
         Threads.@spawn single_ode_step!(s, $ithread, time, step_length)
-    end
+    end::Vector{Task}
     wait.(tasks)
     nothing
 end
 
-lck = ReentrantLock()
-
-function single_ode_step!(s::Simulator{T}, ithread, time::T, step_length::T) where {T}
+function single_ode_step!(s::Simulator{T,IT,FT,FT2}, ithread, time::T, step_length::T) where {T,IT,FT,FT2}
     IIchunk = s.IIchunks[ithread]
     integrator = s.integrators[ithread]
     for ii in IIchunk
-        uii = nothing
-        lock(lck) do
-            uii = @view s.u[:, ii]
-        end
+        uii = @view s.u[:, ii]
         reinit!(integrator, uii, t0=time, tf=time + step_length,
             erase_sol=false, reset_dt=true)
         for (jj, g) ∈ enumerate(s.grid) # Set the coordinates of this grid cell.
@@ -106,13 +109,11 @@ function single_ode_step!(s::Simulator{T}, ithread, time::T, step_length::T) whe
         end
         solve!(integrator)
         @assert length(integrator.sol.u) == 0
-        lock(lck) do
-            uii .= integrator.u
-        end
+        uii .= integrator.u
     end
 end
 
-function operator_step!(s::Simulator{T}, time::T, step_length::T) where {T}
+function operator_step!(s::Simulator{T,IT,FT,FT2}, time::T, step_length::T) where {T,IT,FT,FT2}
     for op in s.sys.ops
         s.du .= zero(eltype(s.du))
         run!(op, s, time)
@@ -121,7 +122,7 @@ function operator_step!(s::Simulator{T}, time::T, step_length::T) where {T}
     nothing
 end
 
-function strang_step!(s::Simulator{T}, time::T, step_length::T) where {T}
+function strang_step!(s::Simulator{T,IT,FT,FT2}, time::T, step_length::T) where {T,IT,FT,FT2}
     ode_step!(s, time, step_length)
     operator_step!(s, time, step_length)
     nothing
@@ -142,8 +143,8 @@ function init_u!(s::Simulator)
     nothing
 end
 
-function run!(s::Simulator{T}) where {T}
-    start, finish = time_range(s.sys.domaininfo)
+function run!(s::Simulator)
+    start, finish = time_range(s.domaininfo)
     optimes = [start:timestep(op):finish for op ∈ s.sys.ops]
     steps = timesteps(optimes...)
     step_length = steplength(steps)
