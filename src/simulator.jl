@@ -1,22 +1,9 @@
 
 """
-Operators are objects that modify the current state of a `Simulator` system.
-Each operator should be define a `run` function with the signature:
-
-    `run!(op::Operator, s::Simulator, time)`
-
-which modifies the `s.du` field in place. It should also implement:
-
-    `timestep(op::Operator)`
-
-which returns the timestep length for the operator.
-"""
-abstract type Operator end
-
-"""
 $(TYPEDSIGNATURES)
 
-Specify a simulator for large-scale model runs.
+Specify a simulator for large-scale model runs. 
+`kwargs` are passed on to the DifferentialEquations.jl integrator initialization.
 
 $(TYPEDFIELDS)
 """
@@ -85,9 +72,9 @@ struct Simulator{T}
         du = similar(u)
 
         II = CartesianIndices(size(u)[2:4])
-        IIchunks = Iterators.partition(II, length(II) ÷ Threads.nthreads())
-        integrators = [init(prob, algorithm, save_on=false,
-            save_start=false, save_end=false, initialize_save=false)
+        IIchunks = collect(Iterators.partition(II, length(II) ÷ Threads.nthreads()))
+        integrators = [init(remake(prob, u0=similar(uvals), p=deepcopy(pvals)), algorithm, save_on=false,
+            save_start=false, save_end=false, initialize_save=false; kwargs...)
                        for _ in 1:length(IIchunks)]
 
         new{T}(sys, mtk_sys, u, du, pvals, uvals, pvidx, grd, obs_fs, tf_fs, integrators, IIchunks)
@@ -96,24 +83,33 @@ end
 
 function ode_step!(s::Simulator{T}, time::T, step_length::T) where {T}
     tasks = map(1:length(s.IIchunks)) do ithread
-        Threads.@spawn begin
-            IIchunk = collect(s.IIchunks)[$ithread]
-            integrator = s.integrators[$ithread]
-            for ii in IIchunk
-                uii = @view s.u[:, ii]
-                reinit!(integrator, uii, t0=time, tf=time + step_length,
-                    erase_sol=false, reset_dt=true)
-                for (jj, g) ∈ enumerate(s.grid) # Set the coordinates of this grid cell.
-                    integrator.p[s.pvidx[jj]] = g[ii[jj]]
-                end
-                solve!(integrator)
-                @assert length(integrator.sol.u) == 0
-                uii .= integrator.u
-            end
-        end
+        Threads.@spawn single_ode_step!(s, $ithread, time, step_length)
     end
     wait.(tasks)
     nothing
+end
+
+lck = ReentrantLock()
+
+function single_ode_step!(s::Simulator{T}, ithread, time::T, step_length::T) where {T}
+    IIchunk = s.IIchunks[ithread]
+    integrator = s.integrators[ithread]
+    for ii in IIchunk
+        uii = nothing
+        lock(lck) do
+            uii = @view s.u[:, ii]
+        end
+        reinit!(integrator, uii, t0=time, tf=time + step_length,
+            erase_sol=false, reset_dt=true)
+        for (jj, g) ∈ enumerate(s.grid) # Set the coordinates of this grid cell.
+            integrator.p[s.pvidx[jj]] = g[ii[jj]]
+        end
+        solve!(integrator)
+        @assert length(integrator.sol.u) == 0
+        lock(lck) do
+            uii .= integrator.u
+        end
+    end
 end
 
 function operator_step!(s::Simulator{T}, time::T, step_length::T) where {T}
@@ -130,14 +126,6 @@ function strang_step!(s::Simulator{T}, time::T, step_length::T) where {T}
     operator_step!(s, time, step_length)
     nothing
 end
-
-function steplength(timesteps)
-    Δs = [timesteps[i] - timesteps[i-1] for i ∈ 2:length(timesteps)]
-    @assert all(Δs[1] .≈ Δs) "Not all time steps are the same."
-    return Δs[1]
-end
-
-@test steplength([0, 0.1, 0.2]) == 0.1
 
 "Initialize the state variables."
 function init_u!(s::Simulator)
@@ -170,290 +158,6 @@ function run!(s::Simulator{T}) where {T}
         #      write_step(r.writer, r.u, time)
         # end
     end
-#    close(o)
+    #    close(o)
     nothing
 end
-
-using Test
-
-@parameters x y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0
-@constants p = 1.0
-@variables(
-    u(t) = 1.0, v(t) = 1.0, x(t) = 1.0, y(t) = 1.0
-)
-Dt = Differential(t)
-
-eqs = [Dt(u) ~ -α * √abs(v) + lon,
-    Dt(v) ~ -α * √abs(u) + lat,
-    x ~ 2α + p + y,
-    y ~ 4α - 2p
-]
-
-
-@named sys = ODESystem(eqs)
-sys = structural_simplify(sys)
-observed(sys)
-
-"""
-$(SIGNATURES)
-
-Return an expression for the observed value of a variable `x` after
-substituting in the constants observed values of other variables.
-`extra_eqs` is a list of additional equations to use in the substitution.
-"""
-function observed_expression(sys::ODESystem, x; extra_eqs=[])
-    expr = nothing
-    eqs = observed(sys)
-    push!(eqs, extra_eqs...)
-    for eq ∈ eqs
-        if isequal(eq.lhs, x)
-            expr = eq.rhs
-        end
-    end
-    if isnothing(expr)
-        return nothing
-    end
-    expr = ModelingToolkit.subs_constants(expr)
-    for v ∈ Symbolics.get_variables(expr)
-        v_expr = observed_expression(sys, v)
-        if !isnothing(v_expr)
-            expr = Symbolics.replace(expr, v => v_expr)
-        end
-    end
-    # Do it again to catch extra variables TODO(CT): Theoretically this could recurse forever; when to stop?
-    for v ∈ Symbolics.get_variables(expr)
-        v_expr = observed_expression(sys, v, extra_eqs=extra_eqs)
-        if !isnothing(v_expr)
-            expr = Symbolics.replace(expr, v => v_expr)
-        end
-    end
-    expr
-end
-
-"""
-$(SIGNATURES)
-
-Return a function to  for the observed value of a variable `x` based
-on the input arguments in `coords`.
-`extra_eqs` is a list of additional equations to use to determine 
-the value of `x`.
-"""
-function observed_function(sys::ODESystem, x, coords; extra_eqs=[])
-    expr = observed_expression(sys, x, extra_eqs=extra_eqs)
-    vars = Symbolics.get_variables(expr)
-    @assert (length(vars) <= length(coords)) "Extra variables: $(vars) != $(coords)"
-    @assert all(Bool.([sum(isequal.((v,), coords)) for v ∈ vars])) "Incorrect variables: $(vars) != $(coords)"
-    return Symbolics.build_function(expr, coords...; expression=Val{false})
-end
-
-xx = observed_expression(sys, x)
-
-@test isequal(xx, -1.0 + 6α)
-
-coords = [α]
-xf = observed_function(sys, x, coords)
-
-@test isequal(xf(α), -1.0 + 6α)
-@test isequal(xf(2), -1.0 + 6 * 2)
-
-
-@variables uu, vv
-extra_eqs = [uu ~ x + 3, vv ~ uu * 4]
-
-xx2 = observed_expression(sys, vv, extra_eqs=extra_eqs)
-
-xf2 = observed_function(sys, vv, coords, extra_eqs=extra_eqs)
-
-@test isequal(xf2(α), 4 * (2 + 6α))
-
-
-
-prob = ODEProblem(sys, tspan=(0.0, 1.0))
-
-sol = solve(prob, Tsit5(), tspan=(0.0, 11.5))
-
-t_min = 0.0
-lon_min, lon_max = -π, π
-lat_min, lat_max = -0.45π, 0.45π
-t_max = 11.5
-
-indepdomain = t ∈ Interval(t_min, t_max)
-
-partialdomains = [lon ∈ Interval(lon_min, lon_max),
-    lat ∈ Interval(lat_min, lat_max)]
-
-domain = DomainInfo(
-    partialderivatives_δxyδlonlat,
-    constIC(16.0, indepdomain), constBC(16.0, partialdomains...))
-
-vars = states(sys)
-
-bcs = icbc(domain, vars)
-
-
-"""
-$(SIGNATURES)
-
-Return the data type of the state variables for this domain,
-based on the data types of the boundary conditions domain intervals.
-"""
-function utype(d::DomainInfo)
-    T = []
-    for icbc ∈ d.icbc
-        if icbc isa BCcomponent
-            for pd ∈ icbc.partialdomains
-                push!(T, eltype(pd.domain))
-            end
-        end
-    end
-    @assert length(T) > 0 "This domain does not include any boundary conditions"
-    return promote_type(T)[1]
-end
-
-
-@test utype(domain) == Float64
-@test utype(DomainInfo(constIC(0, t ∈ Interval(0, 1)), constBC(16.0f0, lon ∈ Interval(0.0f0, 1.0f0)))) == Float32
-
-
-"""
-$(SIGNATURES)
-
-Return the ranges representing the discretization of the partial independent 
-variables for this domain, based on the discretization intervals given in `Δs`
-"""
-function grid(d::DomainInfo, Δs::AbstractVector{T})::Vector{AbstractRange{T}} where {T<:AbstractFloat}
-    i = 1
-    rngs = []
-    for icbc ∈ d.icbc
-        if icbc isa BCcomponent
-            for pd ∈ icbc.partialdomains
-                rng = DomainSets.infimum(pd.domain):Δs[i]:DomainSets.supremum(pd.domain)
-                push!(rngs, rng)
-                i += 1
-            end
-        end
-    end
-    @assert length(rngs) == length(Δs) "The number of partial independent variables ($(length(rng))) must equal the number of Δs provided ($(length(Δs)))"
-    return rngs
-end
-
-@test grid(domain, [0.1π, 0.01π]) ≈ [-π:0.1π:π, -0.45π:0.01π:0.45π]
-
-
-"""
-$(SIGNATURES)
-
-Return the time range associated with this domain.
-"""
-function time_range(d::DomainInfo)
-    for icbc ∈ d.icbc
-        if icbc isa ICcomponent
-            return DomainSets.infimum(icbc.indepdomain.domain), DomainSets.supremum(icbc.indepdomain.domain)
-        end
-    end
-    ArgumentError("Could not find a time range for this domain.")
-end
-
-"""
-$(SIGNATURES)
-
-Return the time points during which integration should be stopped to run the operators.
-"""
-function timesteps(tsteps...)
-    allt = sort(union(vcat(tsteps...)))
-    allt2 = [allt[1]]
-    for i ∈ 2:length(allt) # Remove nearly duplicate times.
-        if allt[i] ≉ allt[i-1]
-            push!(allt2, allt[i])
-        end
-    end
-    allt2
-end
-
-@test timesteps(0:0.1:1, 0:0.15:1) == [0.0, 0.1, 0.15, 0.2, 0.3, 0.4, 0.45, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1.0]
-
-@test timesteps(0:0.1:0.3, 0:0.1000000000001:0.3) == [0.0, 0.1, 0.2, 0.3]
-
-mutable struct ExampleOp <: Operator
-    α # Multiplier from ODESystem
-end
-
-function run!(op::ExampleOp, s::Simulator, t)
-    f = s.obs_fs[op.α]
-    for ix ∈ 1:size(s.u, 1)
-        for (i, c1) ∈ enumerate(s.grid[1])
-            for (j, c2) ∈ enumerate(s.grid[2])
-                for (k, c3) ∈ enumerate(s.grid[3])
-                    # Demonstrate coordinate transforms
-                    t1 = s.tf_fs[1](t, c1, c2, c3)
-                    t2 = s.tf_fs[2](t, c1, c2, c3)
-                    t3 = s.tf_fs[3](t, c1, c2, c3)
-                    # Demonstrate calculating observed value.
-                    fv = f(t, c1, c2, c3)
-                    # Set derivative value.
-                    s.du[ix, i, j, k] = (t1 + t2 + t3) * fv
-                end
-            end
-        end
-    end
-end
-
-timestep(op::ExampleOp) = 1.0
-
-partialdomains = [lon ∈ Interval(lon_min, lon_max),
-    lat ∈ Interval(lat_min, lat_max),
-    lev ∈ Interval(1, 3)]
-
-domain = DomainInfo(
-    partialderivatives_δxyδlonlat,
-    constIC(16.0, indepdomain), constBC(16.0, partialdomains...))
-
-@parameters y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0
-lat = GlobalScope(lat)
-lon = GlobalScope(lon)
-lev = GlobalScope(lev)
-@constants p = 1.0
-@variables(
-    u(t) = 1.0, v(t) = 1.0, x(t) = 1.0, y(t) = 1.0, windspeed(t) = 1.0
-)
-Dt = Differential(t)
-
-eqs = [Dt(u) ~ -α * √abs(v) + lon,
-    Dt(v) ~ -α * √abs(u) + lat,
-    windspeed ~ lat + lon + lev,
-]
-@named sys = ODESystem(eqs, t)
-
-op = ExampleOp(sys.windspeed)
-
-csys = couple(sys, op, domain)
-
-
-sim = Simulator(csys, [0.1, 0.1, 1], Tsit5())
-
-sim.pvidx
-
-@test 1 / (sim.tf_fs[1](0.0, 0.0, 0.0, 0.0) * 180 / π) ≈ 111319.44444444445
-@test 1 / (sim.tf_fs[2](0.0, 0.0, 0.0, 0.0) * 180 / π) ≈ 111320.00000000001
-@test sim.tf_fs[3](0.0, 0.0, 0.0, 0.0) == 1.0
-
-@test sim.obs_fs[sys.windspeed](0.0, 1.0, 3.0, 2.0) == 6.0
-@test sim.obs_fs[op.α](0.0, 1.0, 3.0, 2.0) == 6.0
-
-run!(op, sim, 0.0)
-
-@test sum(abs.(sim.du)) ≈ 26094.203039436292
-
-operator_step!(sim, 0.0, 1.0)
-
-@test sum(abs.(sim.du)) ≈ 26094.203039436292
-
-init_u!(sim)
-
-ode_step!(sim, 0.0, 1.0)
-
-@test sum(abs.(sim.u)) ≈ 182879.67315985882
-
-run!(sim)
-
-@test sum(abs.(sim.u)) ≈ 3.776280791609253e7
