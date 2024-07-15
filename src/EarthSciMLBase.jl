@@ -3,6 +3,7 @@ using ModelingToolkit, Symbolics, Catalyst
 using Graphs, MetaGraphsNext
 using DocStringExtensions
 using Unitful
+using OrdinaryDiffEq, DomainSets
 
 include("add_dims.jl")
 include("domaininfo.jl")

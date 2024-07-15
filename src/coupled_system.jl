@@ -27,6 +27,11 @@ mutable struct CoupledSystem
     added to this system, and returns a transformed PDESystem.
     """
     pdefunctions::AbstractVector
+
+    """
+    A vector of operators to run during simulations.
+    """
+    ops::Vector{Operator}
 end
 
 """    
@@ -40,13 +45,15 @@ or any type `T` that has a method `couple(::CoupledSystem, ::T)::CoupledSystem` 
 `couple(::T, ::CoupledSystem)::CoupledSystem` defined for it.
 """
 function couple(systems...)::CoupledSystem
-    o = CoupledSystem([], nothing, [])
+    o = CoupledSystem([], nothing, [], [])
     for sys ∈ systems
         if sys isa DomainInfo # Add domain information to the system.
             if o.domaininfo !== nothing
                 error("Cannot add two sets of DomainInfo to a system.")
             end
             o.domaininfo = sys
+        elseif sys isa Operator
+            push!(o.ops, sys)
         elseif sys isa ModelingToolkit.AbstractSystem # Add a system to the coupled system.
             push!(o.systems, sys)
         elseif sys isa CoupledSystem # Add a coupled system to the coupled system.
@@ -95,9 +102,9 @@ end
 """
     $(SIGNATURES)
 
-Get the ModelingToolkit representation of a [`CoupledSystem`](@ref).
+Get the ODE ModelingToolkit representation of a [`CoupledSystem`](@ref).
 """
-function get_mtk(sys::CoupledSystem; name=:model)::ModelingToolkit.AbstractSystem
+function get_mtk_ode(sys::CoupledSystem; name=:model)::ModelingToolkit.AbstractSystem
     connector_eqs = []
     systems = copy(sys.systems)
     hashes = systemhash.(systems)
@@ -121,7 +128,16 @@ function get_mtk(sys::CoupledSystem; name=:model)::ModelingToolkit.AbstractSyste
     connectors = ODESystem(connector_eqs, iv; name=name)
 
     # Compose everything together.
-    o = compose(connectors, systems...)
+    compose(connectors, systems...)
+end
+
+"""
+    $(SIGNATURES)
+
+Get the ModelingToolkit representation of a [`CoupledSystem`](@ref).
+"""
+function get_mtk(sys::CoupledSystem; name=:model)::ModelingToolkit.AbstractSystem
+    o = get_mtk_ode(sys; name)
 
     if sys.domaininfo !== nothing
         o += sys.domaininfo
