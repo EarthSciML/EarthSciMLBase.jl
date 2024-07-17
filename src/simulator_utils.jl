@@ -68,7 +68,7 @@ $(SIGNATURES)
 Return the data type of the state variables for this domain,
 based on the data types of the boundary conditions domain intervals.
 """
-function utype(_::DomainInfo{T}) where T
+function utype(_::DomainInfo{T}) where {T}
     return T
 end
 
@@ -78,13 +78,13 @@ $(SIGNATURES)
 Return the ranges representing the discretization of the partial independent 
 variables for this domain, based on the discretization intervals given in `Δs`
 """
-function grid(d::DomainInfo{T}, Δs::AbstractVector)::Vector{AbstractRange{T}} where {T<:AbstractFloat}
+function grid(d::DomainInfo{T}, Δs::AbstractVector) where {T<:AbstractFloat}
     i = 1
     rngs = []
     for icbc ∈ d.icbc
         if icbc isa BCcomponent
             for pd ∈ icbc.partialdomains
-                rng = DomainSets.infimum(pd.domain):Δs[i]:DomainSets.supremum(pd.domain)
+                rng = T(DomainSets.infimum(pd.domain)):T(Δs[i]):T(DomainSets.supremum(pd.domain))
                 push!(rngs, rng)
                 i += 1
             end
@@ -99,7 +99,7 @@ $(SIGNATURES)
 
 Return the time range associated with this domain.
 """
-function time_range(d::DomainInfo{T})::Tuple{T, T} where T<:AbstractFloat
+function time_range(d::DomainInfo{T})::Tuple{T,T} where {T<:AbstractFloat}
     for icbc ∈ d.icbc
         if icbc isa ICcomponent
             return DomainSets.infimum(icbc.indepdomain.domain), DomainSets.supremum(icbc.indepdomain.domain)
@@ -113,7 +113,7 @@ $(SIGNATURES)
 
 Return the time points during which integration should be stopped to run the operators.
 """
-function timesteps(tsteps::AbstractVector{T}...)::Vector{T} where T<:AbstractFloat
+function timesteps(tsteps::AbstractVector{T}...)::Vector{T} where {T<:AbstractFloat}
     allt = sort(union(vcat(tsteps...)))
     allt2 = [allt[1]]
     for i ∈ 2:length(allt) # Remove nearly duplicate times.

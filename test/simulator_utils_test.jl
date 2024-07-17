@@ -1,4 +1,7 @@
+using EarthSciMLBase: steplength, observed_expression, observed_function, utype, grid, timesteps, icbc
+using EarthSciMLBase
 using Test
+using ModelingToolkit, DomainSets
 
 @test steplength([0, 0.1, 0.2]) == 0.1
 
@@ -17,7 +20,6 @@ eqs = [Dt(u) ~ -α * √abs(v) + lon,
 
 @named sys = ODESystem(eqs)
 sys = structural_simplify(sys)
-
 
 xx = observed_expression(sys, x)
 
@@ -58,7 +60,7 @@ vars = states(sys)
 bcs = icbc(domain, vars)
 
 @test utype(domain) == Float64
-@test utype(DomainInfo(constIC(0, t ∈ Interval(0, 1)), constBC(16.0f0, lon ∈ Interval(0.0f0, 1.0f0)))) == Float32
+@test utype(DomainInfo(constIC(0, t ∈ Interval(0, 1)), constBC(16.0, lon ∈ Interval(0.0, 1.0)), dtype=Float32)) == Float32
 
 @test grid(domain, [0.1π, 0.01π]) ≈ [-π:0.1π:π, -0.45π:0.01π:0.45π]
 

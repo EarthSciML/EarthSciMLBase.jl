@@ -1,13 +1,20 @@
+export Simulator, run!
 
 """
 $(TYPEDSIGNATURES)
 
 Specify a simulator for large-scale model runs. 
+`Δs` represent the grid cell spacing in each dimension; for example `Δs = [0.1, 0.1, 1]` 
+would represent a grid with 0.1 spacing in the first two dimensions and 1 in the third,
+in whatever units the grid is natively in.
+The grid spacings should be given in the same order as the partial independent variables
+are in the provided `DomainInfo`.
+`algorithm` should be a [DifferentialEquations.jl ODE solver](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/).
 `kwargs` are passed on to the DifferentialEquations.jl integrator initialization.
 
 $(TYPEDFIELDS)
 """
-struct Simulator{T,IT,FT1,FT2}
+struct Simulator{T,IT,FT1,FT2,TG}
     "The system to be integrated"
     sys::CoupledSystem
     "The ModelingToolkit version of the system"
@@ -25,7 +32,7 @@ struct Simulator{T,IT,FT1,FT2}
     "The indexes of the partial independent variables in the system parameter value vector"
     pvidx::Vector{Int}
     "The discretized values of the partial independent variables"
-    grid::Vector{StepRangeLen{T,Base.TwicePrecision{T},Base.TwicePrecision{T},Int64}}
+    grid::TG
     "Functions to get the current values of the observed variables with input arguments of time and the partial independent variables"
     obs_fs::FT1
     "Indexes for the obs_fs functions"
@@ -75,6 +82,7 @@ struct Simulator{T,IT,FT1,FT2}
         T = utype(sys.domaininfo)
 
         grd = grid(sys.domaininfo, Δs)
+        TG = typeof(grd)
 
         u = Array{T}(undef, length(uvals), length(grd[1]), length(grd[2]), length(grd[3]))
         du = similar(u)
@@ -85,11 +93,12 @@ struct Simulator{T,IT,FT1,FT2}
             save_start=false, save_end=false, initialize_save=false; kwargs...)
                        for _ in 1:length(IIchunks)]
 
-        new{T,typeof(integrators[1]),typeof(obs_fs),typeof(tf_fs)}(sys, mtk_sys, sys.domaininfo, u, du, pvals, uvals, pvidx, grd, obs_fs, obs_fs_idx, tf_fs, integrators, IIchunks)
+        new{T,typeof(integrators[1]),typeof(obs_fs),typeof(tf_fs), TG}(sys, mtk_sys, sys.domaininfo, u, du, pvals, uvals, pvidx, grd, obs_fs, obs_fs_idx, tf_fs, integrators, IIchunks)
     end
 end
 
-function ode_step!(s::Simulator{T,IT,FT,FT2}, time::T, step_length::T) where {T,IT,FT,FT2}
+"Take a step using the ODE solver."
+function ode_step!(s::Simulator{T,IT,FT,FT2,TG}, time::T, step_length::T) where {T,IT,FT,FT2,TG}
     tasks = map(1:length(s.IIchunks)) do ithread
         Threads.@spawn single_ode_step!(s, $ithread, time, step_length)
     end::Vector{Task}
@@ -97,7 +106,8 @@ function ode_step!(s::Simulator{T,IT,FT,FT2}, time::T, step_length::T) where {T,
     nothing
 end
 
-function single_ode_step!(s::Simulator{T,IT,FT,FT2}, ithread, time::T, step_length::T) where {T,IT,FT,FT2}
+"Take a step using the ODE solver in the thread specified by `ithread`."
+function single_ode_step!(s::Simulator{T,IT,FT,FT2,TG}, ithread, time::T, step_length::T) where {T,IT,FT,FT2,TG}
     IIchunk = s.IIchunks[ithread]
     integrator = s.integrators[ithread]
     for ii in IIchunk
@@ -113,7 +123,8 @@ function single_ode_step!(s::Simulator{T,IT,FT,FT2}, ithread, time::T, step_leng
     end
 end
 
-function operator_step!(s::Simulator{T,IT,FT,FT2}, time::T, step_length::T) where {T,IT,FT,FT2}
+"Take a step using the operator functions."
+function operator_step!(s::Simulator{T,IT,FT,FT2,TG}, time::T, step_length::T) where {T,IT,FT,FT2,TG}
     for op in s.sys.ops
         s.du .= zero(eltype(s.du))
         run!(op, s, time)
@@ -122,7 +133,8 @@ function operator_step!(s::Simulator{T,IT,FT,FT2}, time::T, step_length::T) wher
     nothing
 end
 
-function strang_step!(s::Simulator{T,IT,FT,FT2}, time::T, step_length::T) where {T,IT,FT,FT2}
+"Take a step using Strang splitting, first with the ODE solver, then with the operators."
+function strang_step!(s::Simulator{T,IT,FT,FT2,TG}, time::T, step_length::T) where {T,IT,FT,FT2,TG}
     ode_step!(s, time, step_length)
     operator_step!(s, time, step_length)
     nothing
@@ -143,22 +155,26 @@ function init_u!(s::Simulator)
     nothing
 end
 
-function run!(s::Simulator)
+"""
+$(TYPEDSIGNATURES)
+
+Run the simulation
+"""
+function run!(s::Simulator{T,IT,FT,FT2,TG}) where {T,IT,FT,FT2,TG}
     start, finish = time_range(s.domaininfo)
-    optimes = [start:timestep(op):finish for op ∈ s.sys.ops]
+    optimes = [start:T(timestep(op)):finish for op ∈ s.sys.ops]
     steps = timesteps(optimes...)
     step_length = steplength(steps)
     init_u!(s)
 
-    #@assert all([x ∈ steps for x ∈ write_times]) "output times must be a subset of time steps"
-    #write_step(r.writer, r.u, start)
-    #@showprogress for time in steps
+    for op ∈ s.sys.ops
+        initialize!(op, s)
+    end        
     for time in steps
         strang_step!(s, time, step_length)
-        #   if time ∈ r.writer.output_times
-        #      write_step(r.writer, r.u, time)
-        # end
     end
-    #    close(o)
+    for op ∈ s.sys.ops
+        finalize!(op, s)
+    end
     nothing
 end
