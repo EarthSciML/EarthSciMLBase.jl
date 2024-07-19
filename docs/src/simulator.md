@@ -3,9 +3,9 @@
 In this documentation so far, we have talked about creating systems of ordinary differential equations in ModelingToolkit and then converting them to systems of partial differential equations to perform 1-, 2-, or 3-dimensional simulations.
 However, currently this does not work for large scale simulations.
 
-While this ModelingToolkit functionality is being built, we have a different solution based on the (`Simulator`)[@ref] type in this package.
+While this ModelingToolkit functionality is being built, we have a different solution based on the [`Simulator`](@ref) type in this package.
 Using this system, we still define systems of ODEs to define behavior in a single grid cell, and we also have [`Operator`](@ref) processes that define behavior between grid cells.
-The (`Simulator`)[@ref] then integrates the ODEs and the Operators together using [Strang Splitting](https://en.wikipedia.org/wiki/Strang_splitting).
+The [`Simulator`](@ref) then integrates the ODEs and the Operators together using [Strang Splitting](https://en.wikipedia.org/wiki/Strang_splitting).
 
 ## ODE System
 
@@ -30,7 +30,7 @@ eqs = [Dt(u) ~ -α * √abs(v) + lon,
     Dt(v) ~ -α * √abs(u) + lat,
     windspeed ~ lat + lon + lev,
 ]
-@named sys = ODESystem(eqs, t)
+sys = ODESystem(eqs, t; name=:Docs₊sys)
 ```
 
 The equations above don't really have any physical meaning, but they include two state variables, some parameters, and a constant. 
@@ -49,7 +49,7 @@ end
 ```
 In the case above, we're setting up our operator so that it can hold a parameter from our ODE system.
 
-Next, we need to define a method of (`EarthSciMLBase.run!`) for our operator. This method will be called by the simulator to calculate the effect of the operator on the state variables.
+Next, we need to define a method of [`EarthSciMLBase.run!`](@ref) for our operator. This method will be called by the simulator to calculate the effect of the operator on the state variables.
 
 ```@example sim
 function EarthSciMLBase.run!(op::ExampleOp, s::Simulator, t)
@@ -77,9 +77,9 @@ First, it retrieves a function to get the current value of an observed variable 
 ODE system using the `s.obs_fs` field, and it demonstrates how to call the resulting 
 function to get that value.
 It also demonstrates how to get coordinate transforms using the `s.tf_fs` field.
-Coordinate transforms are discussed in more detail in the documentation for the (`DomainInfo`)[@ref] type.
+Coordinate transforms are discussed in more detail in the documentation for the [`DomainInfo`](@ref) type.
 
-Finally, we define a method of (`EarthSciMLBase.timestep`)[@ref] for our operator. This method will be called by the simulator to determine the timestep for the operator.
+Finally, we define a method of [`EarthSciMLBase.timestep`](@ref) for our operator. This method will be called by the simulator to determine the timestep for the operator.
 ```@example sim
 EarthSciMLBase.timestep(op::ExampleOp) = 1.0
 ```
@@ -87,7 +87,7 @@ EarthSciMLBase.timestep(op::ExampleOp) = 1.0
 ## Domain
 
 Once we have an ODE system and an operator, the final component we need is a domain to run the simulation on.
-Defining a domain is covered in more depth in the documentation for the (`DomainInfo`)[@ref] type, but for now we'll just define a simple domain:
+Defining a domain is covered in more depth in the documentation for the [`DomainInfo`](@ref) type, but for now we'll just define a simple domain:
 
 ```@example sim
 t_min = 0.0
@@ -104,6 +104,7 @@ partialdomains = [lon ∈ Interval(lon_min, lon_max),
 domain = DomainInfo(
     partialderivatives_δxyδlonlat,
     constIC(16.0, indepdomain), constBC(16.0, partialdomains...))
+nothing #hide
 ```
 
 Note that our domain includes a coordinate transform to convert from degrees latitude and longitude to meters.
