@@ -24,7 +24,7 @@ ModelingToolkit.jl ODESystem or Catalyst.jl ReactionSystem.
 $(FIELDS)
 
 """
-struct DomainInfo
+struct DomainInfo{T}
     """
     Function that returns spatial derivatives of the partially-independent variables,
     optionally performing a coordinate transformation first. 
@@ -41,20 +41,20 @@ struct DomainInfo
     "The sets of initial and/or boundary conditions."
     icbc::Vector{ICBCcomponent}
 
-    function DomainInfo(icbc::ICBCcomponent...)
+    function DomainInfo(icbc::ICBCcomponent...; dtype=Float64)
         @assert length(icbc) > 0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        new([], ICBCcomponent[icbc...])
+        new{dtype}([], ICBCcomponent[icbc...])
     end
-    function DomainInfo(fdx::Function, icbc::ICBCcomponent...) 
+    function DomainInfo(fdx::Function, icbc::ICBCcomponent...; dtype=Float64) 
         @assert length(icbc) > 0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        new([fdx], ICBCcomponent[icbc...])
+        new{dtype}([fdx], ICBCcomponent[icbc...])
     end
-    function DomainInfo(fdxs::Vector{Function}, icbc::ICBCcomponent...) 
+    function DomainInfo(fdxs::Vector{Function}, icbc::ICBCcomponent...; dtype=Float64) 
         @assert length(icbc) > 0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        new(fdxs, ICBCcomponent[icbc...])
+        new{dtype}(fdxs, ICBCcomponent[icbc...])
     end
 end
 
