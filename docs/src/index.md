@@ -21,10 +21,10 @@ This package contains types and functions designed to simplify the process of co
 
 ## Feature List
 
-* Abstract types (based on `AbstractEarthSciMLSystem`) for wrapping ModelingToolkit.jl equation systems
-* Operations to compose `AbstractEarthSciMLSystem`s together using the `+` operator.
-* Operations to add intitial and boundary conditions to systems and to turn ODE systems into PDE systems.
+* Operations to compose ModelingToolkit.jl equation systems together.
+* Operations to add intitial and boundary conditions to systems and to turn ODE systems into PDE systems, and to provide coordinate transformations.
 * Operations to add Advection terms to systems.
+* A `Simulator` type for running large-scale simulations.
 
 ## Contributing
 
