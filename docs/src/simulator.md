@@ -109,7 +109,7 @@ domain = DomainInfo(
 Note that our domain includes a coordinate transform to convert from degrees latitude and longitude to meters.
 
 !!! warning
-    Initial and boundary conditions are fully implemented for the `Simulator`, so regardless
+    Initial and boundary conditions are not fully implemented for the `Simulator`, so regardless
     of the conditions you specify, the initial conditions will be the default values
     of the variables in the ODE system, and the boundary conditions will be zero.
 
