@@ -1,7 +1,7 @@
 name = "EarthSciMLBase"
 uuid = "e53f1632-a13c-4728-9402-0c66d48804b0"
 authors = ["EarthSciML Authors and Contributors"]
-version = "0.11.0"
+version = "0.12.0"
 
 [deps]
 Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
@@ -15,7 +15,7 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
-Catalyst = "10, 11, 12, 13"
+Catalyst = "13"
 DifferentialEquations = "7"
 DocStringExtensions = "0.9"
 DomainSets = "0.5, 0.6"

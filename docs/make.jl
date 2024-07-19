@@ -22,6 +22,7 @@ makedocs(;
         "Initial and Boundary Conditions" => "icbc.md",
         "Advection" => "advection.md",
         "Coordinate Transforms" => "coord_transforms.md",
+        "Simulator" => "simulator.md",
         "Examples" => [
             "All Together" => "example_all_together.md",
         ],
