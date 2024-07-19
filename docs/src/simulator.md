@@ -49,7 +49,7 @@ end
 ```
 In the case above, we're setting up our operator so that it can hold a parameter from our ODE system.
 
-Next, we need to define a method of [`EarthSciMLBase.run!`](@ref) for our operator. This method will be called by the simulator to calculate the effect of the operator on the state variables.
+Next, we need to define a method of `EarthSciMLBase.run!` for our operator. This method will be called by the simulator to calculate the effect of the operator on the state variables.
 
 ```@example sim
 function EarthSciMLBase.run!(op::ExampleOp, s::Simulator, t)
@@ -79,7 +79,7 @@ function to get that value.
 It also demonstrates how to get coordinate transforms using the `s.tf_fs` field.
 Coordinate transforms are discussed in more detail in the documentation for the [`DomainInfo`](@ref) type.
 
-Finally, we define a method of [`EarthSciMLBase.timestep`](@ref) for our operator. This method will be called by the simulator to determine the timestep for the operator.
+Finally, we define a method of `EarthSciMLBase.timestep` for our operator. This method will be called by the simulator to determine the timestep for the operator.
 ```@example sim
 EarthSciMLBase.timestep(op::ExampleOp) = 1.0
 ```
