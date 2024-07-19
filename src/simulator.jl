@@ -162,9 +162,14 @@ Run the simulation
 """
 function run!(s::Simulator{T,IT,FT,FT2,TG}) where {T,IT,FT,FT2,TG}
     start, finish = time_range(s.domaininfo)
-    optimes = [start:T(timestep(op)):finish for op ∈ s.sys.ops]
-    steps = timesteps(optimes...)
-    step_length = steplength(steps)
+    if length(s.sys.ops) > 0
+        optimes = [start:T(timestep(op)):finish for op ∈ s.sys.ops]
+        steps = timesteps(optimes...)
+        step_length = steplength(steps)
+    else
+        steps = [start,finish]
+        step_length = finish - start
+    end
     init_u!(s)
 
     for op ∈ s.sys.ops

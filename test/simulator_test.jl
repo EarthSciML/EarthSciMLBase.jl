@@ -120,3 +120,18 @@ run!(sim)
 
     @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
 end
+
+@testset "No operator" begin
+    domain = DomainInfo(
+        partialderivatives_δxyδlonlat,
+        constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
+        dtype=Float32)
+
+    csys = couple(sys, domain)
+
+    sim = Simulator(csys, [0.1, 0.1, 1], Tsit5())
+        
+    run!(sim)
+
+    @test sum(abs.(sim.u)) ≈ 1.4343245f8
+end
