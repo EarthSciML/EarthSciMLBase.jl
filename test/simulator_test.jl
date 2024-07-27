@@ -8,7 +8,7 @@ mutable struct ExampleOp <: Operator
     finalized::Bool
 end
 
-function EarthSciMLBase.run!(op::ExampleOp, s::Simulator, t)
+function EarthSciMLBase.run!(op::ExampleOp, s::Simulator, t, step_length)
     f = s.obs_fs[s.obs_fs_idx[op.α]]
     for ix ∈ 1:size(s.u, 1)
         for (i, c1) ∈ enumerate(s.grid[1])
@@ -26,6 +26,8 @@ function EarthSciMLBase.run!(op::ExampleOp, s::Simulator, t)
             end
         end
     end
+    @. s.u += s.du * step_length
+    nothing
 end
 
 EarthSciMLBase.timestep(op::ExampleOp) = 1.0
@@ -38,9 +40,6 @@ lat_min, lat_max = -0.45π, 0.45π
 t_max = 11.5
 
 @parameters y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0
-lat = GlobalScope(lat)
-lon = GlobalScope(lon)
-lev = GlobalScope(lev)
 @constants p = 1.0
 @variables(
     u(t) = 1.0, v(t) = 1.0, x(t) = 1.0, y(t) = 1.0, windspeed(t) = 1.0
@@ -76,7 +75,7 @@ sim = Simulator(csys, [0.1, 0.1, 1], Tsit5(); abstol=1e-12, reltol=1e-12)
 @test sim.obs_fs[sim.obs_fs_idx[sys.windspeed]](0.0, 1.0, 3.0, 2.0) == 6.0
 @test sim.obs_fs[sim.obs_fs_idx[op.α]](0.0, 1.0, 3.0, 2.0) == 6.0
 
-EarthSciMLBase.run!(op, sim, 0.0)
+EarthSciMLBase.run!(op, sim, 0.0, 1.0)
 
 @test sum(abs.(sim.du)) ≈ 26094.203039436292
 

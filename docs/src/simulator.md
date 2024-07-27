@@ -17,9 +17,6 @@ using ModelingToolkit, DomainSets, DifferentialEquations
 using Plots
 
 @parameters y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0
-lat = GlobalScope(lat)
-lon = GlobalScope(lon)
-lev = GlobalScope(lev)
 @constants p = 1.0
 @variables(
     u(t) = 1.0, v(t) = 1.0, x(t) = 1.0, y(t) = 1.0, windspeed(t) = 1.0
@@ -35,8 +32,6 @@ sys = ODESystem(eqs, t; name=:Docs₊sys)
 
 The equations above don't really have any physical meaning, but they include two state variables, some parameters, and a constant. 
 There is also a variable `windspeed` which is "observed" based on the parameters, rather than being a state variable, which will be important later.
-Also, note that we have the coordinates `lat`, `lon`, and `lev` (for latitude, longitude, and vertical level number), which we define as global variables using for example `lat = GlobalScope(lat)`.
-This is important for things to work correctly below.
 
 ## Operator
 

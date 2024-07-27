@@ -4,9 +4,10 @@ export Operator
 Operators are objects that modify the current state of a `Simulator` system.
 Each operator should be define a `run` function with the signature:
 
-    `EarthSciMLBase.run!(op::Operator, s::Simulator, time)`
+    `EarthSciMLBase.run!(op::Operator, s::Simulator, time, step_length)`
 
-which modifies the `s.du` field in place. It should also implement:
+which should modify the `s.u` system state, and can also modify the `s.du` derivative cache if desired. 
+It should also implement:
 
     `EarthSciMLBase.timestep(op::Operator)`
 
@@ -21,6 +22,6 @@ which will be run before the simulation starts and after it ends, respectively, 
 abstract type Operator end
 
 timestep(op::Operator) = ArgumentError("Operator $(typeof(op)) does not define a timestep function.")
-run!(op::Operator, _, _) = ArgumentError("Operator $(typeof(op)) does not define a run! function.")
+run!(op::Operator, _, _, _) = ArgumentError("Operator $(typeof(op)) does not define a run! function.")
 initialize!(_::Operator, _) = nothing
 finalize!(_::Operator, _) = nothing

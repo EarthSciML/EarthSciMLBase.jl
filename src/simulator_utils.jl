@@ -58,8 +58,16 @@ function observed_function(sys::ODESystem, x, coords; extra_eqs=[])
     expr = observed_expression(sys, x, extra_eqs=extra_eqs)
     vars = Symbolics.get_variables(expr)
     @assert (length(vars) <= length(coords)) "Extra variables: $(vars) != $(coords)"
-    @assert all(Bool.([sum(isequal.((v,), coords)) for v ∈ vars])) "Incorrect variables: $(vars) != $(coords)"
-    return Symbolics.build_function(expr, coords...; expression=Val{false})
+    coordvars = []
+    for c ∈ coords
+        i = findfirst(v -> split(String(Symbol(v)), "₊")[end] == String(Symbol(c)), vars)
+        if isnothing(i)
+            push!(coordvars, c)
+        else
+            push!(coordvars, vars[i])
+        end
+    end
+    return Symbolics.build_function(expr, coordvars...; expression=Val{false})
 end
 
 """

@@ -33,6 +33,8 @@ struct Simulator{T,IT,FT1,FT2,TG}
     pvidx::Vector{Int}
     "The discretized values of the partial independent variables"
     grid::TG
+    "The spacings for each grid dimension"
+    Δs::Tuple{T,T,T}
     "Functions to get the current values of the observed variables with input arguments of time and the partial independent variables"
     obs_fs::FT1
     "Indexes for the obs_fs functions"
@@ -60,7 +62,7 @@ struct Simulator{T,IT,FT1,FT2,TG}
         iv = ivar(sys.domaininfo)
         pv = pvars(sys.domaininfo)
         @assert length(pv) == 3 "Currently only 3D simulations are supported."
-        pvidx = [findfirst(isequal(p), parameters(mtk_sys)) for p in pv]
+        pvidx = [findfirst(v -> split(String(Symbol(v)), "₊")[end] == String(Symbol(p)), parameters(mtk_sys)) for p ∈ pv]
 
         # Get functions for observed variables
         obs_fs_idx = Dict()
@@ -93,7 +95,7 @@ struct Simulator{T,IT,FT1,FT2,TG}
             save_start=false, save_end=false, initialize_save=false; kwargs...)
                        for _ in 1:length(IIchunks)]
 
-        new{T,typeof(integrators[1]),typeof(obs_fs),typeof(tf_fs), TG}(sys, mtk_sys, sys.domaininfo, u, du, pvals, uvals, pvidx, grd, obs_fs, obs_fs_idx, tf_fs, integrators, IIchunks)
+        new{T,typeof(integrators[1]),typeof(obs_fs),typeof(tf_fs),TG}(sys, mtk_sys, sys.domaininfo, u, du, pvals, uvals, pvidx, grd, tuple(Δs...), obs_fs, obs_fs_idx, tf_fs, integrators, IIchunks)
     end
 end
 
@@ -127,8 +129,7 @@ end
 function operator_step!(s::Simulator{T,IT,FT,FT2,TG}, time::T, step_length::T) where {T,IT,FT,FT2,TG}
     for op in s.sys.ops
         s.du .= zero(eltype(s.du))
-        run!(op, s, time)
-        @. s.u += s.du * step_length
+        run!(op, s, time, step_length)
     end
     nothing
 end
@@ -167,14 +168,14 @@ function run!(s::Simulator{T,IT,FT,FT2,TG}) where {T,IT,FT,FT2,TG}
         steps = timesteps(optimes...)
         step_length = steplength(steps)
     else
-        steps = [start,finish]
+        steps = [start, finish]
         step_length = finish - start
     end
     init_u!(s)
 
     for op ∈ s.sys.ops
         initialize!(op, s)
-    end        
+    end
     for time in steps
         strang_step!(s, time, step_length)
     end
