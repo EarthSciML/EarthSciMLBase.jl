@@ -176,7 +176,7 @@ function run!(s::Simulator{T,IT,FT,FT2,TG}) where {T,IT,FT,FT2,TG}
     for op ∈ s.sys.ops
         initialize!(op, s)
     end
-    for time in steps
+    @progress name=String(nameof(s.sys_mtk)) for time in steps
         strang_step!(s, time, step_length)
     end
     for op ∈ s.sys.ops

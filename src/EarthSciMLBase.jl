@@ -4,6 +4,7 @@ using Graphs, MetaGraphsNext
 using DocStringExtensions
 using Unitful
 using OrdinaryDiffEq, DomainSets
+using ProgressLogging
 
 include("add_dims.jl")
 include("domaininfo.jl")
