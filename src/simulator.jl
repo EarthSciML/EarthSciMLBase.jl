@@ -81,6 +81,8 @@ struct Simulator{T,IT,FT1,FT2,TG}
         end
         tf_fs = Tuple(tf_fs)
 
+        mtk_sys = prune_observed!(mtk_sys) # Remove unused variables to speed up computation.
+
         T = utype(sys.domaininfo)
 
         grd = grid(sys.domaininfo, Δs)
@@ -97,6 +99,10 @@ struct Simulator{T,IT,FT1,FT2,TG}
 
         new{T,typeof(integrators[1]),typeof(obs_fs),typeof(tf_fs),TG}(sys, mtk_sys, sys.domaininfo, u, du, pvals, uvals, pvidx, grd, tuple(Δs...), obs_fs, obs_fs_idx, tf_fs, integrators, IIchunks)
     end
+end
+
+function Base.show(io::IO, s::Simulator)
+    print(io, "Simulator{$(eltype(s.u))} with $(length(equations(s.sys_mtk))) equation(s), $(length(s.sys.ops)) operator(s), and $(length(s.u)) grid cells.")
 end
 
 "Take a step using the ODE solver."
@@ -176,7 +182,7 @@ function run!(s::Simulator{T,IT,FT,FT2,TG}) where {T,IT,FT,FT2,TG}
     for op ∈ s.sys.ops
         initialize!(op, s)
     end
-    @progress name=String(nameof(s.sys_mtk)) for time in steps
+    @progress name = String(nameof(s.sys_mtk)) for time in steps
         strang_step!(s, time, step_length)
     end
     for op ∈ s.sys.ops

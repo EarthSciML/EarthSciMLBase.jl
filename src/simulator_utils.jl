@@ -131,3 +131,34 @@ function timesteps(tsteps::AbstractVector{T}...)::Vector{T} where {T<:AbstractFl
     end
     allt2
 end
+
+"""
+$(SIGNATURES)
+
+Remove equations from an ODESystem where the variable in the LHS is not
+present in any of the equations for the state variables. This can be used to 
+remove computationally intensive equations that are not used in the final model.
+"""
+function prune_observed!(sys::ODESystem)
+    needed_vars = []
+    for eq in equations(sys)
+        for var in [Symbolics.get_variables(eq.rhs)..., Symbolics.get_variables(eq.rhs)...]
+            push!(needed_vars, var)
+        end
+    end
+    needed_vars = Symbolics.tosymbol.(unique(needed_vars); escape=true)
+    deleteindex = []
+    for (i, eq) ∈ enumerate(observed(sys))
+        lhsvars = Symbolics.tosymbol.(Symbolics.get_variables(eq.lhs); escape=true)
+        # Only keep equations where all variables on the LHS are in at least one 
+        # equation describing the system state.
+        if !all((var) -> var ∈ needed_vars, lhsvars)
+            push!(deleteindex, i)
+        end
+    end
+    obs = observed(sys)
+    deleteat!(obs, deleteindex)
+    sys2 = structural_simplify(ODESystem([equations(sys); obs], 
+        ModelingToolkit.get_iv(sys), name=nameof(sys)))
+    return sys2
+end

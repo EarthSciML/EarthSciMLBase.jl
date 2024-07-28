@@ -34,6 +34,10 @@ mutable struct CoupledSystem
     ops::Vector{Operator}
 end
 
+function Base.show(io::IO, cs::CoupledSystem)
+    print(io, "CoupledSystem containing $(length(cs.systems)) system(s) and $(length(cs.ops)) operator(s).")
+end
+
 """    
     $(TYPEDSIGNATURES)
 
