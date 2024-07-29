@@ -50,8 +50,6 @@ struct Simulator{T,IT,FT1,FT2,TG}
     function Simulator(sys::CoupledSystem, Δs::AbstractVector{T2}, algorithm; kwargs...) where {T2<:AbstractFloat}
         @assert !isnothing(sys.domaininfo) "The system must have a domain specified; see documentation for EarthSciMLBase.DomainInfo."
         mtk_sys = structural_simplify(get_mtk_ode(sys; name=:model))
-        start, finish = time_range(sys.domaininfo)
-        prob = ODEProblem(mtk_sys, [], (start, finish), []; kwargs...)
         vars = states(mtk_sys)
         ps = parameters(mtk_sys)
 
@@ -82,6 +80,8 @@ struct Simulator{T,IT,FT1,FT2,TG}
         tf_fs = Tuple(tf_fs)
 
         mtk_sys = prune_observed!(mtk_sys) # Remove unused variables to speed up computation.
+        start, finish = time_range(sys.domaininfo)
+        prob = ODEProblem(mtk_sys, [], (start, finish), []; kwargs...)
 
         T = utype(sys.domaininfo)
 
