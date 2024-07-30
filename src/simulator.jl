@@ -50,6 +50,11 @@ struct Simulator{T,IT,FT1,FT2,TG}
     function Simulator(sys::CoupledSystem, Δs::AbstractVector{T2}, algorithm; kwargs...) where {T2<:AbstractFloat}
         @assert !isnothing(sys.domaininfo) "The system must have a domain specified; see documentation for EarthSciMLBase.DomainInfo."
         mtk_sys = structural_simplify(get_mtk_ode(sys; name=:model))
+
+        mtk_sys, obs_eqs = prune_observed(mtk_sys) # Remove unused variables to speed up computation.
+        start, finish = time_range(sys.domaininfo)
+        prob = ODEProblem(mtk_sys, [], (start, finish), []; kwargs...)
+
         vars = states(mtk_sys)
         ps = parameters(mtk_sys)
 
@@ -65,9 +70,9 @@ struct Simulator{T,IT,FT1,FT2,TG}
         # Get functions for observed variables
         obs_fs_idx = Dict()
         obs_fs = []
-        for (i, x) ∈ enumerate([eq.lhs for eq ∈ observed(mtk_sys)])
+        for (i, x) ∈ enumerate([eq.lhs for eq ∈ obs_eqs])
             obs_fs_idx[x] = i
-            push!(obs_fs, observed_function(mtk_sys, x, [iv, pv...]))
+            push!(obs_fs, observed_function(obs_eqs, x, [iv, pv...]))
         end
         obs_fs = Tuple(obs_fs)
 
@@ -75,13 +80,9 @@ struct Simulator{T,IT,FT1,FT2,TG}
         tf_fs = []
         @variables 🌈🐉🏒 # Dummy variable.
         for tf ∈ partialderivative_transforms(sys.domaininfo)
-            push!(tf_fs, observed_function(mtk_sys, 🌈🐉🏒, [iv, pv...], extra_eqs=[🌈🐉🏒 ~ tf]))
+            push!(tf_fs, observed_function([obs_eqs..., 🌈🐉🏒 ~ tf], 🌈🐉🏒, [iv, pv...]))
         end
         tf_fs = Tuple(tf_fs)
-
-        mtk_sys = prune_observed!(mtk_sys) # Remove unused variables to speed up computation.
-        start, finish = time_range(sys.domaininfo)
-        prob = ODEProblem(mtk_sys, [], (start, finish), []; kwargs...)
 
         T = utype(sys.domaininfo)
 

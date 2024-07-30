@@ -57,7 +57,7 @@ domain = DomainInfo(
     constIC(16.0, indepdomain), constBC(16.0, partialdomains...))
 
 eqs = [Dt(u) ~ -α * √abs(v) + lon,
-    Dt(v) ~ -α * √abs(u) + lat,
+    Dt(v) ~ -α * √abs(u) + lat + lev * 1e-14,
     windspeed ~ lat + lon + lev,
 ]
 @named sys = ODESystem(eqs, t)

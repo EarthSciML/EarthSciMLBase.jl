@@ -21,12 +21,12 @@ eqs = [Dt(u) ~ -α * √abs(v) + lon,
 @named sys = ODESystem(eqs)
 sys = structural_simplify(sys)
 
-xx = observed_expression(sys, x)
+xx = observed_expression(observed(sys), x)
 
 @test isequal(xx, -1.0 + 6α)
 
 coords = [α]
-xf = observed_function(sys, x, coords)
+xf = observed_function(observed(sys), x, coords)
 
 @test isequal(xf(α), -1.0 + 6α)
 @test isequal(xf(2), -1.0 + 6 * 2)
@@ -35,9 +35,9 @@ xf = observed_function(sys, x, coords)
 @variables uu, vv
 extra_eqs = [uu ~ x + 3, vv ~ uu * 4]
 
-xx2 = observed_expression(sys, vv, extra_eqs=extra_eqs)
+xx2 = observed_expression([observed(sys); extra_eqs], vv)
 
-xf2 = observed_function(sys, vv, coords, extra_eqs=extra_eqs)
+xf2 = observed_function([observed(sys); extra_eqs], vv, coords)
 
 @test isequal(xf2(α), 4 * (2 + 6α))
 
