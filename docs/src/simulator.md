@@ -12,7 +12,7 @@ The [`Simulator`](@ref) then integrates the ODEs and the Operators together usin
 As an example, let's first define a system of ODEs:
 
 ```@example sim
-using Main.EarthSciMLBase
+using EarthSciMLBase
 using ModelingToolkit, DomainSets, DifferentialEquations
 using Plots
 
@@ -24,7 +24,7 @@ using Plots
 Dt = Differential(t)
 
 eqs = [Dt(u) ~ -α * √abs(v) + lon,
-    Dt(v) ~ -α * √abs(u) + lat,
+    Dt(v) ~ -α * √abs(u) + lat + 1e-14 * lev,
     windspeed ~ lat + lon + lev,
 ]
 sys = ODESystem(eqs, t; name=:Docs₊sys)
