@@ -17,5 +17,6 @@ include("param_to_var.jl")
 include("graph.jl")
 include("simulator_utils.jl")
 include("simulator.jl")
+include("simulator_strategy_strang.jl")
 
 end

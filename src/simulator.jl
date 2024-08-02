@@ -1,6 +1,25 @@
 export Simulator, run!
 
 """
+SimulatorStrategy is an abstract type that defines the strategy for running a simulation.
+Each SimulatorStrategy should implement a method of:
+
+```julia
+run!(st::SimulatorStrategy, s::Simulator{T}) where T
+```
+"""
+abstract type SimulatorStrategy end
+
+"""
+$(TYPEDSIGNATURES)
+
+Run the simulation.
+"""
+function run!(st::SimulatorStrategy, simulator)
+    error("Not implemented.")
+end
+
+"""
 $(TYPEDSIGNATURES)
 
 Specify a simulator for large-scale model runs. 
@@ -10,11 +29,11 @@ in whatever units the grid is natively in.
 The grid spacings should be given in the same order as the partial independent variables
 are in the provided `DomainInfo`.
 `algorithm` should be a [DifferentialEquations.jl ODE solver](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/).
-`kwargs` are passed on to the DifferentialEquations.jl integrator initialization.
+`kwargs` are passed on to the DifferentialEquations.jl ODEProblem and integrator initialization.
 
 $(TYPEDFIELDS)
 """
-struct Simulator{T,IT,FT1,FT2,TG}
+struct Simulator{T,FT1,FT2,TG}
     "The system to be integrated"
     sys::CoupledSystem
     "The ModelingToolkit version of the system"
@@ -42,10 +61,8 @@ struct Simulator{T,IT,FT1,FT2,TG}
     "Functions to get the current values of the coordinate transforms with input arguments of time and the partial independent variables"
     tf_fs::FT2
 
-    "Internal integrators"
-    integrators::Vector{IT}
-    "Internal chunks of grid cells for each integrator"
-    IIchunks::Vector{SubArray{CartesianIndex{3},1,Base.ReshapedArray{CartesianIndex{3},1,CartesianIndices{3,Tuple{Base.OneTo{Int64},Base.OneTo{Int64},Base.OneTo{Int64}}},Tuple{Base.SignedMultiplicativeInverse{Int64},Base.SignedMultiplicativeInverse{Int64}}},Tuple{UnitRange{Int64}},false}}
+    "kwargs to pass to the ODEProblem and integrator initialization"
+    kwargs
 
     function Simulator(sys::CoupledSystem, Δs::AbstractVector{T2}, algorithm; kwargs...) where {T2<:AbstractFloat}
         @assert !isnothing(sys.domaininfo) "The system must have a domain specified; see documentation for EarthSciMLBase.DomainInfo."
@@ -92,60 +109,12 @@ struct Simulator{T,IT,FT1,FT2,TG}
         u = Array{T}(undef, length(uvals), length(grd[1]), length(grd[2]), length(grd[3]))
         du = similar(u)
 
-        II = CartesianIndices(size(u)[2:4])
-        IIchunks = collect(Iterators.partition(II, length(II) ÷ Threads.nthreads()))
-        integrators = [init(remake(prob, u0=similar(uvals), p=deepcopy(pvals)), algorithm, save_on=false,
-            save_start=false, save_end=false, initialize_save=false; kwargs...)
-                       for _ in 1:length(IIchunks)]
-
-        new{T,typeof(integrators[1]),typeof(obs_fs),typeof(tf_fs),TG}(sys, mtk_sys, sys.domaininfo, u, du, pvals, uvals, pvidx, grd, tuple(Δs...), obs_fs, obs_fs_idx, tf_fs, integrators, IIchunks)
+        new{T,typeof(obs_fs),typeof(tf_fs),TG}(sys, mtk_sys, sys.domaininfo, u, du, pvals, uvals, pvidx, grd, tuple(Δs...), obs_fs, obs_fs_idx, tf_fs, kwargs)
     end
 end
 
 function Base.show(io::IO, s::Simulator)
     print(io, "Simulator{$(eltype(s.u))} with $(length(equations(s.sys_mtk))) equation(s), $(length(s.sys.ops)) operator(s), and $(length(s.u)) grid cells.")
-end
-
-"Take a step using the ODE solver."
-function ode_step!(s::Simulator{T,IT,FT,FT2,TG}, time::T, step_length::T) where {T,IT,FT,FT2,TG}
-    tasks = map(1:length(s.IIchunks)) do ithread
-        Threads.@spawn single_ode_step!(s, $ithread, time, step_length)
-    end::Vector{Task}
-    wait.(tasks)
-    nothing
-end
-
-"Take a step using the ODE solver in the thread specified by `ithread`."
-function single_ode_step!(s::Simulator{T,IT,FT,FT2,TG}, ithread, time::T, step_length::T) where {T,IT,FT,FT2,TG}
-    IIchunk = s.IIchunks[ithread]
-    integrator = s.integrators[ithread]
-    for ii in IIchunk
-        uii = @view s.u[:, ii]
-        reinit!(integrator, uii, t0=time, tf=time + step_length,
-            erase_sol=false, reset_dt=true)
-        for (jj, g) ∈ enumerate(s.grid) # Set the coordinates of this grid cell.
-            integrator.p[s.pvidx[jj]] = g[ii[jj]]
-        end
-        solve!(integrator)
-        @assert length(integrator.sol.u) == 0
-        uii .= integrator.u
-    end
-end
-
-"Take a step using the operator functions."
-function operator_step!(s::Simulator{T,IT,FT,FT2,TG}, time::T, step_length::T) where {T,IT,FT,FT2,TG}
-    for op in s.sys.ops
-        s.du .= zero(eltype(s.du))
-        run!(op, s, time, step_length)
-    end
-    nothing
-end
-
-"Take a step using Strang splitting, first with the ODE solver, then with the operators."
-function strang_step!(s::Simulator{T,IT,FT,FT2,TG}, time::T, step_length::T) where {T,IT,FT,FT2,TG}
-    ode_step!(s, time, step_length)
-    operator_step!(s, time, step_length)
-    nothing
 end
 
 "Initialize the state variables."
@@ -159,35 +128,6 @@ function init_u!(s::Simulator)
                 end
             end
         end
-    end
-    nothing
-end
-
-"""
-$(TYPEDSIGNATURES)
-
-Run the simulation
-"""
-function run!(s::Simulator{T,IT,FT,FT2,TG}) where {T,IT,FT,FT2,TG}
-    start, finish = time_range(s.domaininfo)
-    if length(s.sys.ops) > 0
-        optimes = [start:T(timestep(op)):finish for op ∈ s.sys.ops]
-        steps = timesteps(optimes...)
-        step_length = steplength(steps)
-    else
-        steps = [start, finish]
-        step_length = finish - start
-    end
-    init_u!(s)
-
-    for op ∈ s.sys.ops
-        initialize!(op, s)
-    end
-    @progress name = String(nameof(s.sys_mtk)) for time in steps
-        strang_step!(s, time, step_length)
-    end
-    for op ∈ s.sys.ops
-        finalize!(op, s)
     end
     nothing
 end

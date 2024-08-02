@@ -67,6 +67,7 @@ op = ExampleOp(sys.windspeed, false, false)
 csys = couple(sys, op, domain)
 
 sim = Simulator(csys, [0.1, 0.1, 1], Tsit5(); abstol=1e-12, reltol=1e-12)
+st = SimulatorStrangThreads(Tsit5(), Euler(), 1.0)
 
 @test 1 / (sim.tf_fs[1](0.0, 0.0, 0.0, 0.0) * 180 / π) ≈ 111319.44444444445
 @test 1 / (sim.tf_fs[2](0.0, 0.0, 0.0, 0.0) * 180 / π) ≈ 111320.00000000001
@@ -91,14 +92,25 @@ sol1 = solve(prob, Tsit5(), abstol=1e-12, reltol=1e-12)
 
 EarthSciMLBase.init_u!(sim)
 
-EarthSciMLBase.ode_step!(sim, 0.0, 1.0)
+IIchunks, integrators = let
+    II = CartesianIndices(size(sim.u)[2:4])
+    IIchunks = collect(Iterators.partition(II, length(II) ÷ st.threads))
+    start, finish = EarthSciMLBase.time_range(sim.domaininfo)
+    prob = ODEProblem(sim.sys_mtk, [], (start, finish), []; sim.kwargs...)
+    integrators = [init(remake(prob, u0=similar(sim.u_init), p=deepcopy(sim.p)), st.stiffalg, save_on=false,
+        save_start=false, save_end=false, initialize_save=false; sim.kwargs...)
+                   for _ in 1:length(IIchunks)]
+    (IIchunks, integrators)
+end
+
+EarthSciMLBase.threaded_ode_step!(sim, IIchunks, integrators, 0.0, 1.0)
 
 @test sim.u[1,1,1,1] ≈ sol1.u[end][1]
 @test sim.u[2,1,1,1] ≈ sol1.u[end][2]
 
 @test sum(abs.(sim.u)) ≈ 212733.04492722102
 
-run!(sim)
+run!(sim, st)
 
 @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
 
@@ -115,7 +127,7 @@ run!(sim)
 
     sim = Simulator(csys, [0.1, 0.1, 1], Tsit5())
         
-    run!(sim)
+    run!(sim, st)
 
     @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
 end
@@ -130,7 +142,7 @@ end
 
     sim = Simulator(csys, [0.1, 0.1, 1], Tsit5())
         
-    run!(sim)
+    run!(sim, st)
 
     @test sum(abs.(sim.u)) ≈ 1.4343245f8
 end
