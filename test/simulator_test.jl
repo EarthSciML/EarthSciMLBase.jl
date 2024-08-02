@@ -105,8 +105,8 @@ end
 
 EarthSciMLBase.threaded_ode_step!(sim, IIchunks, integrators, 0.0, 1.0)
 
-@test sim.u[1,1,1,1] ≈ sol1.u[end][1]
-@test sim.u[2,1,1,1] ≈ sol1.u[end][2]
+@test sim.u[1, 1, 1, 1] ≈ sol1.u[end][1]
+@test sim.u[2, 1, 1, 1] ≈ sol1.u[end][2]
 
 @test sum(abs.(sim.u)) ≈ 212733.04492722102
 
@@ -126,7 +126,7 @@ run!(sim, st)
     csys = couple(sys, op, domain)
 
     sim = Simulator(csys, [0.1, 0.1, 1], Tsit5())
-        
+
     run!(sim, st)
 
     @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
@@ -141,8 +141,18 @@ end
     csys = couple(sys, domain)
 
     sim = Simulator(csys, [0.1, 0.1, 1], Tsit5())
-        
+
     run!(sim, st)
 
     @test sum(abs.(sim.u)) ≈ 1.4343245f8
+end
+
+@testset "SimulatorStrategies" begin
+    st = SimulatorStrangThreads(Tsit5(), Euler(), 1.0)
+    run!(sim, st)
+    @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
+
+    st = SimulatorStrangSerial(Tsit5(), Euler(), 1.0)
+    run!(sim, st)
+    @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
 end

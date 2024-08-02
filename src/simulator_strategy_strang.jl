@@ -1,4 +1,7 @@
-export SimulatorStrangThreads
+export SimulatorStrangThreads, SimulatorStrangSerial
+
+"A simulator strategy based on Strang splitting."
+abstract type SimulatorStrang <: SimulatorStrategy end
 
 """
 ```julia
@@ -16,7 +19,7 @@ using the specified number of threads.
 
 $(FIELDS)
 """
-struct SimulatorStrangThreads <: SimulatorStrategy
+struct SimulatorStrangThreads <: SimulatorStrang
     "Number of threads to use"
     threads::Int
     "Stiff solver algorithm to use (see https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/)"
@@ -28,9 +31,34 @@ struct SimulatorStrangThreads <: SimulatorStrategy
     SimulatorStrangThreads(stiffalg, nonstiffalg, timestep) = new(Threads.nthreads(), stiffalg, nonstiffalg, timestep)
 end
 
-function run!(s::Simulator{T}, st::SimulatorStrangThreads) where {T}
+"""
+```julia
+# Specify the stiff and nonstiff ODE solver algorithm.
+# `timestep` is the length of time for each splitting step.
+SimulatorStrangSerial(stiffalg, nonstiffalg, timestep)
+```
+
+Perform a simulation using [Strang splitting](https://en.wikipedia.org/wiki/Strang_splitting),
+where the MTK system is assumed to be stiff and the operators are assumed to be non-stiff.
+The solution will be calculated in serial.
+
+$(FIELDS)
+"""
+struct SimulatorStrangSerial <: SimulatorStrang
+    "Stiff solver algorithm to use (see https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/)"
+    stiffalg
+    "Non-stiff solver algorithm to use (see https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/)"
+    nonstiffalg
+    "Length of each splitting time step"
+    timestep::AbstractFloat
+end
+
+nthreads(st::SimulatorStrangThreads) = st.threads
+nthreads(st::SimulatorStrangSerial) = 1
+
+function run!(s::Simulator{T}, st::SimulatorStrang) where {T}
     II = CartesianIndices(size(s.u)[2:4])
-    IIchunks = collect(Iterators.partition(II, length(II) ÷ st.threads))
+    IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
     start, finish = time_range(s.domaininfo)
     prob = ODEProblem(s.sys_mtk, [], (start, finish), []; s.kwargs...)
     integrators = [init(remake(prob, u0=similar(s.u_init), p=deepcopy(s.p)), st.stiffalg, save_on=false,
@@ -95,6 +123,13 @@ end
 "Take a step using Strang splitting, first with the ODE solver, then with the operators."
 function strang_step!(s::Simulator{T}, st::SimulatorStrangThreads, IIchunks, integrators, time::T, step_length::T) where T
     threaded_ode_step!(s, IIchunks, integrators, time, step_length)
+    operator_step!(s, time, step_length)
+    nothing
+end
+
+"Take a step using Strang splitting, first with the ODE solver, then with the operators."
+function strang_step!(s::Simulator{T}, st::SimulatorStrangSerial, IIchunks, integrators, time::T, step_length::T) where T
+    single_ode_step!(s, IIchunks[1], integrators[1], time, step_length)
     operator_step!(s, time, step_length)
     nothing
 end
