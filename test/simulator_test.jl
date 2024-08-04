@@ -76,15 +76,11 @@ st = SimulatorStrangThreads(Tsit5(), Euler(), 1.0)
 @test sim.obs_fs[sim.obs_fs_idx[op.α]](0.0, 1.0, 3.0, 2.0) == 6.0
 
 scimlop = EarthSciMLBase.get_scimlop(op, sim)
-sim.du .= 0
-@views scimlop(sim.du[:], sim.u[:], sim.p, 0.0)
+du = similar(sim.u)
+du .= 0
+@views scimlop(du[:], sim.u[:], sim.p, 0.0)
 
-@test sum(abs.(sim.du)) ≈ 26094.203039436292
-
-sim.du .= 0
-EarthSciMLBase.operator_step!(sim, scimlop, 0.0, 1.0)
-
-@test sum(abs.(sim.du)) ≈ 26094.203039436292
+@test sum(abs.(du)) ≈ 26094.203039436292
 
 prob = ODEProblem(structural_simplify(sys), [], (0.0, 1.0), [
     lon => sim.grid[1][1], lat => sim.grid[2][1], lev => sim.grid[3][1]

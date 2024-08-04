@@ -70,20 +70,28 @@ function run!(s::Simulator{T}, st::SimulatorStrang; kwargs...) where {T}
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
     start, finish = time_range(s.domaininfo)
     prob = ODEProblem(s.sys_mtk, [], (start, finish), []; kwargs...)
-    integrators = [init(remake(prob, u0=similar(s.u_init), p=deepcopy(s.p)), st.stiffalg, save_on=false,
+    stiff_integrators = [init(remake(prob, u0=similar(s.u_init), p=deepcopy(s.p)), st.stiffalg, save_on=false,
         save_start=false, save_end=false, initialize_save=false; kwargs...)
-                   for _ in 1:length(IIchunks)]
+                         for _ in 1:length(IIchunks)]
 
     # Combine the non-stiff operators into a single operator.
     # This works because SciMLOperators can be added together.
     nonstiff_op = length(s.sys.ops) > 0 ? sum([get_scimlop(op, s) for op ∈ s.sys.ops]) : nothing
+
+    nonstiff_integrator = nothing
+    if !isnothing(nonstiff_op)
+        nonstiff_op = cache_operator(nonstiff_op, s.u)
+        @views nonstiff_prob = ODEProblem(nonstiff_op, s.u[:], (start, finish), s.p; kwargs...)
+        nonstiff_integrator = init(nonstiff_prob, st.nonstiffalg, save_on=false, save_start=false, save_end=false,
+            initialize_save=false, dt=st.timestep; kwargs...)
+    end
 
     init_u!(s)
 
     times = start:T(st.timestep):finish
 
     @progress name = String(nameof(s.sys_mtk)) for time in times
-        strang_step!(s, st, IIchunks, integrators, nonstiff_op, time)
+        strang_step!(s, st, IIchunks, stiff_integrators, nonstiff_integrator, time)
     end
     nothing
 end
@@ -113,24 +121,26 @@ function single_ode_step!(s::Simulator{T}, IIchunk, integrator, time::T, step_le
 end
 
 "Take a step using the nonstiff operator."
-function operator_step!(s::Simulator{T}, nonstiff_op, time::T, step_length::T) where {T}
-    if !isnothing(nonstiff_op)
-        @info "xxx"
-        @views nonstiff_op(s.du[:], s.u[:], s.p, time)
-        s.u .+= s.du .* step_length
+function operator_step!(s::Simulator{T}, integrator, time::T, step_length::T) where {T}
+    if !isnothing(integrator)
+        @views reinit!(integrator, s.u[:], t0=time, tf=time + step_length,
+            erase_sol=false, reset_dt=true)
+        solve!(integrator)
+        @assert length(integrator.sol.u) == 0
+        @views s.u[:] .= integrator.u
     end
 end
 
 "Take a step using Strang splitting, first with the ODE solver, then with the operators."
-function strang_step!(s::Simulator{T}, st::SimulatorStrangThreads, IIchunks, integrators, nonstiff_op, time::T) where {T}
-    threaded_ode_step!(s, IIchunks, integrators, time, T(st.timestep))
-    operator_step!(s, nonstiff_op, time, T(st.timestep))
+function strang_step!(s::Simulator{T}, st::SimulatorStrangThreads, IIchunks, stiff_integrators, nonstiff_integrator, time::T) where {T}
+    threaded_ode_step!(s, IIchunks, stiff_integrators, time, T(st.timestep))
+    operator_step!(s, nonstiff_integrator, time, T(st.timestep))
     nothing
 end
 
 "Take a step using Strang splitting, first with the ODE solver, then with the operators."
-function strang_step!(s::Simulator{T}, st::SimulatorStrangSerial, IIchunks, integrators, nonstiff_op, time::T) where {T}
-    single_ode_step!(s, IIchunks[1], integrators[1], time, st.timestep)
-    operator_step!(s, nonstiff_op, time, st.timestep)
+function strang_step!(s::Simulator{T}, st::SimulatorStrangSerial, IIchunks, stiff_integrators, nonstiff_integrator, time::T) where {T}
+    single_ode_step!(s, IIchunks[1], stiff_integrators[1], time, st.timestep)
+    operator_step!(s, nonstiff_integrator, time, st.timestep)
     nothing
 end

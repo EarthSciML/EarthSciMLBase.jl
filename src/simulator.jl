@@ -40,8 +40,6 @@ struct Simulator{T,FT1,FT2,TG}
     domaininfo::DomainInfo{T}
     "The system state"
     u::Array{T,4}
-    "The system state derivative"
-    du::Array{T,4}
     "The system parameter values"
     p::Vector{T}
     "The initial values of the system state variables"
@@ -100,9 +98,8 @@ struct Simulator{T,FT1,FT2,TG}
         TG = typeof(grd)
 
         u = Array{T}(undef, length(uvals), length(grd[1]), length(grd[2]), length(grd[3]))
-        du = similar(u)
 
-        new{T,typeof(obs_fs),typeof(tf_fs),TG}(sys, mtk_sys, sys.domaininfo, u, du, pvals, uvals, pvidx, grd, tuple(Δs...), obs_fs, obs_fs_idx, tf_fs)
+        new{T,typeof(obs_fs),typeof(tf_fs),TG}(sys, mtk_sys, sys.domaininfo, u, pvals, uvals, pvidx, grd, tuple(Δs...), obs_fs, obs_fs_idx, tf_fs)
     end
 end
 
