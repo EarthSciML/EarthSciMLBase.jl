@@ -38,7 +38,8 @@ DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+SciMLOperators = "c0aeaf25-5076-4817-a8d5-81caf7dfa961"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Documenter", "Test", "SafeTestsets", "MethodOfLines", "Dates", "DomainSets", "DifferentialEquations", "SciMLBase"]
+test = ["Documenter", "Test", "SafeTestsets", "MethodOfLines", "Dates", "DomainSets", "DifferentialEquations", "SciMLBase", "SciMLOperators"]

@@ -1,38 +1,37 @@
 using EarthSciMLBase
 using Test
 using ModelingToolkit, DomainSets, OrdinaryDiffEq
+using SciMLOperators
 
-mutable struct ExampleOp <: Operator
+struct ExampleOp <: Operator
     α::Num # Multiplier from ODESystem
-    initialized::Bool
-    finalized::Bool
 end
 
-function EarthSciMLBase.run!(op::ExampleOp, s::Simulator, t, step_length)
-    f = s.obs_fs[s.obs_fs_idx[op.α]]
-    for ix ∈ 1:size(s.u, 1)
-        for (i, c1) ∈ enumerate(s.grid[1])
-            for (j, c2) ∈ enumerate(s.grid[2])
-                for (k, c3) ∈ enumerate(s.grid[3])
-                    # Demonstrate coordinate transforms
-                    t1 = s.tf_fs[1](t, c1, c2, c3)
-                    t2 = s.tf_fs[2](t, c1, c2, c3)
-                    t3 = s.tf_fs[3](t, c1, c2, c3)
-                    # Demonstrate calculating observed value.
-                    fv = f(t, c1, c2, c3)
-                    # Set derivative value.
-                    s.du[ix, i, j, k] = (t1 + t2 + t3) * fv
+function EarthSciMLBase.get_scimlop(op::ExampleOp, s::Simulator)
+    obs_f = s.obs_fs[s.obs_fs_idx[op.α]]
+    function run(du, u, p, t)
+        u = reshape(u, size(s.u)...)
+        du = reshape(du, size(s.u)...)
+        for ix ∈ 1:size(s.u, 1)
+            for (i, c1) ∈ enumerate(s.grid[1])
+                for (j, c2) ∈ enumerate(s.grid[2])
+                    for (k, c3) ∈ enumerate(s.grid[3])
+                        # Demonstrate coordinate transforms
+                        t1 = s.tf_fs[1](t, c1, c2, c3)
+                        t2 = s.tf_fs[2](t, c1, c2, c3)
+                        t3 = s.tf_fs[3](t, c1, c2, c3)
+                        # Demonstrate calculating observed value.
+                        fv = obs_f(t, c1, c2, c3)
+                        # Set derivative value.
+                        du[ix, i, j, k] = (t1 + t2 + t3) * fv
+                    end
                 end
             end
         end
+        nothing
     end
-    @. s.u += s.du * step_length
-    nothing
+    FunctionOperator(run, s.u[:], p=s.p)
 end
-
-EarthSciMLBase.timestep(op::ExampleOp) = 1.0
-EarthSciMLBase.initialize!(op::ExampleOp, s::Simulator) = op.initialized = true
-EarthSciMLBase.finalize!(op::ExampleOp, s::Simulator) = op.finalized = true
 
 t_min = 0.0
 lon_min, lon_max = -π, π
@@ -62,11 +61,11 @@ eqs = [Dt(u) ~ -α * √abs(v) + lon,
 ]
 @named sys = ODESystem(eqs, t)
 
-op = ExampleOp(sys.windspeed, false, false)
+op = ExampleOp(sys.windspeed)
 
 csys = couple(sys, op, domain)
 
-sim = Simulator(csys, [0.1, 0.1, 1], Tsit5(); abstol=1e-12, reltol=1e-12)
+sim = Simulator(csys, [0.1, 0.1, 1])
 st = SimulatorStrangThreads(Tsit5(), Euler(), 1.0)
 
 @test 1 / (sim.tf_fs[1](0.0, 0.0, 0.0, 0.0) * 180 / π) ≈ 111319.44444444445
@@ -76,11 +75,14 @@ st = SimulatorStrangThreads(Tsit5(), Euler(), 1.0)
 @test sim.obs_fs[sim.obs_fs_idx[sys.windspeed]](0.0, 1.0, 3.0, 2.0) == 6.0
 @test sim.obs_fs[sim.obs_fs_idx[op.α]](0.0, 1.0, 3.0, 2.0) == 6.0
 
-EarthSciMLBase.run!(op, sim, 0.0, 1.0)
+scimlop = EarthSciMLBase.get_scimlop(op, sim)
+sim.du .= 0
+@views scimlop(sim.du[:], sim.u[:], sim.p, 0.0)
 
 @test sum(abs.(sim.du)) ≈ 26094.203039436292
 
-EarthSciMLBase.operator_step!(sim, 0.0, 1.0)
+sim.du .= 0
+EarthSciMLBase.operator_step!(sim, scimlop, 0.0, 1.0)
 
 @test sum(abs.(sim.du)) ≈ 26094.203039436292
 
@@ -96,9 +98,9 @@ IIchunks, integrators = let
     II = CartesianIndices(size(sim.u)[2:4])
     IIchunks = collect(Iterators.partition(II, length(II) ÷ st.threads))
     start, finish = EarthSciMLBase.time_range(sim.domaininfo)
-    prob = ODEProblem(sim.sys_mtk, [], (start, finish), []; sim.kwargs...)
+    prob = ODEProblem(sim.sys_mtk, [], (start, finish), [])
     integrators = [init(remake(prob, u0=similar(sim.u_init), p=deepcopy(sim.p)), st.stiffalg, save_on=false,
-        save_start=false, save_end=false, initialize_save=false; sim.kwargs...)
+        save_start=false, save_end=false, initialize_save=false; abstol=1e-12, reltol=1e-12)
                    for _ in 1:length(IIchunks)]
     (IIchunks, integrators)
 end
@@ -110,12 +112,9 @@ EarthSciMLBase.threaded_ode_step!(sim, IIchunks, integrators, 0.0, 1.0)
 
 @test sum(abs.(sim.u)) ≈ 212733.04492722102
 
-run!(sim, st)
+run!(sim, st; abstol=1e-12, reltol=1e-12)
 
 @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
-
-@test op.initialized == true
-@test op.finalized == true
 
 @testset "Float32" begin
     domain = DomainInfo(
@@ -125,7 +124,7 @@ run!(sim, st)
 
     csys = couple(sys, op, domain)
 
-    sim = Simulator(csys, [0.1, 0.1, 1], Tsit5())
+    sim = Simulator(csys, [0.1, 0.1, 1])
 
     run!(sim, st)
 
@@ -140,19 +139,19 @@ end
 
     csys = couple(sys, domain)
 
-    sim = Simulator(csys, [0.1, 0.1, 1], Tsit5())
+    sim = Simulator(csys, [0.1, 0.1, 1])
 
-    run!(sim, st)
+    run!(sim, st; abstol=1e-6, reltol=1e-6)
 
-    @test sum(abs.(sim.u)) ≈ 1.4343245f8
+    @test sum(abs.(sim.u)) ≈ 3.8660308f7
 end
 
 @testset "SimulatorStrategies" begin
     st = SimulatorStrangThreads(Tsit5(), Euler(), 1.0)
-    run!(sim, st)
+    run!(sim, st; abstol=1e-12, reltol=1e-12)
     @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
 
     st = SimulatorStrangSerial(Tsit5(), Euler(), 1.0)
-    run!(sim, st)
+    run!(sim, st; abstol=1e-12, reltol=1e-12)
     @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
 end

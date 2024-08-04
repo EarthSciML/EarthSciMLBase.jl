@@ -5,7 +5,7 @@ However, currently this does not work for large scale simulations.
 
 While this ModelingToolkit functionality is being built, we have a different solution based on the [`Simulator`](@ref) type in this package.
 Using this system, we still define systems of ODEs to define behavior in a single grid cell, and we also have [`Operator`](@ref) processes that define behavior between grid cells.
-The [`Simulator`](@ref) then integrates the ODEs and the Operators together using [Strang Splitting](https://en.wikipedia.org/wiki/Strang_splitting).
+The [`Simulator`](@ref) then integrates the ODEs and the Operators together.
 
 ## ODE System
 
@@ -14,7 +14,7 @@ As an example, let's first define a system of ODEs:
 ```@example sim
 using EarthSciMLBase
 using ModelingToolkit, DomainSets, DifferentialEquations
-using Plots
+using SciMLOperators, Plots
 
 @parameters y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0
 @constants p = 1.0
@@ -35,7 +35,7 @@ There is also a variable `windspeed` which is "observed" based on the parameters
 
 ## Operator
 
-Next, we define an operator. To do so, first we create a new type that is a subtype of `Oerator`:
+Next, we define an operator. To do so, first we create a new type that is a subtype of [`Operator`](@ref):
 
 ```@example sim
 mutable struct ExampleOp <: Operator
@@ -44,27 +44,33 @@ end
 ```
 In the case above, we're setting up our operator so that it can hold a parameter from our ODE system.
 
-Next, we need to define a method of `EarthSciMLBase.run!` for our operator. This method will be called by the simulator to calculate the effect of the operator on the state variables.
+Next, we need to define a method of `EarthSciMLBase.get_scimlop` for our operator. This method will be called by the simulator to get a [`SciMLOperators.AbstractSciMLOperator`](https://docs.sciml.ai/SciMLOperators/stable/interface/) that will be used conjuction with the ModelingToolkit system above to integrate the simulation forward in time.
 
 ```@example sim
-function EarthSciMLBase.run!(op::ExampleOp, s::Simulator, t)
-    f = s.obs_fs[s.obs_fs_idx[op.α]]
-    for ix ∈ 1:size(s.u, 1)
-        for (i, c1) ∈ enumerate(s.grid[1])
-            for (j, c2) ∈ enumerate(s.grid[2])
-                for (k, c3) ∈ enumerate(s.grid[3])
-                    # Demonstrate coordinate transforms
-                    t1 = s.tf_fs[1](t, c1, c2, c3)
-                    t2 = s.tf_fs[2](t, c1, c2, c3)
-                    t3 = s.tf_fs[3](t, c1, c2, c3)
-                    # Demonstrate calculating observed value.
-                    fv = f(t, c1, c2, c3)
-                    # Set derivative value.
-                    s.du[ix, i, j, k] = (t1 + t2 + t3) * fv / 10
+function EarthSciMLBase.get_scimlop(op::ExampleOp, s::Simulator)
+    obs_f = s.obs_fs[s.obs_fs_idx[op.α]]
+    function run(du, u, p, t)
+        u = reshape(u, size(s.u)...)
+        du = reshape(du, size(s.u)...)
+        for ix ∈ 1:size(s.u, 1)
+            for (i, c1) ∈ enumerate(s.grid[1])
+                for (j, c2) ∈ enumerate(s.grid[2])
+                    for (k, c3) ∈ enumerate(s.grid[3])
+                        # Demonstrate coordinate transforms
+                        t1 = s.tf_fs[1](t, c1, c2, c3)
+                        t2 = s.tf_fs[2](t, c1, c2, c3)
+                        t3 = s.tf_fs[3](t, c1, c2, c3)
+                        # Demonstrate calculating observed value.
+                        fv = obs_f(t, c1, c2, c3)
+                        # Set derivative value.
+                        du[ix, i, j, k] = (t1 + t2 + t3) * fv
+                    end
                 end
             end
         end
+        nothing
     end
+    FunctionOperator(run, s.u[:], p=s.p)
 end
 ```
 The function above also doesn't have any physical meaning, but it demonstrates some functionality of the `Simulator` "`s`".
@@ -73,11 +79,6 @@ ODE system using the `s.obs_fs` field, and it demonstrates how to call the resul
 function to get that value.
 It also demonstrates how to get coordinate transforms using the `s.tf_fs` field.
 Coordinate transforms are discussed in more detail in the documentation for the [`DomainInfo`](@ref) type.
-
-Finally, we define a method of `EarthSciMLBase.timestep` for our operator. This method will be called by the simulator to determine the timestep for the operator.
-```@example sim
-EarthSciMLBase.timestep(op::ExampleOp) = 1.0
-```
 
 ## Domain
 
@@ -122,22 +123,26 @@ nothing #hide
 
 ...and then create a Simulator. 
 Our simulator specification needs to include grid spacing the the `lon`, `lat`, and `lev`
-coordinates, which we set as 0.1π, 0.1π, and 1, respectively, and it needs us to 
-chose an ODE solver from the [options available in DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/).
-We choose the `Tsit5` solver:
+coordinates, which we set as 0.1π, 0.1π, and 1, respectively.
 
 ```@example sim
 sim = Simulator(csys, [0.1π, 0.1π, 1], Tsit5())
 nothing #hide
 ```
 
-Finally, we can run the simulation:
+Finally, we can choose a [`SimulatorStrategy`](@ref) and run the simulation.
+We choose the [`StrangSimulatorThreads`](@ref) strategy, which needs us to 
+specify ODE solvers from the [options available in DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/) for both the MTK system and the operator(s).
+We choose the `Tsit5` solver for our MTK system and the `Euler` solver for our operator.
+We also choose a time step of 1.0 seconds:
 
 ```@example sim
-run!(sim)
+st = SimulatorStrangThreads(Tsit5(), Euler(), 1.0)
+
+@time run!(sim, st)
 ```
 
-...and plot the result at the end of the simulation:
+After the simulation finishes, we can plot the result at the end of the simulation:
 
 ```@example sim
 plot(

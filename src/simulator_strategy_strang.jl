@@ -1,6 +1,9 @@
 export SimulatorStrangThreads, SimulatorStrangSerial
 
-"A simulator strategy based on Strang splitting."
+"""
+A simulator strategy based on Strang splitting.
+Choose either `SimulatorStrangThreads` or `SimulatorStrangSerial` to run the simulation.
+"""
 abstract type SimulatorStrang <: SimulatorStrategy end
 
 """
@@ -56,33 +59,31 @@ end
 nthreads(st::SimulatorStrangThreads) = st.threads
 nthreads(st::SimulatorStrangSerial) = 1
 
-function run!(s::Simulator{T}, st::SimulatorStrang) where {T}
+"""
+$(TYPEDSIGNATURES)
+
+Run the simualation.
+`kwargs` are passed to the ODEProblem and ODE solver constructors.
+"""
+function run!(s::Simulator{T}, st::SimulatorStrang; kwargs...) where {T}
     II = CartesianIndices(size(s.u)[2:4])
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
     start, finish = time_range(s.domaininfo)
-    prob = ODEProblem(s.sys_mtk, [], (start, finish), []; s.kwargs...)
+    prob = ODEProblem(s.sys_mtk, [], (start, finish), []; kwargs...)
     integrators = [init(remake(prob, u0=similar(s.u_init), p=deepcopy(s.p)), st.stiffalg, save_on=false,
-        save_start=false, save_end=false, initialize_save=false; s.kwargs...)
+        save_start=false, save_end=false, initialize_save=false; kwargs...)
                    for _ in 1:length(IIchunks)]
 
-    if length(s.sys.ops) > 0
-        optimes = [start:T(timestep(op)):finish for op ∈ s.sys.ops]
-        steps = timesteps(optimes...)
-        step_length = steplength(steps)
-    else
-        steps = [start, finish]
-        step_length = finish - start
-    end
+    # Combine the non-stiff operators into a single operator.
+    # This works because SciMLOperators can be added together.
+    nonstiff_op = length(s.sys.ops) > 0 ? sum([get_scimlop(op, s) for op ∈ s.sys.ops]) : nothing
+
     init_u!(s)
 
-    for op ∈ s.sys.ops
-        initialize!(op, s)
-    end
-    @progress name = String(nameof(s.sys_mtk)) for time in steps
-        strang_step!(s, st, IIchunks, integrators, time, step_length)
-    end
-    for op ∈ s.sys.ops
-        finalize!(op, s)
+    times = start:T(st.timestep):finish
+
+    @progress name = String(nameof(s.sys_mtk)) for time in times
+        strang_step!(s, st, IIchunks, integrators, nonstiff_op, time)
     end
     nothing
 end
@@ -97,7 +98,7 @@ function threaded_ode_step!(s::Simulator{T}, IIchunks, integrators, time::T, ste
 end
 
 "Take a step using the ODE solver with the given IIchunk (grid cell interator) and integrator."
-function single_ode_step!(s::Simulator{T}, IIchunk, integrator, time::T, step_length::T) where T
+function single_ode_step!(s::Simulator{T}, IIchunk, integrator, time::T, step_length::T) where {T}
     for ii in IIchunk
         uii = @view s.u[:, ii]
         reinit!(integrator, uii, t0=time, tf=time + step_length,
@@ -111,25 +112,25 @@ function single_ode_step!(s::Simulator{T}, IIchunk, integrator, time::T, step_le
     end
 end
 
-"Take a step using the operator functions."
-function operator_step!(s::Simulator{T}, time::T, step_length::T) where T
-    for op in s.sys.ops
-        s.du .= zero(eltype(s.du))
-        run!(op, s, time, step_length)
+"Take a step using the nonstiff operator."
+function operator_step!(s::Simulator{T}, nonstiff_op, time::T, step_length::T) where {T}
+    if !isnothing(nonstiff_op)
+        @info "xxx"
+        @views nonstiff_op(s.du[:], s.u[:], s.p, time)
+        s.u .+= s.du .* step_length
     end
+end
+
+"Take a step using Strang splitting, first with the ODE solver, then with the operators."
+function strang_step!(s::Simulator{T}, st::SimulatorStrangThreads, IIchunks, integrators, nonstiff_op, time::T) where {T}
+    threaded_ode_step!(s, IIchunks, integrators, time, T(st.timestep))
+    operator_step!(s, nonstiff_op, time, T(st.timestep))
     nothing
 end
 
 "Take a step using Strang splitting, first with the ODE solver, then with the operators."
-function strang_step!(s::Simulator{T}, st::SimulatorStrangThreads, IIchunks, integrators, time::T, step_length::T) where T
-    threaded_ode_step!(s, IIchunks, integrators, time, step_length)
-    operator_step!(s, time, step_length)
-    nothing
-end
-
-"Take a step using Strang splitting, first with the ODE solver, then with the operators."
-function strang_step!(s::Simulator{T}, st::SimulatorStrangSerial, IIchunks, integrators, time::T, step_length::T) where T
-    single_ode_step!(s, IIchunks[1], integrators[1], time, step_length)
-    operator_step!(s, time, step_length)
+function strang_step!(s::Simulator{T}, st::SimulatorStrangSerial, IIchunks, integrators, nonstiff_op, time::T) where {T}
+    single_ode_step!(s, IIchunks[1], integrators[1], time, st.timestep)
+    operator_step!(s, nonstiff_op, time, st.timestep)
     nothing
 end

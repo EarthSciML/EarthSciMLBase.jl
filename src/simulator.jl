@@ -28,8 +28,6 @@ would represent a grid with 0.1 spacing in the first two dimensions and 1 in the
 in whatever units the grid is natively in.
 The grid spacings should be given in the same order as the partial independent variables
 are in the provided `DomainInfo`.
-`algorithm` should be a [DifferentialEquations.jl ODE solver](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/).
-`kwargs` are passed on to the DifferentialEquations.jl ODEProblem and integrator initialization.
 
 $(TYPEDFIELDS)
 """
@@ -61,16 +59,11 @@ struct Simulator{T,FT1,FT2,TG}
     "Functions to get the current values of the coordinate transforms with input arguments of time and the partial independent variables"
     tf_fs::FT2
 
-    "kwargs to pass to the ODEProblem and integrator initialization"
-    kwargs
-
-    function Simulator(sys::CoupledSystem, Δs::AbstractVector{T2}, algorithm; kwargs...) where {T2<:AbstractFloat}
+    function Simulator(sys::CoupledSystem, Δs::AbstractVector{T2}) where {T2<:AbstractFloat}
         @assert !isnothing(sys.domaininfo) "The system must have a domain specified; see documentation for EarthSciMLBase.DomainInfo."
         mtk_sys = structural_simplify(get_mtk_ode(sys; name=:model))
 
         mtk_sys, obs_eqs = prune_observed(mtk_sys) # Remove unused variables to speed up computation.
-        start, finish = time_range(sys.domaininfo)
-        prob = ODEProblem(mtk_sys, [], (start, finish), []; kwargs...)
 
         vars = states(mtk_sys)
         ps = parameters(mtk_sys)
@@ -109,7 +102,7 @@ struct Simulator{T,FT1,FT2,TG}
         u = Array{T}(undef, length(uvals), length(grd[1]), length(grd[2]), length(grd[3]))
         du = similar(u)
 
-        new{T,typeof(obs_fs),typeof(tf_fs),TG}(sys, mtk_sys, sys.domaininfo, u, du, pvals, uvals, pvidx, grd, tuple(Δs...), obs_fs, obs_fs_idx, tf_fs, kwargs)
+        new{T,typeof(obs_fs),typeof(tf_fs),TG}(sys, mtk_sys, sys.domaininfo, u, du, pvals, uvals, pvidx, grd, tuple(Δs...), obs_fs, obs_fs_idx, tf_fs)
     end
 end
 
