@@ -2,6 +2,7 @@ using EarthSciMLBase
 using Test
 using ModelingToolkit, DomainSets, OrdinaryDiffEq
 using SciMLOperators
+using DifferentialEquations
 
 struct ExampleOp <: Operator
     α::Num # Multiplier from ODESystem
@@ -59,7 +60,7 @@ eqs = [Dt(u) ~ -α * √abs(v) + lon,
     Dt(v) ~ -α * √abs(u) + lat + lev * 1e-14,
     windspeed ~ lat + lon + lev,
 ]
-@named sys = ODESystem(eqs, t)
+sys = ODESystem(eqs, t, name=:Test₊sys)
 
 op = ExampleOp(sys.windspeed)
 
@@ -108,6 +109,17 @@ EarthSciMLBase.threaded_ode_step!(sim, IIchunks, integrators, 0.0, 1.0)
 
 @test sum(abs.(sim.u)) ≈ 212733.04492722102
 
+@testset "mtk_func" begin
+    ucopy = copy(sim.u)
+    f = EarthSciMLBase.mtk_func(sim)
+    EarthSciMLBase.init_u!(sim)
+    du = similar(sim.u)
+    prob = ODEProblem(f, sim.u[:], (0.0, 1.0), sim.p)
+    sol = solve(prob, KenCarp47(linsolve=KrylovJL_GMRES(), autodiff=false))
+    uu = reshape(sol.u[end], size(ucopy)...)
+    @test uu[:] ≈ ucopy[:] rtol = 0.01
+end
+
 run!(sim, st; abstol=1e-12, reltol=1e-12)
 
 @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
@@ -150,4 +162,7 @@ end
     st = SimulatorStrangSerial(Tsit5(), Euler(), 1.0)
     run!(sim, st; abstol=1e-12, reltol=1e-12)
     @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
+
+    st = SimulatorIMEX(KenCarp47(linsolve=KrylovJL_GMRES(), autodiff=false))
+    @test_broken run!(sim, st)
 end

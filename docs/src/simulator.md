@@ -126,7 +126,7 @@ Our simulator specification needs to include grid spacing the the `lon`, `lat`, 
 coordinates, which we set as 0.1π, 0.1π, and 1, respectively.
 
 ```@example sim
-sim = Simulator(csys, [0.1π, 0.1π, 1], Tsit5())
+sim = Simulator(csys, [0.1π, 0.1π, 1])
 nothing #hide
 ```
 
