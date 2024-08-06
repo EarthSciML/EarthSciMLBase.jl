@@ -168,15 +168,26 @@ end
     @test_broken run!(sim, st)
 end
 
+mutable struct cbt
+    runcount::Int
+end
+function EarthSciMLBase.init_callback(c::cbt, s::Simulator)
+    DiscreteCallback((u, t, integrator) -> true,
+        (_) -> c.runcount += 1,
+    )
+end
+
 @testset "callback" begin
     runcount = 0
-    af(integrator) = runcount += 1
+    af(_) = runcount += 1
     cb = DiscreteCallback(
         (u, t, integrator) -> true,
         af,
     )
-    csys2 = couple(csys, cb)
+    cc = cbt(0)
+    csys2 = couple(csys, cb, cc)
     sim = Simulator(csys2, [0.1, 0.1, 1])
     run!(sim, st)
     @test runcount > 0
+    @test cc.runcount > 0
 end

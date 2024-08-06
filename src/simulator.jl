@@ -102,3 +102,8 @@ function init_u!(s::Simulator)
     end
     nothing
 end
+
+function get_callbacks(s::Simulator)
+    extra_cb = [init_callback(c, s) for c ∈ s.sys.init_callbacks]
+    CallbackSet(s.sys.callbacks..., extra_cb...)
+end

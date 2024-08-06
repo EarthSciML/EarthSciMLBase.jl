@@ -86,7 +86,7 @@ function run!(s::Simulator{T}, st::SimulatorStrang; kwargs...) where {T}
     nonstiff_integrator = nothing
     if !isnothing(nonstiff_op)
         nonstiff_op = cache_operator(nonstiff_op, s.u)
-        @views nonstiff_prob = ODEProblem(nonstiff_op, s.u[:], (start, finish), s.p, callback=CallbackSet(s.sys.callbacks...); kwargs...)
+        @views nonstiff_prob = ODEProblem(nonstiff_op, s.u[:], (start, finish), s.p, callback=get_callbacks(s); kwargs...)
         nonstiff_integrator = init(nonstiff_prob, st.nonstiffalg, save_on=false, save_start=false, save_end=false,
             initialize_save=false, dt=st.timestep; kwargs...)
     end
