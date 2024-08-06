@@ -130,8 +130,8 @@ sim = Simulator(csys, [0.1π, 0.1π, 1])
 nothing #hide
 ```
 
-Finally, we can choose a [`SimulatorStrategy`](@ref) and run the simulation.
-We choose the [`StrangSimulatorThreads`](@ref) strategy, which needs us to 
+Finally, we can choose a [`EarthSciMLBase.SimulatorStrategy`](@ref) and run the simulation.
+We choose the [`SimulatorStrangThreads`](@ref) strategy, which needs us to 
 specify ODE solvers from the [options available in DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/) for both the MTK system and the operator(s).
 We choose the `Tsit5` solver for our MTK system and the `Euler` solver for our operator.
 We also choose a time step of 1.0 seconds:

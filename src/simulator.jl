@@ -1,23 +1,4 @@
-export Simulator, run!
-
-"""
-SimulatorStrategy is an abstract type that defines the strategy for running a simulation.
-Each SimulatorStrategy should implement a method of:
-
-```julia
-run!(st::SimulatorStrategy, s::Simulator{T}) where T
-```
-"""
-abstract type SimulatorStrategy end
-
-"""
-$(TYPEDSIGNATURES)
-
-Run the simulation.
-"""
-function run!(st::SimulatorStrategy, simulator)
-    error("Not implemented.")
-end
+export Simulator
 
 """
 $(TYPEDSIGNATURES)

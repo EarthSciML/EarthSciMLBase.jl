@@ -1,4 +1,23 @@
-export SimulatorIMEX
+export SimulatorIMEX, run!
+
+"""
+SimulatorStrategy is an abstract type that defines the strategy for running a simulation.
+Each SimulatorStrategy should implement a method of:
+
+```julia
+run!(st::SimulatorStrategy, s::Simulator{T}) where T
+```
+"""
+abstract type SimulatorStrategy end
+
+"""
+$(TYPEDSIGNATURES)
+
+Run the simulation.
+"""
+function run!(st::SimulatorStrategy, simulator)
+    error("Not implemented.")
+end
 
 "Return a SciMLOperator to apply the MTK system to each column of s.u after reshaping to a matrix."
 function mtk_op(s::Simulator)
@@ -51,6 +70,9 @@ for additional information.
 from the Split ODE Solver algorithms listed [here](https://docs.sciml.ai/DiffEqDocs/stable/solvers/split_ode_solve/#split_ode_solve).
 In most cases, it is recommended to use a Jacobian-free Newton-Krylov linear solution method
 as described [here](https://docs.sciml.ai/DiffEqDocs/stable/tutorials/advanced_ode_example/#Using-Jacobian-Free-Newton-Krylov).
+
+!!! caution
+    This strategy does not currently work. Do not use. See [here](https://github.com/SciML/OrdinaryDiffEq.jl/issues/2078) for more details.
 
 $(FIELDS)
 """
