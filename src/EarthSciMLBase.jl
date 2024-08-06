@@ -4,6 +4,7 @@ using Graphs, MetaGraphsNext
 using DocStringExtensions
 using Unitful
 using OrdinaryDiffEq, DomainSets
+using SciMLBase: DECallback, CallbackSet
 using LinearAlgebra, BlockBandedMatrices
 using ProgressLogging
 

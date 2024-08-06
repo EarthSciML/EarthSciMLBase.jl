@@ -96,7 +96,7 @@ function run!(s::Simulator, st::SimulatorIMEX; kwargs...)
     f2 = sum([get_scimlop(op, s) for op ∈ s.sys.ops])
 
     start, finish = time_range(s.domaininfo)
-    prob = SplitODEProblem(f1, f2, s.u, (start, finish), s.p, kwargs...)
+    prob = SplitODEProblem(f1, f2, s.u, (start, finish), s.p, callback=CallbackSet(s.sys.callbacks...), kwargs...)
     solve(prob, st.alg, save_on=false, save_start=false, save_end=false,
         initialize_save=false; kwargs...)
 end

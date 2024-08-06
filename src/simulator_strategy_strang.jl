@@ -3,6 +3,11 @@ export SimulatorStrangThreads, SimulatorStrangSerial
 """
 A simulator strategy based on Strang splitting.
 Choose either `SimulatorStrangThreads` or `SimulatorStrangSerial` to run the simulation.
+
+!!! warning
+    `SimulatorStrang` strategies will still work if no operator is included, 
+    but any callbacks included in the system are executed together with the operators,
+    so if there are no operators in the system, the callbacks will not be executed.
 """
 abstract type SimulatorStrang <: SimulatorStrategy end
 
@@ -81,7 +86,7 @@ function run!(s::Simulator{T}, st::SimulatorStrang; kwargs...) where {T}
     nonstiff_integrator = nothing
     if !isnothing(nonstiff_op)
         nonstiff_op = cache_operator(nonstiff_op, s.u)
-        @views nonstiff_prob = ODEProblem(nonstiff_op, s.u[:], (start, finish), s.p; kwargs...)
+        @views nonstiff_prob = ODEProblem(nonstiff_op, s.u[:], (start, finish), s.p, callback=CallbackSet(s.sys.callbacks...); kwargs...)
         nonstiff_integrator = init(nonstiff_prob, st.nonstiffalg, save_on=false, save_start=false, save_end=false,
             initialize_save=false, dt=st.timestep; kwargs...)
     end

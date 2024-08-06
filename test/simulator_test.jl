@@ -3,6 +3,7 @@ using Test
 using ModelingToolkit, DomainSets, OrdinaryDiffEq
 using SciMLOperators
 using DifferentialEquations
+using SciMLBase: DiscreteCallback
 
 struct ExampleOp <: Operator
     α::Num # Multiplier from ODESystem
@@ -165,4 +166,17 @@ end
 
     st = SimulatorIMEX(KenCarp47(linsolve=KrylovJL_GMRES(), autodiff=false))
     @test_broken run!(sim, st)
+end
+
+@testset "callback" begin
+    runcount = 0
+    af(integrator) = runcount += 1
+    cb = DiscreteCallback(
+        (u, t, integrator) -> true,
+        af,
+    )
+    csys2 = couple(csys, cb)
+    sim = Simulator(csys2, [0.1, 0.1, 1])
+    run!(sim, st)
+    @test runcount > 0
 end

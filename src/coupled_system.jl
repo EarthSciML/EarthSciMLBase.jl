@@ -32,10 +32,13 @@ mutable struct CoupledSystem
     A vector of operators to run during simulations.
     """
     ops::Vector{Operator}
+
+    "A vector of callbacks to run during simulations."
+    callbacks::Vector{DECallback}
 end
 
 function Base.show(io::IO, cs::CoupledSystem)
-    print(io, "CoupledSystem containing $(length(cs.systems)) system(s) and $(length(cs.ops)) operator(s).")
+    print(io, "CoupledSystem containing $(length(cs.systems)) system(s), $(length(cs.ops)) operator(s), and $(length(cs.callbacks)) callback(s).")
 end
 
 """    
@@ -49,7 +52,7 @@ or any type `T` that has a method `couple(::CoupledSystem, ::T)::CoupledSystem` 
 `couple(::T, ::CoupledSystem)::CoupledSystem` defined for it.
 """
 function couple(systems...)::CoupledSystem
-    o = CoupledSystem([], nothing, [], [])
+    o = CoupledSystem([], nothing, [], [], [])
     for sys ∈ systems
         if sys isa DomainInfo # Add domain information to the system.
             if o.domaininfo !== nothing
@@ -63,16 +66,22 @@ function couple(systems...)::CoupledSystem
         elseif sys isa CoupledSystem # Add a coupled system to the coupled system.
             o.systems = vcat(o.systems, sys.systems)
             o.pdefunctions = vcat(o.pdefunctions, sys.pdefunctions)
+            o.ops = vcat(o.ops, sys.ops)
+            o.callbacks = vcat(o.callbacks, sys.callbacks)
             if sys.domaininfo !== nothing
                 if o.domaininfo !== nothing
                     error("Cannot add two sets of DomainInfo to a system.")
                 end
                 o.domaininfo = sys.domaininfo
             end
+        elseif sys isa DECallback
+            push!(o.callbacks, sys)
         elseif applicable(couple, o, sys)
             o = couple(o, sys)
         elseif applicable(couple, sys, o)
             o = couple(sys, o)
+        elseif (sys isa Tuple) || (sys isa AbstractVector)
+            o = couple(o, sys...)
         else
             error("Cannot couple a $(typeof(sys)).")
         end
