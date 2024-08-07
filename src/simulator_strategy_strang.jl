@@ -81,39 +81,56 @@ function run!(s::Simulator{T}, st::SimulatorStrang; kwargs...) where {T}
 
     # Combine the non-stiff operators into a single operator.
     # This works because SciMLOperators can be added together.
-    nonstiff_op = length(s.sys.ops) > 0 ? sum([get_scimlop(op, s) for op ∈ s.sys.ops]) : nothing
-
-    nonstiff_integrator = nothing
-    if !isnothing(nonstiff_op)
-        nonstiff_op = cache_operator(nonstiff_op, s.u)
-        @views nonstiff_prob = ODEProblem(nonstiff_op, s.u[:], (start, finish), s.p, callback=get_callbacks(s); kwargs...)
-        nonstiff_integrator = init(nonstiff_prob, st.nonstiffalg, save_on=false, save_start=false, save_end=false,
-            initialize_save=false, dt=st.timestep; kwargs...)
-    end
+    nonstiff_op = length(s.sys.ops) > 0 ? sum([get_scimlop(op, s) for op ∈ s.sys.ops]) : NullOperator(length(s.u))
+    nonstiff_op = cache_operator(nonstiff_op, s.u)
 
     init_u!(s)
 
-    times = start:T(st.timestep):finish
+    cb = CallbackSet(
+        stiff_callback(s, st, IIchunks, stiff_integrators),
+        get_callbacks(s)...,
+    )
+    @views nonstiff_prob = ODEProblem(nonstiff_op, s.u[:], (start, finish), s.p, callback=cb; kwargs...)
+    solve(nonstiff_prob, st.nonstiffalg, save_on=false, save_start=false, save_end=false,
+        initialize_save=false, dt=st.timestep; kwargs...)
+end
 
-    @progress name = String(nameof(s.sys_mtk)) for time in times
-        strang_step!(s, st, IIchunks, stiff_integrators, nonstiff_integrator, time)
+"A callback to periodically run the stiff solver."
+function stiff_callback(s::Simulator{T}, st::SimulatorStrang, IIchunks, integrators) where T
+    function affect!(integrator)
+        u = reshape(integrator.u, length(states(s.sys_mtk)), [length(g) for g in s.grid]...)
+        ode_step!(s, st, u, IIchunks, integrators, T(integrator.t), T(st.timestep))
+        @views integrator.u .= u[:]
     end
-    nothing
+    PeriodicCallback(
+        affect!,
+        T(st.timestep),
+        initial_affect=true,
+        final_affect=false,
+    )
 end
 
 "Take a step using the ODE solver."
-function threaded_ode_step!(s::Simulator{T}, IIchunks, integrators, time::T, step_length::T) where {T}
+function ode_step!(s::Simulator, st::SimulatorStrangThreads, u, IIchunks, integrators, time, step_length)
+    threaded_ode_step!(s, u, IIchunks, integrators, time, step_length)
+end
+function ode_step!(s::Simulator, st::SimulatorStrangSerial, u, IIchunks, integrators, time, step_length)
+    single_ode_step!(s, u, IIchunks[1], integrators[1], time, step_length)
+end
+
+"Take a step using the ODE solver."
+function threaded_ode_step!(s::Simulator{T}, u, IIchunks, integrators, time::T, step_length::T) where {T}
     tasks = map(1:length(IIchunks)) do ithread
-        Threads.@spawn single_ode_step!(s, IIchunks[$ithread], integrators[$ithread], time, step_length)
+        Threads.@spawn single_ode_step!(s, u, IIchunks[$ithread], integrators[$ithread], time, step_length)
     end::Vector{Task}
     wait.(tasks)
     nothing
 end
 
 "Take a step using the ODE solver with the given IIchunk (grid cell interator) and integrator."
-function single_ode_step!(s::Simulator{T}, IIchunk, integrator, time::T, step_length::T) where {T}
+function single_ode_step!(s::Simulator{T}, u, IIchunk, integrator, time::T, step_length::T) where {T}
     for ii in IIchunk
-        uii = @view s.u[:, ii]
+        uii = @view u[:, ii]
         reinit!(integrator, uii, t0=time, tf=time + step_length,
             erase_sol=false, reset_dt=true)
         for (jj, g) ∈ enumerate(s.grid) # Set the coordinates of this grid cell.
@@ -123,29 +140,4 @@ function single_ode_step!(s::Simulator{T}, IIchunk, integrator, time::T, step_le
         @assert length(integrator.sol.u) == 0
         uii .= integrator.u
     end
-end
-
-"Take a step using the nonstiff operator."
-function operator_step!(s::Simulator{T}, integrator, time::T, step_length::T) where {T}
-    if !isnothing(integrator)
-        @views reinit!(integrator, s.u[:], t0=time, tf=time + step_length,
-            erase_sol=false, reset_dt=true)
-        solve!(integrator)
-        @assert length(integrator.sol.u) == 0
-        @views s.u[:] .= integrator.u
-    end
-end
-
-"Take a step using Strang splitting, first with the ODE solver, then with the operators."
-function strang_step!(s::Simulator{T}, st::SimulatorStrangThreads, IIchunks, stiff_integrators, nonstiff_integrator, time::T) where {T}
-    threaded_ode_step!(s, IIchunks, stiff_integrators, time, T(st.timestep))
-    operator_step!(s, nonstiff_integrator, time, T(st.timestep))
-    nothing
-end
-
-"Take a step using Strang splitting, first with the ODE solver, then with the operators."
-function strang_step!(s::Simulator{T}, st::SimulatorStrangSerial, IIchunks, stiff_integrators, nonstiff_integrator, time::T) where {T}
-    single_ode_step!(s, IIchunks[1], stiff_integrators[1], time, st.timestep)
-    operator_step!(s, nonstiff_integrator, time, st.timestep)
-    nothing
 end

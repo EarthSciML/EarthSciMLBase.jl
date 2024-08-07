@@ -105,5 +105,5 @@ end
 
 function get_callbacks(s::Simulator)
     extra_cb = [init_callback(c, s) for c ∈ s.sys.init_callbacks]
-    CallbackSet(s.sys.callbacks..., extra_cb...)
+    [s.sys.callbacks; extra_cb]
 end

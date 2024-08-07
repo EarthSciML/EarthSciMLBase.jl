@@ -5,6 +5,7 @@ using DocStringExtensions
 using Unitful
 using OrdinaryDiffEq, DomainSets
 using SciMLBase: DECallback, CallbackSet
+using DiffEqCallbacks
 using LinearAlgebra, BlockBandedMatrices
 using ProgressLogging
 

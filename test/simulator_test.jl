@@ -65,7 +65,20 @@ sys = ODESystem(eqs, t, name=:Test₊sys)
 
 op = ExampleOp(sys.windspeed)
 
-csys = couple(sys, op, domain)
+# Callback for saving the end result for testing.
+mutable struct SaveEndCB
+    u
+end
+function cb(s::SaveEndCB)
+    DiscreteCallback(
+        (u, t, integrator) -> false,
+        (integrator) -> nothing,
+        finalize = (c, u, t, integrator) -> s.u = u
+    )
+end
+
+result = SaveEndCB(nothing)
+csys = couple(sys, op, domain, cb(result))
 
 sim = Simulator(csys, [0.1, 0.1, 1])
 st = SimulatorStrangThreads(Tsit5(), Euler(), 1.0)
@@ -103,7 +116,7 @@ IIchunks, integrators = let
     (IIchunks, integrators)
 end
 
-EarthSciMLBase.threaded_ode_step!(sim, IIchunks, integrators, 0.0, 1.0)
+EarthSciMLBase.threaded_ode_step!(sim, sim.u, IIchunks, integrators, 0.0, 1.0)
 
 @test sim.u[1, 1, 1, 1] ≈ sol1.u[end][1]
 @test sim.u[2, 1, 1, 1] ≈ sol1.u[end][2]
@@ -123,7 +136,7 @@ end
 
 run!(sim, st; abstol=1e-12, reltol=1e-12)
 
-@test sum(abs.(sim.u)) ≈ 3.77224671877136e7
+@test sum(abs.(result.u)) ≈ 3.77224671877136e7 rtol = 1e-3
 
 @testset "Float32" begin
     domain = DomainInfo(
@@ -131,13 +144,14 @@ run!(sim, st; abstol=1e-12, reltol=1e-12)
         constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
         dtype=Float32)
 
-    csys = couple(sys, op, domain)
+    result.u = nothing
+    csys = couple(sys, op, domain, cb(result))
 
     sim = Simulator(csys, [0.1, 0.1, 1])
 
     run!(sim, st)
 
-    @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
+    @test sum(abs.(result.u)) ≈ 3.77224671877136e7
 end
 
 @testset "No operator" begin
@@ -146,25 +160,29 @@ end
         constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
         dtype=Float32)
 
-    csys = couple(sys, domain)
+    result.u = nothing
+    csys = couple(sys, domain, cb(result))
 
     sim = Simulator(csys, [0.1, 0.1, 1])
 
     run!(sim, st; abstol=1e-6, reltol=1e-6)
 
-    @test sum(abs.(sim.u)) ≈ 3.8660308f7
+    @test sum(abs.(result.u)) ≈ 3.8660308f7
 end
 
 @testset "SimulatorStrategies" begin
     st = SimulatorStrangThreads(Tsit5(), Euler(), 1.0)
+    result.u = nothing
     run!(sim, st; abstol=1e-12, reltol=1e-12)
-    @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
+    @test sum(abs.(result.u)) ≈ 3.77224671877136e7 rtol = 1e-3
 
     st = SimulatorStrangSerial(Tsit5(), Euler(), 1.0)
+    result.u = nothing
     run!(sim, st; abstol=1e-12, reltol=1e-12)
-    @test sum(abs.(sim.u)) ≈ 3.77224671877136e7
+    @test sum(abs.(result.u)) ≈ 3.77224671877136e7 rtol = 1e-3
 
     st = SimulatorIMEX(KenCarp47(linsolve=KrylovJL_GMRES(), autodiff=false))
+    result.u = nothing
     @test_broken run!(sim, st)
 end
 

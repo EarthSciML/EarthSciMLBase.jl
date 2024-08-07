@@ -61,7 +61,7 @@ mutable struct CoupledSystem
 end
 
 function Base.show(io::IO, cs::CoupledSystem)
-    print(io, "CoupledSystem containing $(length(cs.systems)) system(s), $(length(cs.ops)) operator(s), and $(length(cs.callbacks)) callback(s).")
+    print(io, "CoupledSystem containing $(length(cs.systems)) system(s), $(length(cs.ops)) operator(s), and $(length(cs.callbacks) + length(cs.init_callbacks)) callback(s).")
 end
 
 """    
