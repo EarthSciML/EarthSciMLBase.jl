@@ -4,6 +4,9 @@ using Graphs, MetaGraphsNext
 using DocStringExtensions
 using Unitful
 using OrdinaryDiffEq, DomainSets
+using SciMLBase: DECallback, CallbackSet
+using DiffEqCallbacks
+using LinearAlgebra, BlockBandedMatrices
 using ProgressLogging
 
 include("add_dims.jl")
@@ -17,5 +20,7 @@ include("param_to_var.jl")
 include("graph.jl")
 include("simulator_utils.jl")
 include("simulator.jl")
+include("simulator_strategies.jl")
+include("simulator_strategy_strang.jl")
 
 end

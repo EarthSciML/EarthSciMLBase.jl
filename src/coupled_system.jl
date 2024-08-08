@@ -12,10 +12,30 @@ function systemhash(sys::ModelingToolkit.AbstractSystem)
 end
 
 """
+Types that implement an:
+
+`init_callback(x, Simulator)::DECallback`
+
+method can also be coupled into a `CoupledSystem`.
+The `init_callback` function will be run before the simulator is run
+to get the callback.
+"""
+init_callback() = error("Not implemented")
+
+"""
 A system for composing together other systems using the [`couple`](@ref) function.
 
 $(FIELDS)
 
+Things that can be added to a `CoupledSystem`:
+    * `ModelingToolkit.ODESystem`s
+    * [`Operator`](@ref)s
+    * [`DomainInfo`](@ref)s
+    * [Callbacks](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/)
+    * Types `X` that implement a `EarthSciMLBase.get_callback(::X, ::Simulator)::DECallback` method
+    * Other `CoupledSystem`s
+    * Types `X` that implement a `EarthSciMLBase.couple(::X, ::CoupledSystem)` or `EarthSciMLBase.couple(::CoupledSystem, ::X)` method.
+    * `Tuple`s or `AbstractVector`s of any of the things above.
 """
 mutable struct CoupledSystem
     "Model components to be composed together"
@@ -32,10 +52,16 @@ mutable struct CoupledSystem
     A vector of operators to run during simulations.
     """
     ops::Vector{Operator}
+
+    "A vector of callbacks to run during simulations."
+    callbacks::Vector{DECallback}
+
+    "Objects `x` with an `init_callback(x, Simulator)::DECallback` method."
+    init_callbacks::Vector
 end
 
 function Base.show(io::IO, cs::CoupledSystem)
-    print(io, "CoupledSystem containing $(length(cs.systems)) system(s) and $(length(cs.ops)) operator(s).")
+    print(io, "CoupledSystem containing $(length(cs.systems)) system(s), $(length(cs.ops)) operator(s), and $(length(cs.callbacks) + length(cs.init_callbacks)) callback(s).")
 end
 
 """    
@@ -49,7 +75,7 @@ or any type `T` that has a method `couple(::CoupledSystem, ::T)::CoupledSystem` 
 `couple(::T, ::CoupledSystem)::CoupledSystem` defined for it.
 """
 function couple(systems...)::CoupledSystem
-    o = CoupledSystem([], nothing, [], [])
+    o = CoupledSystem([], nothing, [], [], [], [])
     for sys ∈ systems
         if sys isa DomainInfo # Add domain information to the system.
             if o.domaininfo !== nothing
@@ -63,16 +89,25 @@ function couple(systems...)::CoupledSystem
         elseif sys isa CoupledSystem # Add a coupled system to the coupled system.
             o.systems = vcat(o.systems, sys.systems)
             o.pdefunctions = vcat(o.pdefunctions, sys.pdefunctions)
+            o.ops = vcat(o.ops, sys.ops)
+            o.callbacks = vcat(o.callbacks, sys.callbacks)
+            o.init_callbacks = vcat(o.init_callbacks, sys.init_callbacks)
             if sys.domaininfo !== nothing
                 if o.domaininfo !== nothing
                     error("Cannot add two sets of DomainInfo to a system.")
                 end
                 o.domaininfo = sys.domaininfo
             end
+        elseif sys isa DECallback
+            push!(o.callbacks, sys)
+        elseif hasmethod(init_callback, (typeof(sys), Simulator))
+            push!(o.init_callbacks, sys)
         elseif applicable(couple, o, sys)
             o = couple(o, sys)
         elseif applicable(couple, sys, o)
             o = couple(sys, o)
+        elseif (sys isa Tuple) || (sys isa AbstractVector)
+            o = couple(o, sys...)
         else
             error("Cannot couple a $(typeof(sys)).")
         end
