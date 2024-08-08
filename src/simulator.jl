@@ -1,4 +1,4 @@
-export Simulator
+export Simulator, init_u
 
 """
 $(TYPEDSIGNATURES)
@@ -19,8 +19,6 @@ struct Simulator{T,FT1,FT2,TG}
     sys_mtk::ODESystem
     "Information about the spatiotemporal simulation domain"
     domaininfo::DomainInfo{T}
-    "The system state"
-    u::Array{T,4}
     "The system parameter values"
     p::Vector{T}
     "The initial values of the system state variables"
@@ -78,32 +76,28 @@ struct Simulator{T,FT1,FT2,TG}
         grd = grid(sys.domaininfo, Δs)
         TG = typeof(grd)
 
-        u = Array{T}(undef, length(uvals), length(grd[1]), length(grd[2]), length(grd[3]))
-
-        new{T,typeof(obs_fs),typeof(tf_fs),TG}(sys, mtk_sys, sys.domaininfo, u, pvals, uvals, pvidx, grd, tuple(Δs...), obs_fs, obs_fs_idx, tf_fs)
+        new{T,typeof(obs_fs),typeof(tf_fs),TG}(sys, mtk_sys, sys.domaininfo, pvals, uvals, pvidx, grd, tuple(Δs...), obs_fs, obs_fs_idx, tf_fs)
     end
 end
 
 function Base.show(io::IO, s::Simulator)
-    print(io, "Simulator{$(eltype(s.u))} with $(length(equations(s.sys_mtk))) equation(s), $(length(s.sys.ops)) operator(s), and $(length(s.u)) grid cells.")
+    print(io, "Simulator{$(utype(s.domaininfo))} with $(length(equations(s.sys_mtk))) equation(s), $(length(s.sys.ops)) operator(s), and $(*([length(g) for g in s.grid]...)) grid cells.")
 end
 
 "Initialize the state variables."
-function init_u!(s::Simulator)
+function init_u(s::Simulator{T}) where T
+    u = Array{T}(undef, size(s)...)
     # Set initial conditions
-    for i ∈ eachindex(s.u_init)
-        for j ∈ eachindex(s.grid[1])
-            for k ∈ eachindex(s.grid[2])
-                for l ∈ eachindex(s.grid[3])
-                    s.u[i, j, k, l] = s.u_init[i]
-                end
-            end
-        end
+    for i ∈ eachindex(s.u_init), j ∈ eachindex(s.grid[1]), k ∈ eachindex(s.grid[2]), l ∈ eachindex(s.grid[3])
+        u[i, j, k, l] = s.u_init[i]
     end
-    nothing
+    u
 end
 
 function get_callbacks(s::Simulator)
     extra_cb = [init_callback(c, s) for c ∈ s.sys.init_callbacks]
     [s.sys.callbacks; extra_cb]
 end
+
+Base.size(s::Simulator) = (length(states(s.sys_mtk)), [length(g) for g ∈ s.grid]...)
+Base.length(s::Simulator) = *(size(s)...)

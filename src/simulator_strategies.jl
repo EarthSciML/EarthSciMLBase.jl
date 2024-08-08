@@ -5,8 +5,10 @@ SimulatorStrategy is an abstract type that defines the strategy for running a si
 Each SimulatorStrategy should implement a method of:
 
 ```julia
-run!(st::SimulatorStrategy, s::Simulator{T}) where T
+run!(st::SimulatorStrategy, s::Simulator{T}, u0) where T
 ```
+
+where u0 is the initial conditions for the system state.
 """
 abstract type SimulatorStrategy end
 
@@ -22,7 +24,7 @@ end
 "Return a SciMLOperator to apply the MTK system to each column of s.u after reshaping to a matrix."
 function mtk_op(s::Simulator)
     mtkf = ODEFunction(s.sys_mtk)
-    II = CartesianIndices(size(s.u)[2:4])
+    II = CartesianIndices(size(s)[2:4])
     function setp!(p, j) # Set the parameters for the jth grid cell.
         ii = II[j]
         for (jj, g) ∈ enumerate(s.grid) # Set the coordinates of this grid cell.
@@ -45,18 +47,19 @@ function mtk_op(s::Simulator)
         @inbounds @views mapreduce(jcol -> ff(jcol[2], p, t, jcol[1]), hcat, enumerate(eachcol(u)))
     end
     
-    indata = reshape(s.u, size(s.u, 1), :)
+    u = zeros(utype(s.domaininfo), size(s)...)
+    indata = reshape(u, size(s)[1], :)
     fo = FunctionOperator(f, indata, batch=true, p=s.p)
 
     ncols = size(indata, 2)
     # Rehape the input vector to a matrix, then apply the FunctionOperator.
     #op = ScalarOperator(1.0) * TensorProductOperator(I(ncols), fo)
     op = TensorProductOperator(I(ncols), fo)
-    cache_operator(op, s.u[:])
+    cache_operator(op, u[:])
 end
 
 function mtk_func(s::Simulator)
-    b = repeat([length(states(s.sys_mtk))], length(s.u) ÷ size(s.u, 1))
+    b = repeat([length(states(s.sys_mtk))], length(s) ÷ size(s)[1])
     j = BlockBandedMatrix{Float64}(undef, b, b, (0,0)) # Jacobian prototype
     ODEFunction(mtk_op(s); jac_prototype=j)
 end
@@ -87,7 +90,7 @@ $(TYPEDSIGNATURES)
 Run the simulation.
 `kwargs` are passed to the ODEProblem and ODE solver constructors.
 """
-function run!(s::Simulator, st::SimulatorIMEX; kwargs...)
+function run!(s::Simulator, st::SimulatorIMEX, u=init_u(s); kwargs...)
     f1 = mtk_func(s)
 
     @assert length(s.sys.ops) > 0 "Operators must be defined to use the `SimulatorIMEX` strategy. For no operators, try `SimulatorFused` instead."
@@ -96,7 +99,6 @@ function run!(s::Simulator, st::SimulatorIMEX; kwargs...)
     f2 = sum([get_scimlop(op, s) for op ∈ s.sys.ops])
 
     start, finish = time_range(s.domaininfo)
-    prob = SplitODEProblem(f1, f2, s.u, (start, finish), s.p, callback=CallbackSet(get_callbacks(s)), kwargs...)
-    solve(prob, st.alg, save_on=false, save_start=false, save_end=false,
-        initialize_save=false; kwargs...)
+    prob = SplitODEProblem(f1, f2, u, (start, finish), s.p, callback=CallbackSet(get_callbacks(s)), kwargs...)
+    solve(prob, st.alg; kwargs...)
 end

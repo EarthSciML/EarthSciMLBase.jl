@@ -70,8 +70,8 @@ $(TYPEDSIGNATURES)
 Run the simualation.
 `kwargs` are passed to the ODEProblem and ODE solver constructors.
 """
-function run!(s::Simulator{T}, st::SimulatorStrang; kwargs...) where {T}
-    II = CartesianIndices(size(s.u)[2:4])
+function run!(s::Simulator{T}, st::SimulatorStrang, u=init_u(s); kwargs...) where {T}
+    II = CartesianIndices(size(u)[2:4])
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
     start, finish = time_range(s.domaininfo)
     prob = ODEProblem(s.sys_mtk, [], (start, finish), []; kwargs...)
@@ -81,18 +81,15 @@ function run!(s::Simulator{T}, st::SimulatorStrang; kwargs...) where {T}
 
     # Combine the non-stiff operators into a single operator.
     # This works because SciMLOperators can be added together.
-    nonstiff_op = length(s.sys.ops) > 0 ? sum([get_scimlop(op, s) for op ∈ s.sys.ops]) : NullOperator(length(s.u))
-    nonstiff_op = cache_operator(nonstiff_op, s.u)
-
-    init_u!(s)
+    nonstiff_op = length(s.sys.ops) > 0 ? sum([get_scimlop(op, s) for op ∈ s.sys.ops]) : NullOperator(length(u))
+    nonstiff_op = cache_operator(nonstiff_op, u)
 
     cb = CallbackSet(
         stiff_callback(s, st, IIchunks, stiff_integrators),
         get_callbacks(s)...,
     )
-    @views nonstiff_prob = ODEProblem(nonstiff_op, s.u[:], (start, finish), s.p, callback=cb; kwargs...)
-    solve(nonstiff_prob, st.nonstiffalg, save_on=false, save_start=false, save_end=false,
-        initialize_save=false, dt=st.timestep; kwargs...)
+    @views nonstiff_prob = ODEProblem(nonstiff_op, u[:], (start, finish), s.p, callback=cb; kwargs...)
+    solve(nonstiff_prob, st.nonstiffalg, dt=st.timestep; kwargs...)
 end
 
 "A callback to periodically run the stiff solver."

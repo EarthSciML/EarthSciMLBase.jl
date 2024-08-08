@@ -50,9 +50,9 @@ Next, we need to define a method of `EarthSciMLBase.get_scimlop` for our operato
 function EarthSciMLBase.get_scimlop(op::ExampleOp, s::Simulator)
     obs_f = s.obs_fs[s.obs_fs_idx[op.α]]
     function run(du, u, p, t)
-        u = reshape(u, size(s.u)...)
-        du = reshape(du, size(s.u)...)
-        for ix ∈ 1:size(s.u, 1)
+        u = reshape(u, size(s)...)
+        du = reshape(du, size(s)...)
+        for ix ∈ 1:size(u, 1)
             for (i, c1) ∈ enumerate(s.grid[1])
                 for (j, c2) ∈ enumerate(s.grid[2])
                     for (k, c3) ∈ enumerate(s.grid[3])
@@ -70,7 +70,8 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, s::Simulator)
         end
         nothing
     end
-    FunctionOperator(run, s.u[:], p=s.p)
+    indata = zeros(EarthSciMLBase.utype(s.domaininfo), size(s))
+    FunctionOperator(run, indata[:], p=s.p)
 end
 ```
 The function above also doesn't have any physical meaning, but it demonstrates some functionality of the `Simulator` "`s`".
@@ -118,7 +119,6 @@ Next, initialize our operator, giving the the `windspeed` observed variable, and
 op = ExampleOp(sys.windspeed)
 
 csys = couple(sys, op, domain)
-nothing #hide
 ```
 
 ...and then create a Simulator. 
@@ -127,7 +127,6 @@ coordinates, which we set as 0.1π, 0.1π, and 1, respectively.
 
 ```@example sim
 sim = Simulator(csys, [0.1π, 0.1π, 1])
-nothing #hide
 ```
 
 Finally, we can choose a [`EarthSciMLBase.SimulatorStrategy`](@ref) and run the simulation.
@@ -139,14 +138,19 @@ We also choose a time step of 1.0 seconds:
 ```@example sim
 st = SimulatorStrangThreads(Tsit5(), Euler(), 1.0)
 
-@time run!(sim, st)
+sol = run!(sim, st)
+nothing #hide
 ```
 
-After the simulation finishes, we can plot the result at the end of the simulation:
+After the simulation finishes, we can plot the result:
 
 ```@example sim
-plot(
-    heatmap(sim.u[1, :, :, 1]),
-    heatmap(sim.u[1, :, :, 1]),
-)
+anim = @animate for i ∈ 1:length(sol.u)
+    u = reshape(sol.u[i], size(sim)...)
+    plot(
+        heatmap(u[1, :, :, 1]),
+        heatmap(u[1, :, :, 1]),
+    )
+end
+gif(anim, fps = 15)
 ```
