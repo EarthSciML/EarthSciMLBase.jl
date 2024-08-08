@@ -2,7 +2,7 @@ export Operator
 
 """
 Operators are objects that modify the current state of a `Simulator` system.
-Each operator should be define a `run` function with the signature:
+Each operator should be define a function with the signature:
 
     `EarthSciMLBase.get_scimlop(op::Operator, s::Simulator)::AbstractSciMLOperator`
 
