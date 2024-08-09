@@ -23,7 +23,7 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 [compat]
 BlockBandedMatrices = "0.13"
 Catalyst = "13"
-DiffEqCallbacks = "2"
+DiffEqCallbacks = "2, 3"
 DifferentialEquations = "7"
 DocStringExtensions = "0.9"
 DomainSets = "0.5, 0.6"
