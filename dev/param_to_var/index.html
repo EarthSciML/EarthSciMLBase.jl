@@ -3,39 +3,42 @@
 
 @variables t [unit=u&quot;s&quot;, description=&quot;time&quot;]
 
+struct LossCoupler sys end
 function Loss(t)
     @variables A(t)=1 [unit=u&quot;kg&quot;]
     @parameters k=1 [unit=u&quot;s^-1&quot;]
     @parameters T=300 [unit=u&quot;K&quot;]
     @constants T₀=300 [unit=u&quot;K&quot;]
     eq = Differential(t)(A) ~ -k*exp(T/T₀) * A
-    ODESystem([eq]; name=:Docs₊Loss)
+    ODESystem([eq]; name=:Loss, metadata=Dict(:coupletype=&gt;LossCoupler))
 end
 
 Loss(t)</code></pre><p class="math-container">\[ \begin{align}
 \frac{\mathrm{d} A\left( t \right)}{\mathrm{d}t} &amp;=  - k e^{\frac{T}{T_0}} A\left( t \right)
 \end{align}
- \]</p><p>Next, we specify the temperature that varies in time.</p><pre><code class="language-julia hljs">function Temperature(t)
+ \]</p><p>Next, we specify the temperature that varies in time.</p><pre><code class="language-julia hljs">struct TemperatureCoupler sys end
+function Temperature(t)
     @variables T(t)=300 [unit=u&quot;K&quot;]
     @constants Tc=1.0 [unit=u&quot;K/s&quot;]
     @constants tc=1.0 [unit=u&quot;s&quot;]
     eq = Differential(t)(T) ~ sin(t/tc)*Tc
-    ODESystem([eq]; name=:Docs₊Temperature)
+    ODESystem([eq]; name=:Temperature, metadata=Dict(:coupletype=&gt;TemperatureCoupler))
 end
 
 Temperature(t)</code></pre><p class="math-container">\[ \begin{align}
 \frac{\mathrm{d} T\left( t \right)}{\mathrm{d}t} &amp;= Tc \sin\left( \frac{t}{tc} \right)
 \end{align}
- \]</p><p>Now, we specify how to compose the two systems using <code>param_to_var</code>.</p><pre><code class="language-julia hljs">register_coupling(Loss(t), Temperature(t)) do loss, temp
+ \]</p><p>Now, we specify how to compose the two systems using <code>param_to_var</code>.</p><pre><code class="language-julia hljs">function EarthSciMLBase.couple2(loss::LossCoupler, temp::TemperatureCoupler)
+    loss, temp = loss.sys, temp.sys
     loss = param_to_var(loss, :T)
     ConnectorSystem([loss.T ~ temp.T], loss, temp)
-end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">#1 (generic function with 1 method)</code></pre><p>Finally, we create the system components and the composed system.</p><pre><code class="language-julia hljs">l = Loss(t)
+end</code></pre><p>Finally, we create the system components and the composed system.</p><pre><code class="language-julia hljs">l = Loss(t)
 t = Temperature(t)
 variable_loss = couple(l, t)
 
 get_mtk(variable_loss)</code></pre><p class="math-container">\[ \begin{align}
-Docs_{+}Loss_{+}T\left( t \right) &amp;= Docs_{+}Temperature_{+}T\left( t \right) \\
-\frac{\mathrm{d} Docs_{+}Loss_{+}A\left( t \right)}{\mathrm{d}t} &amp;=  - Docs_{+}Loss_{+}k Docs_{+}Loss_{+}A\left( t \right) e^{\frac{Docs_{+}Loss_{+}T\left( t \right)}{Docs_{+}Loss_{+}T_0}} \\
-\frac{\mathrm{d} Docs_{+}Temperature_{+}T\left( t \right)}{\mathrm{d}t} &amp;= Docs_{+}Temperature_{+}Tc \sin\left( \frac{t}{Docs_{+}Temperature_{+}tc} \right)
+Loss_{+}T\left( t \right) &amp;= Temperature_{+}T\left( t \right) \\
+\frac{\mathrm{d} Loss_{+}A\left( t \right)}{\mathrm{d}t} &amp;=  - Loss_{+}k e^{\frac{Loss_{+}T\left( t \right)}{Loss_{+}T_0}} Loss_{+}A\left( t \right) \\
+\frac{\mathrm{d} Temperature_{+}T\left( t \right)}{\mathrm{d}t} &amp;= Temperature_{+}Tc \sin\left( \frac{t}{Temperature_{+}tc} \right)
 \end{align}
- \]</p><p>If we wanted to, we could then run a simulation with the composed system.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../operator_compose/">« Operator Composition</a><a class="docs-footer-nextpage" href="../icbc/">Initial and Boundary Conditions »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.5.0 on <span class="colophon-date" title="Thursday 8 August 2024 16:48">Thursday 8 August 2024</span>. Using Julia version 1.10.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ \]</p><p>If we wanted to, we could then run a simulation with the composed system.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../operator_compose/">« Operator Composition</a><a class="docs-footer-nextpage" href="../icbc/">Initial and Boundary Conditions »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.5.0 on <span class="colophon-date" title="Saturday 10 August 2024 15:09">Saturday 10 August 2024</span>. Using Julia version 1.10.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
