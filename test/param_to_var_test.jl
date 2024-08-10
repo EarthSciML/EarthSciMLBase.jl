@@ -1,11 +1,13 @@
-using EarthSciMLBase, ModelingToolkit, Unitful, Symbolics
+using Test
+using Main.EarthSciMLBase, ModelingToolkit, Unitful, Symbolics
+
 
 @parameters α=1 [unit = u"kg", description="α description"] 
 @parameters β=2 [unit = u"kg*s", description="β description"]
 @variables t [unit=u"s", description="time"]
 @variables x(t) [unit=u"m", description="x description"]
 eq = Differential(t)(x) ~ α * x / β
-@named sys = ODESystem([eq])
+@named sys = ODESystem([eq]; metadata=:metatest)
 
 ii(x, y) = findfirst(isequal(x), y)
 isin(x, y) = ii(x, y) !== nothing
@@ -20,6 +22,7 @@ isin(x, y) = ii(x, y) !== nothing
     var = states(sys2)[ii(β, states(sys2))]
     @test Symbolics.getmetadata(var, ModelingToolkit.VariableUnit) == u"kg*s"
     @test Symbolics.getmetadata(var, ModelingToolkit.VariableDescription) == "β description"
+    @test ModelingToolkit.get_metadata(sys2) == :metatest
 end
 
 @variables α(t) [unit = u"kg*s", description="α description"]

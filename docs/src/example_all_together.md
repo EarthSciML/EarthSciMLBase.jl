@@ -16,11 +16,13 @@ using Plots
 # Create our independent variable `t` and our partially-independent variables `x` and `y`.
 @parameters t x y
 
+struct ExampleSys1Coupler sys end
 function ExampleSys1(t)
     @species c₁(t)=5.0 c₂(t)=5.0
-    ReactionSystem(
+    rs = ReactionSystem(
         [Reaction(2.0, [c₁], [c₂])],
-        t; name=:Docs₊Sys1, combinatoric_ratelaws=false)
+        t; name=:Sys1, combinatoric_ratelaws=false)
+    convert(ODESystem, rs, metadata=Dict(:coupletype=>ExampleSys1Coupler))
 end
 
 ExampleSys1(t)
@@ -29,13 +31,14 @@ ExampleSys1(t)
 Our second example system is a simple ODE system, with the same two variables.
 
 ```@example ex1
+struct ExampleSys2Coupler sys end
 function ExampleSys2(t)
     @variables c₁(t)=5.0 c₂(t)=5.0
     @parameters p₁=1.0 p₂=0.5
     D = Differential(t)
     ODESystem(
         [D(c₁) ~ -p₁, D(c₂) ~ p₂],
-        t; name=:Docs₊Sys2)
+        t; name=:Sys2, metadata=Dict(:coupletype=>ExampleSys2Coupler))
 end
 
 ExampleSys2(t)
@@ -48,7 +51,8 @@ We can do that using the [`operator_compose`](@ref) function
 from this package.
 
 ```@example ex1
-register_coupling(ExampleSys1(t), ExampleSys2(t)) do sys1, sys2
+function EarthSciMLBase.couple2(sys1::ExampleSys1Coupler, sys2::ExampleSys2Coupler)
+    sys1, sys2 = sys1.sys, sys2.sys
     sys1 = convert(ODESystem, sys1)
     operator_compose(sys1, sys2)
 end
@@ -123,8 +127,8 @@ discretization = MOLFiniteDifference([x=>10, y=>10], t, approx_order=2)
 
 # Plot the solution.
 discrete_x, discrete_y, discrete_t = pdesol[x], pdesol[y], pdesol[t]
-@variables Docs₊Sys1₊c₁(..) Docs₊Sys1₊c₂(..)
-solc1, solc2 = pdesol[Docs₊Sys1₊c₁(t, x, y)], pdesol[Docs₊Sys1₊c₂(t, x, y)]
+@variables Sys1₊c₁(..) Sys1₊c₂(..)
+solc1, solc2 = pdesol[Sys1₊c₁(t, x, y)], pdesol[Sys1₊c₂(t, x, y)]
 anim = @animate for k in 1:length(discrete_t)
     p1 = heatmap(solc1[k, 1:end-1, 1:end-1], title="c₁ t=\$(discrete_t[k])", clim=(0,4.0), lab=:none)
     p2 = heatmap(solc2[k, 1:end-1, 1:end-1], title="c₂ t=\$(discrete_t[k])", clim=(0,7.0), lab=:none)

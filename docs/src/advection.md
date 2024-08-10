@@ -17,7 +17,7 @@ function ExampleSys(t)
     @variables y(t)
     @parameters p=2.0
     D = Differential(t)
-    ODESystem([D(y) ~ p], t; name=:Docs₊ExampleSys)
+    ODESystem([D(y) ~ p], t; name=:ExampleSys)
 end
 
 ExampleSys(t)

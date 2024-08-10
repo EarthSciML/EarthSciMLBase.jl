@@ -1,35 +1,49 @@
-using EarthSciMLBase
+using Main.EarthSciMLBase
 using ModelingToolkit
 using Catalyst
 using Test
 
 @parameters t
+
+struct ExampleSysCoupler
+    sys
+end
 function ExampleSys()
     @variables x(t)
     @parameters p
     D = Differential(t)
-    ODESystem([D(x) ~ p], t; name=:sys1)
+    ODESystem([D(x) ~ p], t; name=:sys1,
+        metadata=Dict(:coupletype => ExampleSysCoupler))
 end
 
+struct ExampleSysCopyCoupler
+    sys
+end
 function ExampleSysCopy()
     @variables x(t)
     @parameters p
     D = Differential(t)
-    ODESystem([D(x) ~ p], t; name=:syscopy)
+    ODESystem([D(x) ~ p], t; name=:syscopy,
+        metadata=Dict(:coupletype => ExampleSysCopyCoupler))
 end
 
+struct ExampleSys2Coupler
+    sys
+end
 function ExampleSys2(; name=:sys2)
     @variables y(t)
     @parameters p
     D = Differential(t)
-    ODESystem([D(y) ~ p], t; name=name)
+    ODESystem([D(y) ~ p], t; name=name,
+        metadata=Dict(:coupletype => ExampleSys2Coupler))
 end
 
 @testset "basic" begin
     sys1 = ExampleSys()
     sys2 = ExampleSysCopy()
 
-    register_coupling(sys1, sys2) do s1, s2
+    function EarthSciMLBase.couple2(s1::ExampleSysCoupler, s2::ExampleSysCopyCoupler)
+        s1, s2 = s1.sys, s2.sys
         operator_compose(s1, s2)
     end
 
@@ -39,17 +53,17 @@ end
     op = structural_simplify(ox)
     eq = equations(op)
 
-    b = IOBuffer()
-    show(b, eq)
+    eqstr = replace(string(eq), "Symbolics." => "")
     # The simplified equation should be D(x) = p + sys2_xˍt, where sys2_xˍt is also equal to p.
-    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊syscopy_ddt_xˍt(t)]"
+    @test eqstr == "Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊syscopy_ddt_xˍt(t)]"
 end
 
 @testset "translated" begin
     sys1 = ExampleSys()
     sys2 = ExampleSys2()
 
-    register_coupling(sys1, sys2) do s1, s2
+    function EarthSciMLBase.couple2(s1::ExampleSysCoupler, s2::ExampleSys2Coupler)
+        s1, s2 = s1.sys, s2.sys
         operator_compose(s1, s2, Dict(s1.x => s2.y))
     end
 
@@ -58,23 +72,26 @@ end
     ox = get_mtk(combined)
     op = structural_simplify(ox)
     eq = equations(op)
-
-    b = IOBuffer()
-    show(b, eq)
-    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_ddt_yˍt(t)]"
+    eqstr = replace(string(eq), "Symbolics." => "")
+    @test eqstr == "Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_ddt_yˍt(t)]"
 end
 
 @testset "Non-ODE" begin
+    struct ExampleSysNonODECoupler
+        sys
+    end
     function ExampleSysNonODE()
         @variables y(t)
         @parameters p
-        ODESystem([y ~ p], t; name=:sysnonode)
+        ODESystem([y ~ p], t; name=:sysnonode,
+            metadata=Dict(:coupletype => ExampleSysNonODECoupler))
     end
 
     sys1 = ExampleSys()
     sys2 = ExampleSysNonODE()
 
-    register_coupling(sys1, sys2) do s1, s2
+    function EarthSciMLBase.couple2(s1::ExampleSysCoupler, s2::ExampleSysNonODECoupler)
+        s1, s2 = s1.sys, s2.sys
         operator_compose(s1, s2, Dict(s1.x => s2.y))
     end
 
@@ -91,10 +108,11 @@ end
     sys1 = ExampleSys()
     sys2 = ExampleSys2(; name=:sys22)
 
-    register_coupling(sys1, sys2) do s1, s2
+    function EarthSciMLBase.couple2(s1::ExampleSysCoupler, s2::ExampleSys2Coupler)
+        s1, s2 = s1.sys, s2.sys
         operator_compose(s1, s2, Dict(s1.x => s2.y => 6.0))
     end
-    
+
     combined = couple(sys1, sys2)
 
     ox = get_mtk(combined)
@@ -105,15 +123,22 @@ end
 end
 
 @testset "Reaction-Deposition" begin
+    struct ChemCoupler
+        sys
+    end
     function Chem()
         @species SO2(t) O2(t) SO4(t)
         @parameters α β
         rxns = [
             Reaction(α, [SO2, O2], [SO4], [1, 1], [1])
         ]
-        ReactionSystem(rxns, t; name=:chem)
+        rs = ReactionSystem(rxns, t; name=:chem)
+        convert(ODESystem, rs; metadata=Dict(:coupletype => ChemCoupler))
     end
 
+    struct DepositionCoupler
+        sys
+    end
     function Deposition()
         @variables SO2(t)
         @parameters k = 2
@@ -122,14 +147,15 @@ end
         eqs = [
             D(SO2) ~ -k * SO2
         ]
-        ODESystem(eqs, t, [SO2], [k]; name=:deposition)
+        ODESystem(eqs, t, [SO2], [k]; name=:deposition,
+            metadata=Dict(:coupletype => DepositionCoupler))
     end
 
     rn = Chem()
     dep = Deposition()
 
-    register_coupling(rn, dep) do r, d
-        r = convert(ODESystem, r)
+    function EarthSciMLBase.couple2(rn::ChemCoupler, dep::DepositionCoupler)
+        r, d = rn.sys, dep.sys
         operator_compose(r, d)
     end
 
@@ -137,7 +163,6 @@ end
     cs = structural_simplify(get_mtk(combined))
     eq = equations(cs)
 
-    b = IOBuffer()
-    show(b, eq)
-    @test String(take!(b)) == "Symbolics.Equation[Differential(t)(chem₊SO2(t)) ~ chem₊deposition_ddt_SO2ˍt(t) - chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊O2(t)) ~ -chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊SO4(t)) ~ chem₊α*chem₊O2(t)*chem₊SO2(t)]"
+    eqstr = replace(string(eq), "Symbolics." => "")
+    @test eqstr == "Equation[Differential(t)(chem₊SO2(t)) ~ chem₊deposition_ddt_SO2ˍt(t) - chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊O2(t)) ~ -chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊SO4(t)) ~ chem₊α*chem₊O2(t)*chem₊SO2(t)]"
 end

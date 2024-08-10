@@ -28,22 +28,26 @@ using ModelingToolkit
 
 @parameters t
 
+struct ExampleSysCoupler sys end
 function ExampleSys(t)
     @variables x(t)
     @parameters p
     D = Differential(t)
-    ODESystem([D(x) ~ p], t; name=:Docs₊ExampleSys)
+    ODESystem([D(x) ~ p], t; name=:ExampleSys,
+        metadata=Dict(:coupletype=>ExampleSysCoupler))
 end
 
 ExampleSys(t)
 ```
 
 ```@example operator_compose
+struct ExampleSys2Coupler sys end
 function ExampleSys2(t)
     @variables x(t)
     @parameters p
     D = Differential(t)
-    ODESystem([D(x) ~ 2p], t; name=:Docs₊ExampleSys2)
+    ODESystem([D(x) ~ 2p], t; name=:ExampleSys2,
+        metadata=Dict(:coupletype=>ExampleSys2Coupler))
 end
 
 ExampleSys2(t)
@@ -53,7 +57,8 @@ ExampleSys2(t)
 sys1 = ExampleSys(t)
 sys2 = ExampleSys2(t)
 
-register_coupling(ExampleSys(t), ExampleSys2(t)) do sys1, sys2
+function EarthSciMLBase(sys1::ExampleSysCoupler, sys2::ExampleSys2Coupler)
+    sys1, sys2 = sys1.sys, sys2.sys
     operator_compose(sys1, sys2)
 end
 
@@ -78,17 +83,20 @@ This example demonstrates a case where one variable in the first system is equal
 
 
 ```@example operator_compose
+struct ExampleSys3Coupler sys end
 function ExampleSys3(t)
     @variables y(t)
     @parameters p
     D = Differential(t)
-    ODESystem([D(y) ~ p], t; name=:Docs₊ExampleSys3)
+    ODESystem([D(y) ~ p], t; name=:ExampleSys3,
+        metadata=Dict(:coupletype=>ExampleSys3Coupler))
 end
 
 sys1 = ExampleSys(t)
 sys2 = ExampleSys3(t)
 
-register_coupling(ExampleSys(t), ExampleSys3(t)) do sys1, sys2
+function EarthSciMLBase(sys1::ExampleSysCoupler, sys2::ExampleSys3Coupler)
+    sys1, sys2 = sys1.sys, sys2.sys
     operator_compose(sys1, sys2, Dict(sys1.x => sys2.y))
 end
 
@@ -107,16 +115,19 @@ This could happen if we are extracting emissions from a file, and those emission
 (Note that this case can also be used with the conversion factors shown in the last example.)
 
 ```@example operator_compose
+struct ExampleSysNonODECoupler sys end
 function ExampleSysNonODE(t)
     @variables y(t)
     @parameters p
-    ODESystem([y ~ p], t; name=:Docs₊ExampleSysNonODE)
+    ODESystem([y ~ p], t; name=:ExampleSysNonODE,
+        metadata=Dict(:coupletype=>ExampleSysNonODECoupler))
 end
 
 sys1 = ExampleSys(t)
 sys2 = ExampleSysNonODE(t)
 
-register_coupling(ExampleSys(t), ExampleSysNonODE(t)) do sys1, sys2
+function EarthSciMLBase(sys1::ExampleSysCoupler, sys2::ExampleSysNonODECoupler)
+    sys1, sys2 = sys1.sys, sys2.sys
     operator_compose(sys1, sys2, Dict(sys1.x => sys2.y))
 end
 
@@ -133,16 +144,19 @@ observed(sys_combined)
 Finally, this last example shows the fourth case, where a conversion factor is included in the translation dictionary.
 
 ```@example operator_compose
+struct ExampleSysNonODE2Coupler sys end
 function ExampleSysNonODE2(t)
     @variables y(t)
     @parameters p
-    ODESystem([y ~ p], t; name=:Docs₊ExampleSysNonODE2)
+    ODESystem([y ~ p], t; name=:Docs₊ExampleSysNonODE2,
+        metadata=Dict(:coupletype=>ExampleSysNonODE2Coupler))
 end
 
 sys1 = ExampleSys(t)
 sys2 = ExampleSysNonODE2(t)
 
-register_coupling(ExampleSys(t), ExampleSysNonODE2(t)) do sys1, sys2
+function EarthSciMLBase(sys1::ExampleSysCoupler, sys2::ExampleSysNonODE2Coupler)
+    sys1, sys2 = sys1.sys, sys2.sys
     operator_compose(sys1, sys2, Dict(sys1.x => sys2.y => 6.0))
 end
 

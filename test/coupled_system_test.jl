@@ -1,4 +1,4 @@
-using EarthSciMLBase
+using Main.EarthSciMLBase
 using ModelingToolkit
 using Test
 using Catalyst
@@ -7,41 +7,56 @@ using Unitful
 @parameters t [unit = u"s"]
 
 @testset "Composed System" begin
+    struct SEqnCoupler
+        sys
+    end
     function SEqn()
         @variables S(t), I(t), R(t)
         D = Differential(t)
         N = S + I + R
         @parameters β [unit = u"s^-1"]
-        @named seqn = ODESystem([D(S) ~ -β * S * I / N])
+        @named seqn = ODESystem([D(S) ~ -β * S * I / N],
+            metadata=Dict(:coupletype => SEqnCoupler))
     end
 
+    struct IEqnCoupler
+        sys
+    end
     function IEqn()
         @variables S(t), I(t), R(t)
         D = Differential(t)
         N = S + I + R
         @parameters β [unit = u"s^-1"]
         @parameters γ [unit = u"s^-1"]
-        @named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I])
+        @named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I],
+            metadata=Dict(:coupletype => IEqnCoupler))
     end
 
+    struct REqnCoupler
+        sys
+    end
     function REqn()
         @variables I(t), R(t)
         D = Differential(t)
         @parameters γ [unit = u"s^-1"]
-        @named reqn = ODESystem([D(R) ~ γ * I])
+        @named reqn = ODESystem([D(R) ~ γ * I],
+            metadata=Dict(:coupletype => REqnCoupler))
     end
 
-    register_coupling(SEqn(), IEqn()) do s, i
+    function EarthSciMLBase.couple2(s::SEqnCoupler, i::IEqnCoupler)
+        s, i = s.sys, i.sys
         ConnectorSystem([
                 i.S ~ s.S,
                 s.I ~ i.I], s, i)
     end
 
-    register_coupling(SEqn(), REqn()) do s, r
+    function EarthSciMLBase.couple2(s::SEqnCoupler, r::REqnCoupler)
+        s, r = s.sys, r.sys
         ConnectorSystem([s.R ~ r.R], s, r)
     end
 
-    register_coupling(IEqn(), REqn()) do i, r
+    function EarthSciMLBase.couple2(i::IEqnCoupler, r::REqnCoupler)
+        i, r = i.sys, r.sys
         ConnectorSystem([
                 i.R ~ r.R,
                 r.I ~ i.I], i, r)
@@ -85,39 +100,52 @@ using Unitful
 end
 
 @testset "Composed System Permutations" begin
+    struct ACoupler
+        sys
+    end
     function A()
         @parameters j_unit = 1 [unit = u"s^-1"]
         @variables j_NO2(t) = 0.0149 [unit = u"s^-1"]
         eqs = [
             j_NO2 ~ j_unit
         ]
-        ODESystem(eqs, t, [j_NO2], [j_unit]; name=:a)
+        ODESystem(eqs, t, [j_NO2], [j_unit]; name=:a,
+            metadata=Dict(:coupletype=>ACoupler))
     end
 
+    struct BCoupler
+        sys
+    end
     function B()
         @parameters jNO2 = 0.0149 [unit = u"s^-1"]
         @species NO2(t) = 10.0
         rxs = [
             Reaction(jNO2, [NO2], [], [1], [1])
         ]
-        ReactionSystem(rxs, t; combinatoric_ratelaws=false, name=:b)
+        rs = ReactionSystem(rxs, t; combinatoric_ratelaws=false, name=:b)
+        convert(ODESystem, rs; metadata=Dict(:coupletype=>BCoupler))
     end
 
-    register_coupling(B(), A()) do b, a
-        b = param_to_var(convert(ODESystem, b), :jNO2)
+    function EarthSciMLBase.couple2(b::BCoupler, a::ACoupler)
+        a, b = a.sys, b.sys
+        b = param_to_var(b, :jNO2)
         ConnectorSystem([b.jNO2 ~ a.j_NO2], b, a)
     end
 
+    struct CCoupler
+        sys
+    end
     function C()
         @parameters emis = 1 [unit = u"s^-1"]
         @variables NO2(t) = 0.00014 [unit = u"s^-1"]
         eqs = [NO2 ~ emis]
-        ODESystem(eqs, t, [NO2], [emis]; name=:c)
+        ODESystem(eqs, t, [NO2], [emis]; name=:c, metadata=Dict(:coupletype=>CCoupler))
     end
 
-    register_coupling(B(), C()) do b, c
+    function EarthSciMLBase.couple2(b::BCoupler, c::CCoupler)
+        b, c = b.sys, c.sys
         @constants uu = 1
-        operator_compose(convert(ODESystem, b), c, Dict(
+        operator_compose(b, c, Dict(
             b.NO2 => c.NO2 => uu,
         ))
     end
@@ -130,18 +158,20 @@ end
         couple(A(), C(), B())
         couple(B(), C(), A())
     ]
-    for model ∈ models
-        model_mtk = get_mtk(model)
-        m = structural_simplify(model_mtk)
-        eqstr = string(equations(m))
-        @test occursin("b₊c_NO2(t)", eqstr)
-        @test occursin("b₊jNO2(t)", eqstr)
-        @test occursin("b₊NO2(t)", string(states(m)))
-        obstr = string(observed(m))
-        @test occursin("a₊j_NO2(t) ~ a₊j_unit", obstr)
-        @test occursin("c₊NO2(t) ~ c₊emis", obstr)
-        @test occursin("b₊jNO2(t) ~ a₊j_NO2(t)", obstr)
-        @test occursin("b₊c_NO2(t) ~ c₊NO2(t)", obstr)
+    for (i, model) ∈ enumerate(models)
+        @testset "permutation $i" begin
+            model_mtk = get_mtk(model)
+            m = structural_simplify(model_mtk)
+            eqstr = string(equations(m))
+            @test occursin("b₊c_NO2(t)", eqstr)
+            @test occursin("b₊jNO2(t)", eqstr)
+            @test occursin("b₊NO2(t)", string(states(m)))
+            obstr = string(observed(m))
+            @test occursin("a₊j_NO2(t) ~ a₊j_unit", obstr)
+            @test occursin("c₊NO2(t) ~ c₊emis", obstr)
+            @test occursin("b₊jNO2(t) ~ a₊j_NO2(t)", obstr)
+            @test occursin("b₊c_NO2(t) ~ c₊NO2(t)", obstr)
+        end
     end
 
     @testset "Stable evaluation" begin
