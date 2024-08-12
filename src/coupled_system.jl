@@ -154,7 +154,7 @@ function get_mtk_ode(sys::CoupledSystem; name=:model)::ModelingToolkit.AbstractS
         for (j, b) ∈ enumerate(systems)
             a_t, b_t = get_coupletype(a), get_coupletype(b)
             if hasmethod(couple2, (a_t, b_t))
-                cs = couple2(a_t(deepcopy(a)), b_t(deepcopy(b)))
+                cs = couple2(a_t(a), b_t(b))
                 @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a ConnectorSystem. " *
                                                "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
                 systems[i], a = cs.from, cs.from

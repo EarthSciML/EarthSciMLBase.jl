@@ -41,8 +41,8 @@ The left hand sides of two equations will be considered matching if:
 
 """
 function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESystem, translate=Dict())
-    a_eqs = equations(a)
-    b_eqs = equations(b)
+    a_eqs = deepcopy(equations(a))
+    b_eqs = deepcopy(equations(b))
     iv = ModelingToolkit.get_iv(a) # independent variable
     aname = String(nameof(a))
     bname = String(nameof(b))
@@ -89,17 +89,21 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
                 else # The LHS of this equation is the dependent variable of interest.
                     var1 = Symbol("$(bname)_$(bvar)")
                     term1 = (@variables $var1(iv))[1]
-                    term1 = add_metadata(term1, b_eq.lhs)
+                    term1 = add_metadata(term1, b_eq.lhs * conv)
                     var2 = Symbol("$(aname)₊", var1)
                     term2 = (@variables $var2(iv))[1]
-                    term2 = add_metadata(term2, b_eq.lhs)
+                    term2 = add_metadata(term2, b_eq.lhs * conv)
                     a_eqs[i] = a_eq.lhs ~ a_eq.rhs + term1
                     push!(connections, term2 ~ bdv * conv)
                 end
             end
         end
     end
-    ConnectorSystem(connections, a, b)
+    aa = ODESystem(a_eqs, ModelingToolkit.get_iv(a);
+        name=nameof(a), metadata=ModelingToolkit.get_metadata(a))
+    bb = ODESystem(b_eqs, ModelingToolkit.get_iv(b);
+        name=nameof(b), metadata=ModelingToolkit.get_metadata(b))
+    ConnectorSystem(connections, aa, bb)
 end
 
 # PDESystems don't have a compose function, so we just add the equations together

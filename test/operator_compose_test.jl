@@ -2,6 +2,7 @@ using Main.EarthSciMLBase
 using ModelingToolkit
 using Catalyst
 using Test
+using Unitful
 
 @parameters t
 
@@ -120,6 +121,89 @@ end
     streq = string(equations(op))
     @test occursin("sys1₊p", streq)
     @test occursin("sys1₊sys22_ddt_yˍt(t)", streq)
+end
+
+@testset "Units" begin
+    @parameters t [unit = u"s"]
+    struct U1Coupler
+        sys
+    end
+    function U1()
+        @variables x(t) [unit = u"kg"]
+        @parameters p [unit = u"kg/s"]
+        D = Differential(t)
+        ODESystem([D(x) ~ p], t; name=:sys1,
+            metadata=Dict(:coupletype => U1Coupler))
+    end
+    struct U2Coupler
+        sys
+    end
+    function U2(; name=:sys2)
+        @variables y(t) [unit = u"m"]
+        @parameters p [unit = u"m/s"]
+        D = Differential(t)
+        ODESystem([D(y) ~ p], t; name=name,
+            metadata=Dict(:coupletype => U2Coupler))
+    end
+    
+    
+    sys1 = U1()
+    sys2 = U2()
+
+    function EarthSciMLBase.couple2(s1::U1Coupler, s2::U2Coupler)
+        s1, s2 = s1.sys, s2.sys
+        @constants uconv = 6.0 [unit=u"kg/m"]
+        operator_compose(s1, s2, Dict(s1.x => s2.y => uconv))
+    end
+
+    combined = couple(sys1, sys2)
+
+    ox = get_mtk(combined)
+    op = structural_simplify(ox)
+    streq = string(equations(op))
+    @test occursin("sys1₊p", streq)
+    @test occursin("sys1₊sys2_ddt_yˍt(t)", streq)
+end
+
+@testset "Units Non-ODE" begin
+    @parameters t [unit = u"s"]
+    struct U1Coupler
+        sys
+    end
+    function U1()
+        @variables x(t) [unit = u"kg"]
+        @parameters p [unit = u"kg/s"]
+        D = Differential(t)
+        ODESystem([D(x) ~ p], t; name=:sys1,
+            metadata=Dict(:coupletype => U1Coupler))
+    end
+    struct U2Coupler
+        sys
+    end
+    function U2(; name=:sys2)
+        @variables y(t) [unit = u"m/s"]
+        @parameters p [unit = u"m/s"]
+        ODESystem([y ~ p], t; name=name,
+            metadata=Dict(:coupletype => U2Coupler))
+    end
+    
+    
+    sys1 = U1()
+    sys2 = U2()
+
+    function EarthSciMLBase.couple2(s1::U1Coupler, s2::U2Coupler)
+        s1, s2 = s1.sys, s2.sys
+        @constants uconv = 6.0 [unit=u"kg/m"]
+        operator_compose(s1, s2, Dict(s1.x => s2.y => uconv))
+    end
+
+    combined = couple(sys1, sys2)
+
+    ox = get_mtk(combined)
+    op = structural_simplify(ox)
+    streq = string(equations(op))
+    @test occursin("sys1₊p", streq)
+    @test occursin("sys1₊sys2_y(t)", streq)
 end
 
 @testset "Reaction-Deposition" begin
