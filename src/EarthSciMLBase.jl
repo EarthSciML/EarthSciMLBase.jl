@@ -8,6 +8,7 @@ using SciMLBase: DECallback, CallbackSet
 using DiffEqCallbacks
 using LinearAlgebra, BlockBandedMatrices
 using ProgressLogging
+using Graphs
 
 include("add_dims.jl")
 include("domaininfo.jl")
