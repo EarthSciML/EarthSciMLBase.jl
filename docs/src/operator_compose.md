@@ -57,7 +57,7 @@ ExampleSys2(t)
 sys1 = ExampleSys(t)
 sys2 = ExampleSys2(t)
 
-function EarthSciMLBase(sys1::ExampleSysCoupler, sys2::ExampleSys2Coupler)
+function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSys2Coupler)
     sys1, sys2 = sys1.sys, sys2.sys
     operator_compose(sys1, sys2)
 end
@@ -95,7 +95,7 @@ end
 sys1 = ExampleSys(t)
 sys2 = ExampleSys3(t)
 
-function EarthSciMLBase(sys1::ExampleSysCoupler, sys2::ExampleSys3Coupler)
+function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSys3Coupler)
     sys1, sys2 = sys1.sys, sys2.sys
     operator_compose(sys1, sys2, Dict(sys1.x => sys2.y))
 end
@@ -126,7 +126,7 @@ end
 sys1 = ExampleSys(t)
 sys2 = ExampleSysNonODE(t)
 
-function EarthSciMLBase(sys1::ExampleSysCoupler, sys2::ExampleSysNonODECoupler)
+function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODECoupler)
     sys1, sys2 = sys1.sys, sys2.sys
     operator_compose(sys1, sys2, Dict(sys1.x => sys2.y))
 end
@@ -155,7 +155,7 @@ end
 sys1 = ExampleSys(t)
 sys2 = ExampleSysNonODE2(t)
 
-function EarthSciMLBase(sys1::ExampleSysCoupler, sys2::ExampleSysNonODE2Coupler)
+function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODE2Coupler)
     sys1, sys2 = sys1.sys, sys2.sys
     operator_compose(sys1, sys2, Dict(sys1.x => sys2.y => 6.0))
 end
