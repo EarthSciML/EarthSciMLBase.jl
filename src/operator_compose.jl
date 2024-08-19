@@ -63,6 +63,7 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
         end
         for (j, b_eq) ∈ enumerate(b_eqs)
             if isequal(bdv, add_scope(b, get_dv(b_eq.lhs, iv), iv))
+                bdv = add_scope(b, get_dv(b_eq.lhs, iv), iv) # Make sure the units are correct.
                 # The dependent variable of the LHS of this equation matches the dependent 
                 # variable of interest,
                 # so create a new variable to represent the dependent variable

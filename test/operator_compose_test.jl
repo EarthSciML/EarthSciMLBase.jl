@@ -206,6 +206,42 @@ end
     @test occursin("sys1₊sys2_y(t)", streq)
 end
 
+@testset "Units 2" begin
+    @parameters t [unit = u"s"]
+    struct U1Coupler
+        sys
+    end
+    function U1()
+        @variables x(t) [unit = u"kg*m^-3"]
+        D = Differential(t)
+        ODESystem([D(x) ~ 0], t; name=:sys1,
+            metadata=Dict(:coupletype => U1Coupler))
+    end
+    struct U2Coupler
+        sys
+    end
+    function U2(; name=:sys2)
+        @variables x(t) [unit = u"kg*m^-3/s"]
+        @parameters p [unit = u"kg*m^-3/s"]
+        ODESystem([x ~ p], t; name=name,
+            metadata=Dict(:coupletype => U2Coupler))
+    end
+    
+    
+    sys1 = U1()
+    sys2 = U2()
+
+    function EarthSciMLBase.couple2(s1::U1Coupler, s2::U2Coupler)
+        s1, s2 = s1.sys, s2.sys
+        operator_compose(s1, s2)
+    end
+
+    combined = couple(sys1, sys2)
+
+    sys = get_mtk(combined)
+    @test occursin("sys1₊sys2_x(t)", string(equations(sys)))
+end
+
 @testset "Reaction-Deposition" begin
     struct ChemCoupler
         sys
