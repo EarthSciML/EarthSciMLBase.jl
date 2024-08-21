@@ -59,7 +59,7 @@ function mtk_op(s::Simulator)
 end
 
 function mtk_func(s::Simulator)
-    b = repeat([length(states(s.sys_mtk))], length(s) ÷ size(s)[1])
+    b = repeat([length(unknowns(s.sys_mtk))], length(s) ÷ size(s)[1])
     j = BlockBandedMatrix{Float64}(undef, b, b, (0,0)) # Jacobian prototype
     ODEFunction(mtk_op(s); jac_prototype=j)
 end

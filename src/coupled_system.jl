@@ -93,14 +93,14 @@ function couple(systems...)::CoupledSystem
             end
         elseif sys isa DECallback
             push!(o.callbacks, sys)
+        elseif (sys isa Tuple) || (sys isa AbstractVector)
+            o = couple(o, sys...)
         elseif hasmethod(init_callback, (typeof(sys), Simulator))
             push!(o.init_callbacks, sys)
         elseif applicable(couple, o, sys)
             o = couple(o, sys)
         elseif applicable(couple, sys, o)
             o = couple(sys, o)
-        elseif (sys isa Tuple) || (sys isa AbstractVector)
-            o = couple(o, sys...)
         else
             error("Cannot couple a $(typeof(sys)).")
         end
