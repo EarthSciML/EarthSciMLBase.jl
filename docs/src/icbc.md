@@ -8,20 +8,22 @@ To demonstrate how to do this, we will use the following simple system of ordina
 ```@example icbc
 using EarthSciMLBase
 using ModelingToolkit
+using ModelingToolkit: t_nounits, D_nounits
+t = t_nounits
+D = D_nounits
 
-@parameters x y t
+@parameters x y
 
-function ExampleSys(t)
+function ExampleSys()
     @variables u(t) v(t)
-    Dt = Differential(t)
     eqs = [
-        Dt(u) ~ √abs(v),
-        Dt(v) ~ √abs(u),
+        D(u) ~ √abs(v),
+        D(v) ~ √abs(u),
     ]
     ODESystem(eqs, t; name=:Docs₊Example)
 end
 
-ExampleSys(t)
+ExampleSys()
 ```
 Next, we specify our initial and boundary conditions using the [`DomainInfo`](@ref) type.
 We initialize [`DomainInfo`](@ref) with sets of initial and boundary conditions.
@@ -49,9 +51,9 @@ It is also possible to use periodic boundary conditions with [`periodicBC`](@ref
 Finally, we combine our initial and boundary conditions with our system of equations using the [`couple`](@ref) function.
 
 ```@example icbc
-model = couple(ExampleSys(t), icbc)
+model = couple(ExampleSys(), icbc)
 
-eq_sys = get_mtk(model)
+eq_sys = convert(PDESystem, model)
 ```
 
 We can also look at the expanded boundary conditions of the resulting equation system:

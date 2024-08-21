@@ -96,14 +96,22 @@ function ConstantWind(t, vals...; name=:ConstantWind)
     for (i, val) ∈ enumerate(vals)
         sym = Symbol("v_$i")
         desc = "Constant wind speed in the $(i)$(counts[i]) direction."
-        uv = only(@variables $sym(t), [unit=val/ustrip(val), description=desc])
+        if val isa DynamicQuantities.AbstractQuantity
+            uv = only(@variables $sym(t), [unit=val/ustrip(val), description=desc])
+        else
+            uv = only(@variables $sym(t), [description=desc])
+        end
         push!(uvars, uv)
     end
     uvals = []
     for i in eachindex(vals)
         v = ustrip(vals[i])
         sym = Symbol("c_v$i")
-        c = only(@constants $sym = v [unit = vals[i]/v])
+        if vals[i] isa DynamicQuantities.AbstractQuantity
+            c = only(@constants $sym = v [unit = vals[i]/v])
+        else
+            c = only(@constants $sym = v)
+        end
         push!(uvals, c)
     end
     eqs = convert(Vector{Equation}, Symbolics.scalarize(uvars .~ uvals))

@@ -25,37 +25,37 @@ The example below shows that when we `operator_compose` two systems together tha
 ```@example operator_compose
 using EarthSciMLBase
 using ModelingToolkit
+using ModelingToolkit: t_nounits, D_nounits
+t = t_nounits
+D = D_nounits
 
-@parameters t
 
 struct ExampleSysCoupler sys end
-function ExampleSys(t)
+function ExampleSys()
     @variables x(t)
     @parameters p
-    D = Differential(t)
     ODESystem([D(x) ~ p], t; name=:ExampleSys,
         metadata=Dict(:coupletype=>ExampleSysCoupler))
 end
 
-ExampleSys(t)
+ExampleSys()
 ```
 
 ```@example operator_compose
 struct ExampleSys2Coupler sys end
-function ExampleSys2(t)
+function ExampleSys2()
     @variables x(t)
     @parameters p
-    D = Differential(t)
     ODESystem([D(x) ~ 2p], t; name=:ExampleSys2,
         metadata=Dict(:coupletype=>ExampleSys2Coupler))
 end
 
-ExampleSys2(t)
+ExampleSys2()
 ```
 
 ```@example operator_compose
-sys1 = ExampleSys(t)
-sys2 = ExampleSys2(t)
+sys1 = ExampleSys()
+sys2 = ExampleSys2()
 
 function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSys2Coupler)
     sys1, sys2 = sys1.sys, sys2.sys
@@ -64,7 +64,7 @@ end
 
 combined = couple(sys1, sys2)
 
-combined_mtk = get_mtk(combined)
+combined_mtk = convert(ODESystem, combined)
 ```
 
 The simplified equation should be D(x) = p + sys2_xˍt:
@@ -84,16 +84,15 @@ This example demonstrates a case where one variable in the first system is equal
 
 ```@example operator_compose
 struct ExampleSys3Coupler sys end
-function ExampleSys3(t)
+function ExampleSys3()
     @variables y(t)
     @parameters p
-    D = Differential(t)
     ODESystem([D(y) ~ p], t; name=:ExampleSys3,
         metadata=Dict(:coupletype=>ExampleSys3Coupler))
 end
 
-sys1 = ExampleSys(t)
-sys2 = ExampleSys3(t)
+sys1 = ExampleSys()
+sys2 = ExampleSys3()
 
 function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSys3Coupler)
     sys1, sys2 = sys1.sys, sys2.sys
@@ -101,7 +100,7 @@ function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSys3Couple
 end
 
 combined = couple(sys1, sys2)
-combined_simplified = structural_simplify(get_mtk(combined))
+combined_simplified = structural_simplify(convert(ODESystem, combined))
 ```
 
 ```@example operator_compose
@@ -116,15 +115,15 @@ This could happen if we are extracting emissions from a file, and those emission
 
 ```@example operator_compose
 struct ExampleSysNonODECoupler sys end
-function ExampleSysNonODE(t)
+function ExampleSysNonODE()
     @variables y(t)
     @parameters p
     ODESystem([y ~ p], t; name=:ExampleSysNonODE,
         metadata=Dict(:coupletype=>ExampleSysNonODECoupler))
 end
 
-sys1 = ExampleSys(t)
-sys2 = ExampleSysNonODE(t)
+sys1 = ExampleSys()
+sys2 = ExampleSysNonODE()
 
 function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODECoupler)
     sys1, sys2 = sys1.sys, sys2.sys
@@ -132,7 +131,7 @@ function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODEC
 end
 
 combined = couple(sys1, sys2)
-sys_combined = structural_simplify(get_mtk(combined))
+sys_combined = structural_simplify(convert(ODESystem, combined))
 ```
 
 ```@example operator_compose
@@ -145,15 +144,15 @@ Finally, this last example shows the fourth case, where a conversion factor is i
 
 ```@example operator_compose
 struct ExampleSysNonODE2Coupler sys end
-function ExampleSysNonODE2(t)
+function ExampleSysNonODE2()
     @variables y(t)
     @parameters p
     ODESystem([y ~ p], t; name=:Docs₊ExampleSysNonODE2,
         metadata=Dict(:coupletype=>ExampleSysNonODE2Coupler))
 end
 
-sys1 = ExampleSys(t)
-sys2 = ExampleSysNonODE2(t)
+sys1 = ExampleSys()
+sys2 = ExampleSysNonODE2()
 
 function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODE2Coupler)
     sys1, sys2 = sys1.sys, sys2.sys
@@ -161,7 +160,7 @@ function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODE2
 end
 
 combined = couple(sys1, sys2)
-combined_simplified = structural_simplify(get_mtk(combined))
+combined_simplified = structural_simplify(convert(ODESystem, combined))
 ```
 
 ```@example operator_compose

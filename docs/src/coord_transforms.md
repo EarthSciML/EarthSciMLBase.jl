@@ -8,12 +8,12 @@ To handle this, the [`DomainInfo`](@ref) type can be used to define coordinate s
 ```@example trans
 using EarthSciMLBase
 using ModelingToolkit
+using ModelingToolkit: t, D
 using DomainSets
-using Unitful
+using DynamicQuantities
 
 @parameters lon [unit = u"rad"]
 @parameters lat [unit = u"rad"]
-@parameters t [unit = u"s"]
 @parameters lev
 
 partialderivatives_δxyδlonlat([lev, lon, lat])
@@ -57,7 +57,7 @@ This returns a list of functions, one corresponding to each coordinate in our do
 Then we can calculate the symbolic partial derivative of a variable by just calling each function:
 
 ```@example trans
-@variables u
+@variables u(t)
 
 [δs[i](u) for i ∈ eachindex(δs)]
 ```
