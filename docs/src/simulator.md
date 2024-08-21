@@ -15,16 +15,18 @@ As an example, let's first define a system of ODEs:
 using EarthSciMLBase
 using ModelingToolkit, DomainSets, DifferentialEquations
 using SciMLOperators, Plots
+using ModelingToolkit: t_nounits, D_nounits
+t = t_nounits
+D = D_nounits
 
-@parameters y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0
+@parameters y lon = 0.0 lat = 0.0 lev = 1.0 α = 10.0
 @constants p = 1.0
 @variables(
     u(t) = 1.0, v(t) = 1.0, x(t) = 1.0, y(t) = 1.0, windspeed(t) = 1.0
 )
-Dt = Differential(t)
 
-eqs = [Dt(u) ~ -α * √abs(v) + lon,
-    Dt(v) ~ -α * √abs(u) + lat + 1e-14 * lev,
+eqs = [D(u) ~ -α * √abs(v) + lon,
+    D(v) ~ -α * √abs(u) + lat + 1e-14 * lev,
     windspeed ~ lat + lon + lev,
 ]
 sys = ODESystem(eqs, t; name=:Docs₊sys)

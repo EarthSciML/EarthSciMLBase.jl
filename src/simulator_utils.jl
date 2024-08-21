@@ -31,7 +31,7 @@ function observed_expression(eqs, x)
     for v ∈ Symbolics.get_variables(expr)
         v_expr = observed_expression(eqs, v)
         if !isnothing(v_expr)
-            expr = Symbolics.replace(expr, v => v_expr)
+            expr = Symbolics.substitute(expr, v => v_expr)
         end
     end
     # Do it again to catch extra variables TODO(CT): Theoretically this could recurse forever; when to stop?
@@ -145,14 +145,14 @@ function get_needed_vars(sys::ODESystem)
         ModelingToolkit.asgraph(sys), 
         ModelingToolkit.variable_dependencies(sys),
     )
-    g = SimpleDiGraph(length(states(sys)))
+    g = SimpleDiGraph(length(unknowns(sys)))
     for (i, es) in enumerate(varvardeps.badjlist)
         for e in es
             add_edge!(g, i, e)
         end
     end
-    allst = states(sys)
-    simpst = states(structural_simplify(sys))
+    allst = unknowns(sys)
+    simpst = unknowns(structural_simplify(sys))
     stidx = [only(findall(isequal(s), allst)) for s in simpst]
     collect(Graphs.DFSIterator(g, stidx))    
 end
@@ -166,8 +166,8 @@ remove computationally intensive equations that are not used in the final model.
 """
 function prune_observed(sys::ODESystem)
     needed_var_idxs = get_needed_vars(sys)
-    needed_vars = Symbolics.tosymbol.(states(sys)[needed_var_idxs]; escape=true)
-    sys = structural_simplify(sys)
+    needed_vars = Symbolics.tosymbol.(unknowns(sys)[needed_var_idxs]; escape=true)
+    sys = structural_simplify(sys, split=false)
     deleteindex = []
     for (i, eq) ∈ enumerate(observed(sys))
         lhsvars = Symbolics.tosymbol.(Symbolics.get_variables(eq.lhs); escape=true)
@@ -180,6 +180,6 @@ function prune_observed(sys::ODESystem)
     obs = observed(sys)
     deleteat!(obs, deleteindex)
     sys2 = structural_simplify(ODESystem([equations(sys); obs], 
-        ModelingToolkit.get_iv(sys), name=nameof(sys)))
+        ModelingToolkit.get_iv(sys), name=nameof(sys)), split=false)
     return sys2, observed(sys)
 end

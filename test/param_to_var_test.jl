@@ -1,13 +1,12 @@
 using Test
-using Main.EarthSciMLBase, ModelingToolkit, Unitful, Symbolics
-
+using Main.EarthSciMLBase, ModelingToolkit, DynamicQuantities, Symbolics
+using ModelingToolkit: t, D
 
 @parameters α=1 [unit = u"kg", description="α description"] 
 @parameters β=2 [unit = u"kg*s", description="β description"]
-@variables t [unit=u"s", description="time"]
 @variables x(t) [unit=u"m", description="x description"]
-eq = Differential(t)(x) ~ α * x / β
-@named sys = ODESystem([eq]; metadata=:metatest)
+eq = D(x) ~ α * x / β
+@named sys = ODESystem([eq], t; metadata=:metatest)
 
 ii(x, y) = findfirst(isequal(x), y)
 isin(x, y) = ii(x, y) !== nothing
@@ -16,10 +15,10 @@ isin(x, y) = ii(x, y) !== nothing
 
 @testset "Single substitution" begin
     sys2 = param_to_var(sys, :β)
-    @test isin(β, states(sys2)) == true
+    @test isin(β, unknowns(sys2)) == true
     @test isin(β, parameters(sys2)) == false
     @test isin(β, Symbolics.get_variables(equations(sys2)[1])) == true
-    var = states(sys2)[ii(β, states(sys2))]
+    var = unknowns(sys2)[ii(β, unknowns(sys2))]
     @test Symbolics.getmetadata(var, ModelingToolkit.VariableUnit) == u"kg*s"
     @test Symbolics.getmetadata(var, ModelingToolkit.VariableDescription) == "β description"
     @test ModelingToolkit.get_metadata(sys2) == :metatest
@@ -29,10 +28,10 @@ end
 
 @testset "Multiple substitutions" begin
     sys3 = param_to_var(sys, :β, :α)
-    @test isin(β, states(sys3)) == true
+    @test isin(β, unknowns(sys3)) == true
     @test isin(β, parameters(sys3)) == false
     @test isin(β, Symbolics.get_variables(equations(sys3)[1])) == true
-    @test isin(α, states(sys3)) == true
+    @test isin(α, unknowns(sys3)) == true
     @test isin(α, parameters(sys3)) == false
     @test isin(α, Symbolics.get_variables(equations(sys3)[1])) == true
 end
