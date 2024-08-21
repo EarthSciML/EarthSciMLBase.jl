@@ -46,7 +46,7 @@ end
 
     composed_sys = couple(examplesys, domain, Advection())
 
-    sys_mtk = get_mtk(composed_sys)
+    sys_mtk = convert(PDESystem, composed_sys)
 
     have_eq = equations(sys_mtk)
     @assert length(have_eq) == 1

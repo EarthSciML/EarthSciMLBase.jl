@@ -62,7 +62,7 @@ using DynamicQuantities
 
     sir = couple(seqn, ieqn, reqn)
 
-    sirfinal = get_mtk(sir)
+    sirfinal = convert(PDESystem, sir)
 
     sir_simple = structural_simplify(sirfinal)
 
@@ -156,7 +156,7 @@ end
     ]
     for (i, model) ∈ enumerate(models)
         @testset "permutation $i" begin
-            model_mtk = get_mtk(model)
+            model_mtk = convert(ODESystem, model)
             m = structural_simplify(model_mtk)
             eqstr = string(equations(m))
             @test occursin("b₊c_NO2(t)", eqstr)
@@ -172,9 +172,9 @@ end
 
     @testset "Stable evaluation" begin
         sys = couple(A(), B(), C())
-        eqs1 = string(equations(get_mtk(sys)))
+        eqs1 = string(equations(convert(ODESystem, sys)))
         @test occursin("b₊c_NO2(t)", eqs1)
-        eqs2 = string(equations(get_mtk(sys)))
+        eqs2 = string(equations(convert(ODESystem, sys)))
         @test occursin("b₊c_NO2(t)", eqs2)
         @test eqs1 == eqs2
     end

@@ -36,7 +36,7 @@ using Dates, DomainSets
 
     combined = couple(sys1, sys2)
     combined_pde = couple(combined, domain, ConstantWind(t, 1.0u"m/s"), Advection())
-    combined_mtk = get_mtk(combined_pde)
+    combined_mtk = convert(PDESystem, combined_pde)
 
     @test length(equations(combined_mtk)) == 6
     @test length(combined_mtk.ivs) == 2
@@ -81,7 +81,7 @@ end
     )
 
     composed_sys = couple(examplesys, domain, Advection(), wind)
-    pde_sys = get_mtk(composed_sys)
+    pde_sys = convert(PDESystem, composed_sys)
 
     eqs = equations(pde_sys)
 

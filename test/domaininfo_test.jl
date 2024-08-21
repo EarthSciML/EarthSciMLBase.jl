@@ -189,7 +189,7 @@ end
     end
 
     sys_domain = couple(ExSys(), domain)
-    sys_mtk = get_mtk(sys_domain)
+    sys_mtk = convert(PDESystem, sys_domain)
 
     discretization = MOLFiniteDifference([x => 10], t, approx_order=2)
     prob = discretize(sys_mtk, discretization)

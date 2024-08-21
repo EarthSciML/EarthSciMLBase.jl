@@ -38,7 +38,7 @@ struct Simulator{T,FT1,FT2,TG}
 
     function Simulator(sys::CoupledSystem, Δs::AbstractVector{T2}) where {T2<:AbstractFloat}
         @assert !isnothing(sys.domaininfo) "The system must have a domain specified; see documentation for EarthSciMLBase.DomainInfo."
-        mtk_sys = get_mtk_ode(sys; name=:model)
+        mtk_sys = convert(ODESystem, sys; name=:model)
 
         mtk_sys, obs_eqs = prune_observed(mtk_sys) # Remove unused variables to speed up computation.
 

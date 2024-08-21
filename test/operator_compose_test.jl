@@ -46,7 +46,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    ox = get_mtk(combined)
+    ox = convert(ODESystem, combined)
     op = structural_simplify(ox)
     eq = equations(op)
 
@@ -66,7 +66,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    ox = get_mtk(combined)
+    ox = convert(ODESystem, combined)
     op = structural_simplify(ox)
     eq = equations(op)
     eqstr = replace(string(eq), "Symbolics." => "")
@@ -93,7 +93,7 @@ end
     end
 
     combined = couple(sys1, sys2)
-    combined_mtk = get_mtk(combined)
+    combined_mtk = convert(ODESystem, combined)
     sys_combined = structural_simplify(combined_mtk)
 
     streq = string(equations(sys_combined))
@@ -112,7 +112,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    ox = get_mtk(combined)
+    ox = convert(ODESystem, combined)
     op = structural_simplify(ox)
     streq = string(equations(op))
     @test occursin("sys1₊p", streq)
@@ -151,7 +151,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    ox = get_mtk(combined)
+    ox = convert(ODESystem, combined)
     op = structural_simplify(ox)
     streq = string(equations(op))
     @test occursin("sys1₊p", streq)
@@ -190,7 +190,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    ox = get_mtk(combined)
+    ox = convert(ODESystem, combined)
     op = structural_simplify(ox)
     streq = string(equations(op))
     @test occursin("sys1₊p", streq)
@@ -227,7 +227,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    sys = get_mtk(combined)
+    sys = convert(ODESystem, combined)
     @test occursin("sys1₊sys2_x(t)", string(equations(sys)))
 end
 
@@ -268,7 +268,7 @@ end
     end
 
     combined = couple(rn, dep)
-    cs = structural_simplify(get_mtk(combined))
+    cs = structural_simplify(convert(ODESystem, combined))
     eq = equations(cs)
 
     eqstr = replace(string(eq), "Symbolics." => "")
