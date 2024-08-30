@@ -10,36 +10,35 @@ As an example, we will create a loss equation that depends on the temperature, s
 So first, let's specify the original system with constant temperature.
 
 ```@example param_to_var
-using ModelingToolkit, EarthSciMLBase, Unitful
-
-@variables t [unit=u"s", description="time"]
+using ModelingToolkit, EarthSciMLBase, DynamicQuantities
+using ModelingToolkit: t, D
 
 struct LossCoupler sys end
-function Loss(t)
+function Loss()
     @variables A(t)=1 [unit=u"kg"]
     @parameters k=1 [unit=u"s^-1"]
     @parameters T=300 [unit=u"K"]
     @constants T₀=300 [unit=u"K"]
-    eq = Differential(t)(A) ~ -k*exp(T/T₀) * A
-    ODESystem([eq]; name=:Loss, metadata=Dict(:coupletype=>LossCoupler))
+    eq = D(A) ~ -k*exp(T/T₀) * A
+    ODESystem([eq], t; name=:Loss, metadata=Dict(:coupletype=>LossCoupler))
 end
 
-Loss(t)
+Loss()
 ```
 
 Next, we specify the temperature that varies in time.
 
 ```@example param_to_var
 struct TemperatureCoupler sys end
-function Temperature(t)
+function Temperature()
     @variables T(t)=300 [unit=u"K"]
     @constants Tc=1.0 [unit=u"K/s"]
     @constants tc=1.0 [unit=u"s"]
-    eq = Differential(t)(T) ~ sin(t/tc)*Tc
-    ODESystem([eq]; name=:Temperature, metadata=Dict(:coupletype=>TemperatureCoupler))
+    eq = D(T) ~ sin(t/tc)*Tc
+    ODESystem([eq], t; name=:Temperature, metadata=Dict(:coupletype=>TemperatureCoupler))
 end
 
-Temperature(t)
+Temperature()
 ```
 
 Now, we specify how to compose the two systems using `param_to_var`.
@@ -54,11 +53,11 @@ end
 
 Finally, we create the system components and the composed system.
 ```@example param_to_var
-l = Loss(t)
-t = Temperature(t)
-variable_loss = couple(l, t)
+l = Loss()
+temp = Temperature()
+variable_loss = couple(l, temp)
 
-get_mtk(variable_loss)
+convert(ODESystem, variable_loss)
 ```
 
 If we wanted to, we could then run a simulation with the composed system.

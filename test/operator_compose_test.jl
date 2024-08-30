@@ -1,18 +1,17 @@
 using Main.EarthSciMLBase
 using ModelingToolkit
+using ModelingToolkit: t, D, t_nounits, D_nounits
 using Catalyst
 using Test
-
-@parameters t
+using DynamicQuantities
 
 struct ExampleSysCoupler
     sys
 end
 function ExampleSys()
-    @variables x(t)
+    @variables x(t_nounits)
     @parameters p
-    D = Differential(t)
-    ODESystem([D(x) ~ p], t; name=:sys1,
+    ODESystem([D_nounits(x) ~ p], t; name=:sys1,
         metadata=Dict(:coupletype => ExampleSysCoupler))
 end
 
@@ -20,10 +19,9 @@ struct ExampleSysCopyCoupler
     sys
 end
 function ExampleSysCopy()
-    @variables x(t)
+    @variables x(t_nounits)
     @parameters p
-    D = Differential(t)
-    ODESystem([D(x) ~ p], t; name=:syscopy,
+    ODESystem([D_nounits(x) ~ p], t; name=:syscopy,
         metadata=Dict(:coupletype => ExampleSysCopyCoupler))
 end
 
@@ -31,10 +29,9 @@ struct ExampleSys2Coupler
     sys
 end
 function ExampleSys2(; name=:sys2)
-    @variables y(t)
+    @variables y(t_nounits)
     @parameters p
-    D = Differential(t)
-    ODESystem([D(y) ~ p], t; name=name,
+    ODESystem([D_nounits(y) ~ p], t; name=name,
         metadata=Dict(:coupletype => ExampleSys2Coupler))
 end
 
@@ -49,7 +46,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    ox = get_mtk(combined)
+    ox = convert(ODESystem, combined)
     op = structural_simplify(ox)
     eq = equations(op)
 
@@ -69,7 +66,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    ox = get_mtk(combined)
+    ox = convert(ODESystem, combined)
     op = structural_simplify(ox)
     eq = equations(op)
     eqstr = replace(string(eq), "Symbolics." => "")
@@ -81,7 +78,7 @@ end
         sys
     end
     function ExampleSysNonODE()
-        @variables y(t)
+        @variables y(t_nounits)
         @parameters p
         ODESystem([y ~ p], t; name=:sysnonode,
             metadata=Dict(:coupletype => ExampleSysNonODECoupler))
@@ -96,7 +93,7 @@ end
     end
 
     combined = couple(sys1, sys2)
-    combined_mtk = get_mtk(combined)
+    combined_mtk = convert(ODESystem, combined)
     sys_combined = structural_simplify(combined_mtk)
 
     streq = string(equations(sys_combined))
@@ -115,11 +112,123 @@ end
 
     combined = couple(sys1, sys2)
 
-    ox = get_mtk(combined)
+    ox = convert(ODESystem, combined)
     op = structural_simplify(ox)
     streq = string(equations(op))
     @test occursin("sys1₊p", streq)
     @test occursin("sys1₊sys22_ddt_yˍt(t)", streq)
+end
+
+@testset "Units" begin
+    struct U1Coupler
+        sys
+    end
+    function U1()
+        @variables x(t) [unit = u"kg"]
+        @parameters p [unit = u"kg/s"]
+        ODESystem([D(x) ~ p], t; name=:sys1,
+            metadata=Dict(:coupletype => U1Coupler))
+    end
+    struct U2Coupler
+        sys
+    end
+    function U2(; name=:sys2)
+        @variables y(t) [unit = u"m"]
+        @parameters p [unit = u"m/s"]
+        D = Differential(t)
+        ODESystem([D(y) ~ p], t; name=name,
+            metadata=Dict(:coupletype => U2Coupler))
+    end
+    
+    sys1 = U1()
+    sys2 = U2()
+
+    function EarthSciMLBase.couple2(s1::U1Coupler, s2::U2Coupler)
+        s1, s2 = s1.sys, s2.sys
+        @constants uconv = 6.0 [unit=u"kg/m"]
+        operator_compose(s1, s2, Dict(s1.x => s2.y => uconv))
+    end
+
+    combined = couple(sys1, sys2)
+
+    ox = convert(ODESystem, combined)
+    op = structural_simplify(ox)
+    streq = string(equations(op))
+    @test occursin("sys1₊p", streq)
+    @test occursin("sys1₊sys2_ddt_yˍt(t)", streq)
+end
+
+@testset "Units Non-ODE" begin
+    struct U1Coupler
+        sys
+    end
+    function U1()
+        @variables x(t) [unit = u"kg"]
+        @parameters p [unit = u"kg/s"]
+        ODESystem([D(x) ~ p], t; name=:sys1,
+            metadata=Dict(:coupletype => U1Coupler))
+    end
+    struct U2Coupler
+        sys
+    end
+    function U2(; name=:sys2)
+        @variables y(t) [unit = u"m/s"]
+        @parameters p [unit = u"m/s"]
+        ODESystem([y ~ p], t; name=name,
+            metadata=Dict(:coupletype => U2Coupler))
+    end
+    
+    
+    sys1 = U1()
+    sys2 = U2()
+
+    function EarthSciMLBase.couple2(s1::U1Coupler, s2::U2Coupler)
+        s1, s2 = s1.sys, s2.sys
+        @constants uconv = 6.0 [unit=u"kg/m"]
+        operator_compose(s1, s2, Dict(s1.x => s2.y => uconv))
+    end
+
+    combined = couple(sys1, sys2)
+
+    ox = convert(ODESystem, combined)
+    op = structural_simplify(ox)
+    streq = string(equations(op))
+    @test occursin("sys1₊p", streq)
+    @test occursin("sys1₊sys2_y(t)", streq)
+end
+
+@testset "Units 2" begin
+    struct U1Coupler
+        sys
+    end
+    function U1()
+        @variables x(t) [unit = u"kg*m^-3"]
+        ODESystem([D(x) ~ 0], t; name=:sys1,
+            metadata=Dict(:coupletype => U1Coupler))
+    end
+    struct U2Coupler
+        sys
+    end
+    function U2(; name=:sys2)
+        @variables x(t) [unit = u"kg*m^-3/s"]
+        @parameters p [unit = u"kg*m^-3/s"]
+        ODESystem([x ~ p], t; name=name,
+            metadata=Dict(:coupletype => U2Coupler))
+    end
+    
+    
+    sys1 = U1()
+    sys2 = U2()
+
+    function EarthSciMLBase.couple2(s1::U1Coupler, s2::U2Coupler)
+        s1, s2 = s1.sys, s2.sys
+        operator_compose(s1, s2)
+    end
+
+    combined = couple(sys1, sys2)
+
+    sys = convert(ODESystem, combined)
+    @test occursin("sys1₊sys2_x(t)", string(equations(sys)))
 end
 
 @testset "Reaction-Deposition" begin
@@ -127,12 +236,12 @@ end
         sys
     end
     function Chem()
-        @species SO2(t) O2(t) SO4(t)
+        @species SO2(t_nounits) O2(t_nounits) SO4(t_nounits)
         @parameters α β
         rxns = [
             Reaction(α, [SO2, O2], [SO4], [1, 1], [1])
         ]
-        rs = ReactionSystem(rxns, t; name=:chem)
+        rs = complete(ReactionSystem(rxns, t_nounits; name=:chem))
         convert(ODESystem, rs; metadata=Dict(:coupletype => ChemCoupler))
     end
 
@@ -140,14 +249,13 @@ end
         sys
     end
     function Deposition()
-        @variables SO2(t)
+        @variables SO2(t_nounits)
         @parameters k = 2
-        D = Differential(t)
 
         eqs = [
-            D(SO2) ~ -k * SO2
+            D_nounits(SO2) ~ -k * SO2
         ]
-        ODESystem(eqs, t, [SO2], [k]; name=:deposition,
+        ODESystem(eqs, t_nounits, [SO2], [k]; name=:deposition,
             metadata=Dict(:coupletype => DepositionCoupler))
     end
 
@@ -160,7 +268,7 @@ end
     end
 
     combined = couple(rn, dep)
-    cs = structural_simplify(get_mtk(combined))
+    cs = structural_simplify(convert(ODESystem, combined))
     eq = equations(cs)
 
     eqstr = replace(string(eq), "Symbolics." => "")

@@ -1,5 +1,4 @@
-export CoupledSystem, ConnectorSystem, get_mtk, couple
-
+export CoupledSystem, ConnectorSystem, couple
 
 """
 Types that implement an:
@@ -93,14 +92,14 @@ function couple(systems...)::CoupledSystem
             end
         elseif sys isa DECallback
             push!(o.callbacks, sys)
+        elseif (sys isa Tuple) || (sys isa AbstractVector)
+            o = couple(o, sys...)
         elseif hasmethod(init_callback, (typeof(sys), Simulator))
             push!(o.init_callbacks, sys)
         elseif applicable(couple, o, sys)
             o = couple(o, sys)
         elseif applicable(couple, sys, o)
             o = couple(sys, o)
-        elseif (sys isa Tuple) || (sys isa AbstractVector)
-            o = couple(o, sys...)
         else
             error("Cannot couple a $(typeof(sys)).")
         end
@@ -143,18 +142,18 @@ struct ACoupler sys end
 couple2() = nothing
 
 """
-    $(SIGNATURES)
+$(SIGNATURES)
 
-Get the ODE ModelingToolkit representation of a [`CoupledSystem`](@ref).
+Get the ODE ModelingToolkit ODESystem representation of a [`CoupledSystem`](@ref).
 """
-function get_mtk_ode(sys::CoupledSystem; name=:model)::ModelingToolkit.AbstractSystem
+function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, kwargs...)::ModelingToolkit.AbstractSystem
     connector_eqs = []
     systems = copy(sys.systems)
     for (i, a) ∈ enumerate(systems)
         for (j, b) ∈ enumerate(systems)
             a_t, b_t = get_coupletype(a), get_coupletype(b)
             if hasmethod(couple2, (a_t, b_t))
-                cs = couple2(a_t(deepcopy(a)), b_t(deepcopy(b)))
+                cs = couple2(a_t(a), b_t(b))
                 @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a ConnectorSystem. " *
                                                "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
                 systems[i], a = cs.from, cs.from
@@ -167,7 +166,7 @@ function get_mtk_ode(sys::CoupledSystem; name=:model)::ModelingToolkit.AbstractS
         end
     end
     iv = ModelingToolkit.get_iv(first(systems))
-    connectors = ODESystem(connector_eqs, iv; name=name)
+    connectors = ODESystem(connector_eqs, iv; name=name, kwargs...)
 
     # Compose everything together.
     compose(connectors, systems...)
@@ -176,10 +175,10 @@ end
 """
     $(SIGNATURES)
 
-Get the ModelingToolkit representation of a [`CoupledSystem`](@ref).
+Get the ModelingToolkit PDESystem representation of a [`CoupledSystem`](@ref).
 """
-function get_mtk(sys::CoupledSystem; name=:model)::ModelingToolkit.AbstractSystem
-    o = get_mtk_ode(sys; name)
+function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name=:model, kwargs...)::ModelingToolkit.AbstractSystem
+    o = convert(ODESystem, sys; name, kwargs...)
 
     if sys.domaininfo !== nothing
         o += sys.domaininfo

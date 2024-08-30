@@ -1,19 +1,18 @@
 using Main.EarthSciMLBase
 using Test
 using DomainSets, MethodOfLines, ModelingToolkit, DifferentialEquations
+using ModelingToolkit: t, D
 import SciMLBase
-using Unitful
+using DynamicQuantities
 using Dates, DomainSets
 
 @testset "Composed System" begin
-    @parameters t [unit = u"s"]
     @parameters x [unit = u"m"]
 
     struct ExampleSysCoupler2 sys end
     function ExampleSys()
         @variables y(t) [unit = u"kg"]
         @parameters p = 1.0 [unit = u"kg/s"]
-        D = Differential(t)
         ODESystem([D(y) ~ p], t; name=:examplesys,
             metadata=Dict(:coupletype=>ExampleSysCoupler2))
     end
@@ -22,7 +21,6 @@ using Dates, DomainSets
     function ExampleSysCopy()
         @variables y(t) [unit = u"kg"]
         @parameters p = 1.0 [unit = u"kg/s"]
-        D = Differential(t)
         ODESystem([D(y) ~ p], t; name=:examplesyscopy,
             metadata=Dict(:coupletype=>ExampleSysCopyCoupler2))
     end
@@ -38,7 +36,7 @@ using Dates, DomainSets
 
     combined = couple(sys1, sys2)
     combined_pde = couple(combined, domain, ConstantWind(t, 1.0u"m/s"), Advection())
-    combined_mtk = get_mtk(combined_pde)
+    combined_mtk = convert(PDESystem, combined_pde)
 
     @test length(equations(combined_mtk)) == 6
     @test length(combined_mtk.ivs) == 2
@@ -60,7 +58,6 @@ using Dates, DomainSets
 end
 
 @testset "Coordinate transform" begin
-    @parameters t [unit = u"s"]
     @parameters lon [unit = u"rad"]
     @parameters lat [unit = u"rad"]
     @constants c_unit = 180 / π / 6 [unit = u"rad" description = "constant to make units cancel out"]
@@ -84,7 +81,7 @@ end
     )
 
     composed_sys = couple(examplesys, domain, Advection(), wind)
-    pde_sys = get_mtk(composed_sys)
+    pde_sys = convert(PDESystem, composed_sys)
 
     eqs = equations(pde_sys)
 

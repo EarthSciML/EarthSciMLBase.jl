@@ -7,10 +7,11 @@ To demonstrate how this works, below we define three model components, `Photolys
 
 ```@example composition
 using ModelingToolkit, Catalyst, EarthSciMLBase
-@parameters t
+using ModelingToolkit: t_nounits
+t = t_nounits
 
 struct PhotolysisCoupler sys end
-function Photolysis(t; name=:Photolysis)
+function Photolysis(; name=:Photolysis)
     @variables j_NO2(t)
     eqs = [
         j_NO2 ~ max(sin(t/86400),0)
@@ -19,7 +20,7 @@ function Photolysis(t; name=:Photolysis)
         metadata=Dict(:coupletype=>PhotolysisCoupler))
 end
 
-Photolysis(t)
+Photolysis()
 ```
 
 You can see that the system defined above is mostly a standard ModelingToolkit ODE system,
@@ -44,18 +45,18 @@ Let's follow the same process for some additional components:
 
 ```@example composition
 struct ChemistryCoupler sys end
-function Chemistry(t; name=:Chemistry)
+function Chemistry(; name=:Chemistry)
     @parameters jNO2
     @species NO2(t)
     rxs = [
-        Reaction(jNO2, [NO2], [], [1], [1])
+        Reaction(jNO2, [NO2], [], [1], [])
     ]
     rsys = ReactionSystem(rxs, t, [NO2], [jNO2]; 
         combinatoric_ratelaws=false, name=name)
-    convert(ODESystem, rsys, metadata=Dict(:coupletype=>ChemistryCoupler))
+    convert(ODESystem, complete(rsys), metadata=Dict(:coupletype=>ChemistryCoupler))
 end
 
-Chemistry(t)
+Chemistry()
 ```
 
 For our chemistry component above, because it's is originally a ReactionSystem instead of an
@@ -63,7 +64,7 @@ ODESystem, we convert it to an ODESystem before adding the metadata.
 
 ```@example composition
 struct EmissionsCoupler sys end
-function Emissions(t; name=:Emissions)
+function Emissions(; name=:Emissions)
     @parameters emis = 1
     @variables NO2(t)
     eqs = [NO2 ~ emis]
@@ -71,7 +72,7 @@ function Emissions(t; name=:Emissions)
         metadata=Dict(:coupletype=>EmissionsCoupler))
 end
 
-Emissions(t)
+Emissions()
 ```
 
 Now, we need to define ways to couple the model components together.
@@ -104,11 +105,11 @@ end
 nothing # hide
 ```
 
-Finally, we can compose the model components together to create our complete model. To do so, we just initialize each model component and add the components together using the [`couple`](@ref) function. We can use the [`get_mtk`](@ref) function to convert the composed model to a [ModelingToolkit](https://mtk.sciml.ai/dev/) model so we can see what the combined equations look like.
+Finally, we can compose the model components together to create our complete model. To do so, we just initialize each model component and add the components together using the [`couple`](@ref) function. We can use the `convert` function to convert the composed model to a [ModelingToolkit](https://mtk.sciml.ai/dev/) `ODESystem` so we can see what the combined equations look like.
 
 ```@example composition
-model = couple(Photolysis(t), Chemistry(t), Emissions(t))
-get_mtk(model)
+model = couple(Photolysis(), Chemistry(), Emissions())
+convert(ODESystem, model)
 ```
 
 Finally, we can use the [`graph`](@ref) function to visualize the model components and their connections.
