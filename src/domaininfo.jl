@@ -310,22 +310,14 @@ domains(di::DomainInfo) = unique(vcat(domains.(di.icbc)...))
 
 function Base.:(+)(sys::ModelingToolkit.ODESystem, di::DomainInfo)::ModelingToolkit.PDESystem
     dimensions = dims(di)
-    allvars = states(sys)
-    statevars = states(structural_simplify(sys))
-    # TODO(CT): Update once the MTK get_defaults function can get defaults for composed system.
-    # defaults = ModelingToolkit.get_defaults(sys)
-    toreplace, replacements = replacement_params(parameters(sys), pvars(di))
-    defaults = get_defaults_all(sys)
-    ps = [k => v for (k,v) in defaults] # Add parameters and their default values
-    parameterstokeep = setdiff(parameters(sys), toreplace)
-    if !all([p ∈ keys(defaults) for p in parameterstokeep])
-        error("All parameters in the system of equations must have default values, but these ones don't: $(setdiff(parameterstokeep, keys(defaults))).")
-    end
-    ivs = dims(di) # New dimensions are the independent variables.
+    allvars = unknowns(sys)
+    statevars = unknowns(structural_simplify(sys))
+    ps = parameters(sys)
+    toreplace, replacements = replacement_params(ps, pvars(di))
     dvs = add_dims(allvars, dimensions) # Add new dimensions to dependent variables.
     eqs = substitute(equations(sys), Dict(zip(toreplace, replacements))) # Substitute local coordinate parameters for global ones.
     eqs = Vector{Equation}([add_dims(eq, allvars, dimensions) for eq in eqs]) # Add new dimensions to equations.
-    PDESystem(eqs, icbc(di, statevars), domains(di), ivs, dvs, ps, name=nameof(sys), defaults=defaults)
+    PDESystem(eqs, icbc(di, statevars), domains(di), dimensions, dvs, ps, name=nameof(sys))
 end
 
 Base.:(+)(di::DomainInfo, sys::ModelingToolkit.ODESystem)::ModelingToolkit.PDESystem = sys + di
@@ -335,27 +327,6 @@ function Base.:(+)(sys::Catalyst.ReactionSystem, di::DomainInfo)::ModelingToolki
 end
 
 Base.:(+)(di::DomainInfo, sys::Catalyst.ReactionSystem)::ModelingToolkit.PDESystem = sys + di
-
-# TODO(CT): Delete once the MTK get_defaults function can get defaults for composed system.
-get_defaults_all(sys) = get_defaults_all(sys, "", 0)
-function get_defaults_all(sys, prefix, depth)
-    dmap = Dict()
-    if depth == 1
-        prefix = Symbol("$(nameof(sys))₊")
-    elseif depth > 1
-        prefix = Symbol("$(prefix)₊$(nameof(sys))₊")
-    end
-    for (p, d) ∈ ModelingToolkit.get_defaults(sys)
-        n = Symbol("$(prefix)$(p)")
-        pp = (@parameters $(n))[1]
-        pp = add_metadata(pp, p)
-        dmap[pp] = d
-    end
-    for child ∈ ModelingToolkit.get_systems(sys)
-        dmap = merge(dmap, get_defaults_all(child, prefix, depth+1))
-    end
-    dmap
-end
 
 # Match local parameters with the global parameters of the same name.
 function replacement_params(localcoords::AbstractVector, globalcoords::AbstractVector)

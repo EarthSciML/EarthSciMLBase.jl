@@ -2,12 +2,13 @@ module EarthSciMLBase
 using ModelingToolkit, Symbolics, Catalyst
 using Graphs, MetaGraphsNext
 using DocStringExtensions
-using Unitful
+using DynamicQuantities
 using OrdinaryDiffEq, DomainSets
 using SciMLBase: DECallback, CallbackSet
 using DiffEqCallbacks
 using LinearAlgebra, BlockBandedMatrices
 using ProgressLogging
+using Graphs
 
 include("add_dims.jl")
 include("domaininfo.jl")

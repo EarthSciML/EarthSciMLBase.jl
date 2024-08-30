@@ -11,34 +11,39 @@ Our first example system is a simple reaction system:
 ```@example ex1
 using EarthSciMLBase
 using ModelingToolkit, Catalyst, DomainSets, MethodOfLines, DifferentialEquations
+using ModelingToolkit: t_nounits, D_nounits
+t = t_nounits
+D = D_nounits
 using Plots
 
 # Create our independent variable `t` and our partially-independent variables `x` and `y`.
-@parameters t x y
+@parameters x y
 
-function ExampleSys1(t)
+struct ExampleSys1Coupler sys end
+function ExampleSys1()
     @species c₁(t)=5.0 c₂(t)=5.0
-    ReactionSystem(
+    rs = ReactionSystem(
         [Reaction(2.0, [c₁], [c₂])],
-        t; name=:Docs₊Sys1, combinatoric_ratelaws=false)
+        t; name=:Sys1, combinatoric_ratelaws=false)
+    convert(ODESystem, complete(rs), metadata=Dict(:coupletype=>ExampleSys1Coupler))
 end
 
-ExampleSys1(t)
+ExampleSys1()
 ```
 
 Our second example system is a simple ODE system, with the same two variables.
 
 ```@example ex1
-function ExampleSys2(t)
+struct ExampleSys2Coupler sys end
+function ExampleSys2()
     @variables c₁(t)=5.0 c₂(t)=5.0
     @parameters p₁=1.0 p₂=0.5
-    D = Differential(t)
     ODESystem(
         [D(c₁) ~ -p₁, D(c₂) ~ p₂],
-        t; name=:Docs₊Sys2)
+        t; name=:Sys2, metadata=Dict(:coupletype=>ExampleSys2Coupler))
 end
 
-ExampleSys2(t)
+ExampleSys2()
 ```
 
 Now, we specify what should happen when we couple the two systems together.
@@ -48,7 +53,8 @@ We can do that using the [`operator_compose`](@ref) function
 from this package.
 
 ```@example ex1
-register_coupling(ExampleSys1(t), ExampleSys2(t)) do sys1, sys2
+function EarthSciMLBase.couple2(sys1::ExampleSys1Coupler, sys2::ExampleSys2Coupler)
+    sys1, sys2 = sys1.sys, sys2.sys
     sys1 = convert(ODESystem, sys1)
     operator_compose(sys1, sys2)
 end
@@ -58,18 +64,18 @@ nothing # hide
 Once we specify all of the above, it is simple to create our two individual systems and then couple them together. 
 
 ```@example ex1
-sys1 = ExampleSys1(t)
-sys2 = ExampleSys2(t)
+sys1 = ExampleSys1()
+sys2 = ExampleSys2()
 sys = couple(sys1, sys2)
 
-get_mtk(sys)
+convert(ODESystem, sys)
 ```
 
 At this point we have an ODE system that is composed of two other ODE systems.
 We can inspect its observed variables using the `observed` function.
 
 ```@example ex1
-simplified_sys = structural_simplify(get_mtk(sys))
+simplified_sys = structural_simplify(convert(ODESystem, sys))
 ```
 
 ```@example ex1
@@ -101,7 +107,7 @@ domain = DomainInfo(
 
 sys_pde = couple(sys, domain, ConstantWind(t, 1.0, 1.0), Advection())
 
-sys_pde_mtk = get_mtk(sys_pde)
+sys_pde_mtk = convert(PDESystem, sys_pde)
 ```
 
 Now we can inspect this new system that we've created:
@@ -123,8 +129,8 @@ discretization = MOLFiniteDifference([x=>10, y=>10], t, approx_order=2)
 
 # Plot the solution.
 discrete_x, discrete_y, discrete_t = pdesol[x], pdesol[y], pdesol[t]
-@variables Docs₊Sys1₊c₁(..) Docs₊Sys1₊c₂(..)
-solc1, solc2 = pdesol[Docs₊Sys1₊c₁(t, x, y)], pdesol[Docs₊Sys1₊c₂(t, x, y)]
+@variables Sys1₊c₁(..) Sys1₊c₂(..)
+solc1, solc2 = pdesol[Sys1₊c₁(t, x, y)], pdesol[Sys1₊c₂(t, x, y)]
 anim = @animate for k in 1:length(discrete_t)
     p1 = heatmap(solc1[k, 1:end-1, 1:end-1], title="c₁ t=\$(discrete_t[k])", clim=(0,4.0), lab=:none)
     p2 = heatmap(solc2[k, 1:end-1, 1:end-1], title="c₂ t=\$(discrete_t[k])", clim=(0,7.0), lab=:none)

@@ -11,15 +11,14 @@ function graph(sys::CoupledSystem)::MetaGraphsNext.MetaGraph
         edge_data_type=ConnectorSystem,
     )
     systems = copy(sys.systems)
-    hashes = systemhash.(systems)
     for sys ∈ systems # First do nodes
         g[nameof(sys)] = sys
     end
-    for (i, a) ∈ enumerate(systems) # Now do edges.
-        for (j, b) ∈ enumerate(systems)
-            if (hashes[i], hashes[j]) ∈ keys(coupling_registry)
-                f = coupling_registry[hashes[i], hashes[j]]
-                cs = f(deepcopy(a), deepcopy(b))
+    for a ∈ systems # Now do edges.
+        for b ∈ systems
+            a_t, b_t = get_coupletype(a), get_coupletype(b)
+            if hasmethod(couple2, (a_t, b_t))
+                cs = couple2(a_t(deepcopy(a)), b_t(deepcopy(b)))
                 g[nameof(a), nameof(b)] = cs
             end
         end

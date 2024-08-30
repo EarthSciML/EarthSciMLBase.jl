@@ -38,11 +38,11 @@ struct Simulator{T,FT1,FT2,TG}
 
     function Simulator(sys::CoupledSystem, Δs::AbstractVector{T2}) where {T2<:AbstractFloat}
         @assert !isnothing(sys.domaininfo) "The system must have a domain specified; see documentation for EarthSciMLBase.DomainInfo."
-        mtk_sys = structural_simplify(get_mtk_ode(sys; name=:model))
+        mtk_sys = convert(ODESystem, sys; name=:model)
 
         mtk_sys, obs_eqs = prune_observed(mtk_sys) # Remove unused variables to speed up computation.
 
-        vars = states(mtk_sys)
+        vars = unknowns(mtk_sys)
         ps = parameters(mtk_sys)
 
         dflts = ModelingToolkit.get_defaults(mtk_sys)
@@ -52,7 +52,8 @@ struct Simulator{T,FT1,FT2,TG}
         iv = ivar(sys.domaininfo)
         pv = pvars(sys.domaininfo)
         @assert length(pv) == 3 "Currently only 3D simulations are supported."
-        pvidx = [findfirst(v -> split(String(Symbol(v)), "₊")[end] == String(Symbol(p)), parameters(mtk_sys)) for p ∈ pv]
+        pvidx = [only(findall(v -> split(String(Symbol(v)), "₊")[end] == String(Symbol(p)), parameters(mtk_sys))) for p ∈ pv]
+        @assert !any(isnothing.(pvidx)) error("Partial independent variables $(pv[isnothing.(pvidx)]) not found in $(parameters(mtk_sys)).")
 
         # Get functions for observed variables
         obs_fs_idx = Dict()
@@ -85,7 +86,7 @@ function Base.show(io::IO, s::Simulator)
 end
 
 "Initialize the state variables."
-function init_u(s::Simulator{T}) where T
+function init_u(s::Simulator{T}) where {T}
     u = Array{T}(undef, size(s)...)
     # Set initial conditions
     for i ∈ eachindex(s.u_init), j ∈ eachindex(s.grid[1]), k ∈ eachindex(s.grid[2]), l ∈ eachindex(s.grid[3])
@@ -99,5 +100,5 @@ function get_callbacks(s::Simulator)
     [s.sys.callbacks; extra_cb]
 end
 
-Base.size(s::Simulator) = (length(states(s.sys_mtk)), [length(g) for g ∈ s.grid]...)
+Base.size(s::Simulator) = (length(unknowns(s.sys_mtk)), [length(g) for g ∈ s.grid]...)
 Base.length(s::Simulator) = *(size(s)...)

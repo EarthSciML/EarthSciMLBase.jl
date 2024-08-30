@@ -1,24 +1,25 @@
-using EarthSciMLBase: steplength, observed_expression, observed_function, utype, grid, timesteps, icbc
-using EarthSciMLBase
+using Main.EarthSciMLBase: steplength, observed_expression, observed_function, utype, grid, timesteps, icbc
+using Main.EarthSciMLBase
 using Test
 using ModelingToolkit, DomainSets
+using ModelingToolkit: t_nounits; t=t_nounits
+using ModelingToolkit: D_nounits; D=D_nounits
 
 @test steplength([0, 0.1, 0.2]) == 0.1
 
-@parameters x y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0
+@parameters x y lon = 0.0 lat = 0.0 lev = 1.0 α = 10.0
 @constants p = 1.0
 @variables(
     u(t) = 1.0, v(t) = 1.0, x(t) = 1.0, y(t) = 1.0
 )
-Dt = Differential(t)
 
-eqs = [Dt(u) ~ -α * √abs(v) + lon,
-    Dt(v) ~ -α * √abs(u) + lat,
+eqs = [D(u) ~ -α * √abs(v) + lon,
+    D(v) ~ -α * √abs(u) + lat,
     x ~ 2α + p + y,
     y ~ 4α - 2p
 ]
 
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 sys = structural_simplify(sys)
 
 xx = observed_expression(observed(sys), x)
@@ -55,7 +56,7 @@ domain = DomainInfo(
     partialderivatives_δxyδlonlat,
     constIC(16.0, indepdomain), constBC(16.0, partialdomains...))
 
-vars = states(sys)
+vars = unknowns(sys)
 
 bcs = icbc(domain, vars)
 

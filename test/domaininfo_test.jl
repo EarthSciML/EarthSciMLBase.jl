@@ -1,21 +1,23 @@
-using EarthSciMLBase
+using Test
+using Main.EarthSciMLBase
 using ModelingToolkit, Catalyst
 using MethodOfLines, DifferentialEquations, DomainSets
+using ModelingToolkit: t_nounits; t=t_nounits
+using ModelingToolkit: D_nounits; D=D_nounits
 import SciMLBase
 
-@parameters x y t α = 10.0
+@parameters x y α = 10.0
 @variables u(t) v(t)
-Dt = Differential(t)
 
 x_min = y_min = t_min = 0.0
 x_max = y_max = 1.0
 t_max = 11.5
 
-eqs = [Dt(u) ~ -α * √abs(v),
-    Dt(v) ~ -α * √abs(u),
+eqs = [D(u) ~ -α * √abs(v),
+    D(v) ~ -α * √abs(u),
 ]
 
-@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t)
 
 indepdomain = t ∈ Interval(t_min, t_max)
 
@@ -46,16 +48,15 @@ end
 
 @testset "pde" begin
     pde_want = let
-        @parameters x y t α = 10.0
+        @parameters x y α = 10.0
         @variables u(..) v(..)
-        Dt = Differential(t)
 
         x_min = y_min = t_min = 0.0
         x_max = y_max = 1.0
         t_max = 11.5
 
-        eqs = [Dt(u(t, x, y)) ~ -α * √abs(v(t, x, y)),
-            Dt(v(t, x, y)) ~ -α * √abs(u(t, x, y)),
+        eqs = [D(u(t, x, y)) ~ -α * √abs(v(t, x, y)),
+            D(v(t, x, y)) ~ -α * √abs(u(t, x, y)),
         ]
 
         domains = [
@@ -78,7 +79,7 @@ end
             v(t, x, y_max) ~ 16.0,
         ]
 
-        @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, x, y)], [α => 10.0])
+        @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, x, y)], [α])
     end
 
     pde_result = sys + domain
@@ -93,12 +94,11 @@ end
 
 @testset "ReactionSystem" begin
     pde_want = let
-        @parameters x y t
+        @parameters x y
         @variables m₁(..) m₂(..)
-        Dt = Differential(t)
         eqs = [
-            Dt(m₁(t, x, y)) ~ -10.0 * m₁(t, x, y),
-            Dt(m₂(t, x, y)) ~ 10.0 * m₁(t, x, y),
+            D(m₁(t, x, y)) ~ -10.0 * m₁(t, x, y),
+            D(m₂(t, x, y)) ~ 10.0 * m₁(t, x, y),
         ]
 
         bcs = [
@@ -173,7 +173,7 @@ end
 end
 
 @testset "Simplify" begin
-    @parameters x, t
+    @parameters x
     domain = DomainInfo(
         constIC(16.0, t ∈ Interval(0, 1)),
         periodicBC(x ∈ Interval(0, 1)),
@@ -189,7 +189,7 @@ end
     end
 
     sys_domain = couple(ExSys(), domain)
-    sys_mtk = get_mtk(sys_domain)
+    sys_mtk = convert(PDESystem, sys_domain)
 
     discretization = MOLFiniteDifference([x => 10], t, approx_order=2)
     prob = discretize(sys_mtk, discretization)

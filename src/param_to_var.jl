@@ -35,6 +35,8 @@ function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
         replace[param] = newvar
     end
 
-    SymbolicUtils.substitute(sys, replace)
+    newsys = SymbolicUtils.substitute(sys, replace)
+    ODESystem(equations(newsys), ModelingToolkit.get_iv(newsys); 
+        name=nameof(newsys), metadata=ModelingToolkit.get_metadata(sys))
 end
 

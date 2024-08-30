@@ -25,41 +25,46 @@ The example below shows that when we `operator_compose` two systems together tha
 ```@example operator_compose
 using EarthSciMLBase
 using ModelingToolkit
+using ModelingToolkit: t_nounits, D_nounits
+t = t_nounits
+D = D_nounits
 
-@parameters t
 
-function ExampleSys(t)
+struct ExampleSysCoupler sys end
+function ExampleSys()
     @variables x(t)
     @parameters p
-    D = Differential(t)
-    ODESystem([D(x) ~ p], t; name=:Docs₊ExampleSys)
+    ODESystem([D(x) ~ p], t; name=:ExampleSys,
+        metadata=Dict(:coupletype=>ExampleSysCoupler))
 end
 
-ExampleSys(t)
+ExampleSys()
 ```
 
 ```@example operator_compose
-function ExampleSys2(t)
+struct ExampleSys2Coupler sys end
+function ExampleSys2()
     @variables x(t)
     @parameters p
-    D = Differential(t)
-    ODESystem([D(x) ~ 2p], t; name=:Docs₊ExampleSys2)
+    ODESystem([D(x) ~ 2p], t; name=:ExampleSys2,
+        metadata=Dict(:coupletype=>ExampleSys2Coupler))
 end
 
-ExampleSys2(t)
+ExampleSys2()
 ```
 
 ```@example operator_compose
-sys1 = ExampleSys(t)
-sys2 = ExampleSys2(t)
+sys1 = ExampleSys()
+sys2 = ExampleSys2()
 
-register_coupling(ExampleSys(t), ExampleSys2(t)) do sys1, sys2
+function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSys2Coupler)
+    sys1, sys2 = sys1.sys, sys2.sys
     operator_compose(sys1, sys2)
 end
 
 combined = couple(sys1, sys2)
 
-combined_mtk = get_mtk(combined)
+combined_mtk = convert(ODESystem, combined)
 ```
 
 The simplified equation should be D(x) = p + sys2_xˍt:
@@ -78,22 +83,24 @@ This example demonstrates a case where one variable in the first system is equal
 
 
 ```@example operator_compose
-function ExampleSys3(t)
+struct ExampleSys3Coupler sys end
+function ExampleSys3()
     @variables y(t)
     @parameters p
-    D = Differential(t)
-    ODESystem([D(y) ~ p], t; name=:Docs₊ExampleSys3)
+    ODESystem([D(y) ~ p], t; name=:ExampleSys3,
+        metadata=Dict(:coupletype=>ExampleSys3Coupler))
 end
 
-sys1 = ExampleSys(t)
-sys2 = ExampleSys3(t)
+sys1 = ExampleSys()
+sys2 = ExampleSys3()
 
-register_coupling(ExampleSys(t), ExampleSys3(t)) do sys1, sys2
+function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSys3Coupler)
+    sys1, sys2 = sys1.sys, sys2.sys
     operator_compose(sys1, sys2, Dict(sys1.x => sys2.y))
 end
 
 combined = couple(sys1, sys2)
-combined_simplified = structural_simplify(get_mtk(combined))
+combined_simplified = structural_simplify(convert(ODESystem, combined))
 ```
 
 ```@example operator_compose
@@ -107,21 +114,24 @@ This could happen if we are extracting emissions from a file, and those emission
 (Note that this case can also be used with the conversion factors shown in the last example.)
 
 ```@example operator_compose
-function ExampleSysNonODE(t)
+struct ExampleSysNonODECoupler sys end
+function ExampleSysNonODE()
     @variables y(t)
     @parameters p
-    ODESystem([y ~ p], t; name=:Docs₊ExampleSysNonODE)
+    ODESystem([y ~ p], t; name=:ExampleSysNonODE,
+        metadata=Dict(:coupletype=>ExampleSysNonODECoupler))
 end
 
-sys1 = ExampleSys(t)
-sys2 = ExampleSysNonODE(t)
+sys1 = ExampleSys()
+sys2 = ExampleSysNonODE()
 
-register_coupling(ExampleSys(t), ExampleSysNonODE(t)) do sys1, sys2
+function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODECoupler)
+    sys1, sys2 = sys1.sys, sys2.sys
     operator_compose(sys1, sys2, Dict(sys1.x => sys2.y))
 end
 
 combined = couple(sys1, sys2)
-sys_combined = structural_simplify(get_mtk(combined))
+sys_combined = structural_simplify(convert(ODESystem, combined))
 ```
 
 ```@example operator_compose
@@ -133,21 +143,24 @@ observed(sys_combined)
 Finally, this last example shows the fourth case, where a conversion factor is included in the translation dictionary.
 
 ```@example operator_compose
-function ExampleSysNonODE2(t)
+struct ExampleSysNonODE2Coupler sys end
+function ExampleSysNonODE2()
     @variables y(t)
     @parameters p
-    ODESystem([y ~ p], t; name=:Docs₊ExampleSysNonODE2)
+    ODESystem([y ~ p], t; name=:Docs₊ExampleSysNonODE2,
+        metadata=Dict(:coupletype=>ExampleSysNonODE2Coupler))
 end
 
-sys1 = ExampleSys(t)
-sys2 = ExampleSysNonODE2(t)
+sys1 = ExampleSys()
+sys2 = ExampleSysNonODE2()
 
-register_coupling(ExampleSys(t), ExampleSysNonODE2(t)) do sys1, sys2
+function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODE2Coupler)
+    sys1, sys2 = sys1.sys, sys2.sys
     operator_compose(sys1, sys2, Dict(sys1.x => sys2.y => 6.0))
 end
 
 combined = couple(sys1, sys2)
-combined_simplified = structural_simplify(get_mtk(combined))
+combined_simplified = structural_simplify(convert(ODESystem, combined))
 ```
 
 ```@example operator_compose

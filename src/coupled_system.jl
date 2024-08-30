@@ -1,15 +1,4 @@
-export CoupledSystem, ConnectorSystem, get_mtk, register_coupling, couple, systemname
-
-""" Return a unique identifier for a system. """
-function systemhash(sys::ModelingToolkit.AbstractSystem)
-    name = nameof(sys)
-    if !occursin("₊", string(name))
-        @warn "The name of each system should be formatted like `Module₊Name`. " *
-              "The name of the system `$name` does not meet this criteria. " *
-              "If the system is part of the `MyModule` module, the proper name would be `MyModule₊$name`."
-    end
-    name
-end
+export CoupledSystem, ConnectorSystem, couple
 
 """
 Types that implement an:
@@ -28,7 +17,10 @@ A system for composing together other systems using the [`couple`](@ref) functio
 $(FIELDS)
 
 Things that can be added to a `CoupledSystem`:
-    * `ModelingToolkit.ODESystem`s
+    * `ModelingToolkit.ODESystem`s. If the ODESystem has a field in the metadata called 
+        `:coupletype` (e.g. `ModelingToolkit.get_metadata(sys)[:coupletype]` returns a struct type 
+        with a single field called `sys`)
+        then that type will be used to check for methods of `EarthSciMLBase.couple` that use that type.
     * [`Operator`](@ref)s
     * [`DomainInfo`](@ref)s
     * [Callbacks](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/)
@@ -100,14 +92,14 @@ function couple(systems...)::CoupledSystem
             end
         elseif sys isa DECallback
             push!(o.callbacks, sys)
+        elseif (sys isa Tuple) || (sys isa AbstractVector)
+            o = couple(o, sys...)
         elseif hasmethod(init_callback, (typeof(sys), Simulator))
             push!(o.init_callbacks, sys)
         elseif applicable(couple, o, sys)
             o = couple(o, sys)
         elseif applicable(couple, sys, o)
             o = couple(sys, o)
-        elseif (sys isa Tuple) || (sys isa AbstractVector)
-            o = couple(o, sys...)
         else
             error("Cannot couple a $(typeof(sys)).")
         end
@@ -115,45 +107,55 @@ function couple(systems...)::CoupledSystem
     o
 end
 
-"A registery for functions to couple systems together, defined by their [system hashes](@ref systemhash)."
-const coupling_registry = Dict{Tuple{Symbol,Symbol},Function}()
-
-"""
-    $(SIGNATURES)
-
-Register a coupling function for two systems.
-
-In the `get_mtk` method of `CoupledSystem`, the function `f` is called to
-make any edits needed to the two systems before they are composed together,
-and also to return a `ConnectorSystem` that represents the coupling of the two systems.
-
-The function `f` should take as two `ODESystem`s and return a `ConnectorSystem`, i.e. 
-`f(a::ODESystem, b::ODESystem)::ConnectorSystem`.
-"""
-function register_coupling(f::Function, a::ModelingToolkit.AbstractSystem, b::ModelingToolkit.AbstractSystem)
-    ah, bh = systemhash(a), systemhash(b)
-    if (ah, bh) in keys(coupling_registry)
-        error("Coupling between $(nameof(a)) and $(nameof(b)) already registered.")
+"Return the coupling type associated with the given system."
+function get_coupletype(sys::ModelingToolkit.AbstractSystem)
+    md = ModelingToolkit.get_metadata(sys)
+    if (!isa(md, Dict)) || (:coupletype ∉ keys(md))
+        return Nothing
     end
-    coupling_registry[(ah, bh)] = f
+    T = md[:coupletype]
+    @assert ((length(fieldnames(T)) == 1) && (only(fieldnames(T)) == :sys))
+        "The `couple_type` $T must have a single field named `:sys` and no other fields"
+    T
 end
 
 """
-    $(SIGNATURES)
+$(SIGNATURES)
 
-Get the ODE ModelingToolkit representation of a [`CoupledSystem`](@ref).
+Perform bi-directional coupling for two 
+equation systems.
+
+To specify couplings for system pairs, create 
+methods for this function with the signature:
+
+```julia
+EarthSciMLBase.couple2(a::ACoupler, b::BCoupler)::ConnectorSystem
+```
+
+where `ACoupler` and `BCoupler` are `:coupletype`s defined like this:
+
+```julia
+struct ACoupler sys end
+@named asys = ODESystem([], t, metadata=Dict(:coupletype=>ACoupler))
+```
 """
-function get_mtk_ode(sys::CoupledSystem; name=:model)::ModelingToolkit.AbstractSystem
+couple2() = nothing
+
+"""
+$(SIGNATURES)
+
+Get the ODE ModelingToolkit ODESystem representation of a [`CoupledSystem`](@ref).
+"""
+function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, kwargs...)::ModelingToolkit.AbstractSystem
     connector_eqs = []
     systems = copy(sys.systems)
-    hashes = systemhash.(systems)
     for (i, a) ∈ enumerate(systems)
         for (j, b) ∈ enumerate(systems)
-            if (hashes[i], hashes[j]) ∈ keys(coupling_registry)
-                f = coupling_registry[hashes[i], hashes[j]]
-                cs = f(deepcopy(a), deepcopy(b))
+            a_t, b_t = get_coupletype(a), get_coupletype(b)
+            if hasmethod(couple2, (a_t, b_t))
+                cs = couple2(a_t(a), b_t(b))
                 @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a ConnectorSystem. " *
-                                               "This is not the case for $(nameof(a)) and $(nameof(b)); it is instead a $(typeof(cs))."
+                                               "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
                 systems[i], a = cs.from, cs.from
                 systems[j], b = cs.to, cs.to
                 for eq ∈ cs.eqs
@@ -164,7 +166,7 @@ function get_mtk_ode(sys::CoupledSystem; name=:model)::ModelingToolkit.AbstractS
         end
     end
     iv = ModelingToolkit.get_iv(first(systems))
-    connectors = ODESystem(connector_eqs, iv; name=name)
+    connectors = ODESystem(connector_eqs, iv; name=name, kwargs...)
 
     # Compose everything together.
     compose(connectors, systems...)
@@ -173,10 +175,10 @@ end
 """
     $(SIGNATURES)
 
-Get the ModelingToolkit representation of a [`CoupledSystem`](@ref).
+Get the ModelingToolkit PDESystem representation of a [`CoupledSystem`](@ref).
 """
-function get_mtk(sys::CoupledSystem; name=:model)::ModelingToolkit.AbstractSystem
-    o = get_mtk_ode(sys; name)
+function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name=:model, kwargs...)::ModelingToolkit.AbstractSystem
+    o = convert(ODESystem, sys; name, kwargs...)
 
     if sys.domaininfo !== nothing
         o += sys.domaininfo
