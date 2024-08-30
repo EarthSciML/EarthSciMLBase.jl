@@ -31,7 +31,7 @@ function observed_expression(eqs, x)
     for v ∈ Symbolics.get_variables(expr)
         v_expr = observed_expression(eqs, v)
         if !isnothing(v_expr)
-            expr = Symbolics.replace(expr, v => v_expr)
+            expr = Symbolics.substitute(expr, v => v_expr)
         end
     end
     # Do it again to catch extra variables TODO(CT): Theoretically this could recurse forever; when to stop?
@@ -55,7 +55,10 @@ the value of `x`.
 function observed_function(eqs, x, coords)
     expr = observed_expression(eqs, x)
     vars = Symbolics.get_variables(expr)
-    @assert (length(vars) <= length(coords)) "Extra variables: $(vars) != $(coords)"
+    if length(vars) > length(coords)
+        @warn "Extra variables: $(vars) > $(coords) in observed function for $x."
+        return (x...) -> 0.0
+    end
     coordvars = []
     for c ∈ coords
         i = findfirst(v -> split(String(Symbol(v)), "₊")[end] == String(Symbol(c)), vars)
@@ -133,18 +136,38 @@ end
 """
 $(SIGNATURES)
 
+Return the indexes of the system variables that the state variables of the final 
+simplified system depend on. This should be done before running `structural_simplify`
+on the system.
+"""
+function get_needed_vars(sys::ODESystem)
+    varvardeps = ModelingToolkit.varvar_dependencies(
+        ModelingToolkit.asgraph(sys), 
+        ModelingToolkit.variable_dependencies(sys),
+    )
+    g = SimpleDiGraph(length(unknowns(sys)))
+    for (i, es) in enumerate(varvardeps.badjlist)
+        for e in es
+            add_edge!(g, i, e)
+        end
+    end
+    allst = unknowns(sys)
+    simpst = unknowns(structural_simplify(sys))
+    stidx = [only(findall(isequal(s), allst)) for s in simpst]
+    collect(Graphs.DFSIterator(g, stidx))    
+end
+
+"""
+$(SIGNATURES)
+
 Remove equations from an ODESystem where the variable in the LHS is not
 present in any of the equations for the state variables. This can be used to 
 remove computationally intensive equations that are not used in the final model.
 """
 function prune_observed(sys::ODESystem)
-    needed_vars = []
-    for eq in equations(sys)
-        for var in [Symbolics.get_variables(eq.rhs)..., Symbolics.get_variables(eq.rhs)...]
-            push!(needed_vars, var)
-        end
-    end
-    needed_vars = Symbolics.tosymbol.(unique(needed_vars); escape=true)
+    needed_var_idxs = get_needed_vars(sys)
+    needed_vars = Symbolics.tosymbol.(unknowns(sys)[needed_var_idxs]; escape=true)
+    sys = structural_simplify(sys, split=false)
     deleteindex = []
     for (i, eq) ∈ enumerate(observed(sys))
         lhsvars = Symbolics.tosymbol.(Symbolics.get_variables(eq.lhs); escape=true)
@@ -157,6 +180,6 @@ function prune_observed(sys::ODESystem)
     obs = observed(sys)
     deleteat!(obs, deleteindex)
     sys2 = structural_simplify(ODESystem([equations(sys); obs], 
-        ModelingToolkit.get_iv(sys), name=nameof(sys)))
+        ModelingToolkit.get_iv(sys), name=nameof(sys)), split=false)
     return sys2, observed(sys)
 end

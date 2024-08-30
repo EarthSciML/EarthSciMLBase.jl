@@ -95,7 +95,7 @@ end
 "A callback to periodically run the stiff solver."
 function stiff_callback(s::Simulator{T}, st::SimulatorStrang, IIchunks, integrators) where T
     function affect!(integrator)
-        u = reshape(integrator.u, length(states(s.sys_mtk)), [length(g) for g in s.grid]...)
+        u = reshape(integrator.u, length(unknowns(s.sys_mtk)), [length(g) for g in s.grid]...)
         ode_step!(s, st, u, IIchunks, integrators, T(integrator.t), T(st.timestep))
         @views integrator.u .= u[:]
     end

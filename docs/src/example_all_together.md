@@ -11,37 +11,39 @@ Our first example system is a simple reaction system:
 ```@example ex1
 using EarthSciMLBase
 using ModelingToolkit, Catalyst, DomainSets, MethodOfLines, DifferentialEquations
+using ModelingToolkit: t_nounits, D_nounits
+t = t_nounits
+D = D_nounits
 using Plots
 
 # Create our independent variable `t` and our partially-independent variables `x` and `y`.
-@parameters t x y
+@parameters x y
 
 struct ExampleSys1Coupler sys end
-function ExampleSys1(t)
+function ExampleSys1()
     @species c₁(t)=5.0 c₂(t)=5.0
     rs = ReactionSystem(
         [Reaction(2.0, [c₁], [c₂])],
         t; name=:Sys1, combinatoric_ratelaws=false)
-    convert(ODESystem, rs, metadata=Dict(:coupletype=>ExampleSys1Coupler))
+    convert(ODESystem, complete(rs), metadata=Dict(:coupletype=>ExampleSys1Coupler))
 end
 
-ExampleSys1(t)
+ExampleSys1()
 ```
 
 Our second example system is a simple ODE system, with the same two variables.
 
 ```@example ex1
 struct ExampleSys2Coupler sys end
-function ExampleSys2(t)
+function ExampleSys2()
     @variables c₁(t)=5.0 c₂(t)=5.0
     @parameters p₁=1.0 p₂=0.5
-    D = Differential(t)
     ODESystem(
         [D(c₁) ~ -p₁, D(c₂) ~ p₂],
         t; name=:Sys2, metadata=Dict(:coupletype=>ExampleSys2Coupler))
 end
 
-ExampleSys2(t)
+ExampleSys2()
 ```
 
 Now, we specify what should happen when we couple the two systems together.
@@ -62,18 +64,18 @@ nothing # hide
 Once we specify all of the above, it is simple to create our two individual systems and then couple them together. 
 
 ```@example ex1
-sys1 = ExampleSys1(t)
-sys2 = ExampleSys2(t)
+sys1 = ExampleSys1()
+sys2 = ExampleSys2()
 sys = couple(sys1, sys2)
 
-get_mtk(sys)
+convert(ODESystem, sys)
 ```
 
 At this point we have an ODE system that is composed of two other ODE systems.
 We can inspect its observed variables using the `observed` function.
 
 ```@example ex1
-simplified_sys = structural_simplify(get_mtk(sys))
+simplified_sys = structural_simplify(convert(ODESystem, sys))
 ```
 
 ```@example ex1
@@ -105,7 +107,7 @@ domain = DomainInfo(
 
 sys_pde = couple(sys, domain, ConstantWind(t, 1.0, 1.0), Advection())
 
-sys_pde_mtk = get_mtk(sys_pde)
+sys_pde_mtk = convert(PDESystem, sys_pde)
 ```
 
 Now we can inspect this new system that we've created:

@@ -95,18 +95,23 @@ function ConstantWind(t, vals...; name=:ConstantWind)
     uvars = Num[]
     for (i, val) ∈ enumerate(vals)
         sym = Symbol("v_$i")
-        uv = (@variables $sym(t))[1]
-        uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableUnit, unit(val))
-        uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableDescription,
-            "Constant wind speed in the $(i)$(counts[i]) direction.")
+        desc = "Constant wind speed in the $(i)$(counts[i]) direction."
+        if val isa DynamicQuantities.AbstractQuantity
+            uv = only(@variables $sym(t), [unit=val/ustrip(val), description=desc])
+        else
+            uv = only(@variables $sym(t), [description=desc])
+        end
         push!(uvars, uv)
     end
     uvals = []
     for i in eachindex(vals)
-        u = unit(vals[i])
         v = ustrip(vals[i])
         sym = Symbol("c_v$i")
-        c = (@constants $sym = v [unit = u])[1]
+        if vals[i] isa DynamicQuantities.AbstractQuantity
+            c = only(@constants $sym = v [unit = vals[i]/v])
+        else
+            c = only(@constants $sym = v)
+        end
         push!(uvals, c)
     end
     eqs = convert(Vector{Equation}, Symbolics.scalarize(uvars .~ uvals))
@@ -120,7 +125,7 @@ function couple2(mw::MeanWindCoupler, w::ConstantWindCoupler)
     @named a = ODESystem(Equation[], ModelingToolkit.get_iv(mw), [], [], systems=[mw])
     @named b = ODESystem(Equation[], ModelingToolkit.get_iv(w), [], [], systems=[w])
     ConnectorSystem(
-        Symbolics.scalarize(states(a) .~ states(b)),
+        Symbolics.scalarize(unknowns(a) .~ unknowns(b)),
         mw, w,
     )
 end

@@ -1,10 +1,9 @@
 using Main.EarthSciMLBase
 using ModelingToolkit
+using ModelingToolkit: t, D
 using Test
 using Catalyst
-using Unitful
-
-@parameters t [unit = u"s"]
+using DynamicQuantities
 
 @testset "Composed System" begin
     struct SEqnCoupler
@@ -12,10 +11,9 @@ using Unitful
     end
     function SEqn()
         @variables S(t), I(t), R(t)
-        D = Differential(t)
         N = S + I + R
         @parameters β [unit = u"s^-1"]
-        @named seqn = ODESystem([D(S) ~ -β * S * I / N],
+        @named seqn = ODESystem([D(S) ~ -β * S * I / N], t,
             metadata=Dict(:coupletype => SEqnCoupler))
     end
 
@@ -24,11 +22,10 @@ using Unitful
     end
     function IEqn()
         @variables S(t), I(t), R(t)
-        D = Differential(t)
         N = S + I + R
         @parameters β [unit = u"s^-1"]
         @parameters γ [unit = u"s^-1"]
-        @named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I],
+        @named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I], t,
             metadata=Dict(:coupletype => IEqnCoupler))
     end
 
@@ -37,9 +34,8 @@ using Unitful
     end
     function REqn()
         @variables I(t), R(t)
-        D = Differential(t)
         @parameters γ [unit = u"s^-1"]
-        @named reqn = ODESystem([D(R) ~ γ * I],
+        @named reqn = ODESystem([D(R) ~ γ * I], t,
             metadata=Dict(:coupletype => REqnCoupler))
     end
 
@@ -66,14 +62,14 @@ using Unitful
 
     sir = couple(seqn, ieqn, reqn)
 
-    sirfinal = get_mtk(sir)
+    sirfinal = convert(PDESystem, sir)
 
     sir_simple = structural_simplify(sirfinal)
 
     want_eqs = [
-        Differential(t)(reqn.R) ~ reqn.γ * reqn.I,
-        Differential(t)(seqn.S) ~ (-seqn.β * seqn.I * seqn.S) / (seqn.I + seqn.R + seqn.S),
-        Differential(t)(ieqn.I) ~ (ieqn.β * ieqn.I * ieqn.S) / (ieqn.I + ieqn.R + ieqn.S) - ieqn.γ * ieqn.I,
+        D(reqn.R) ~ reqn.γ * reqn.I,
+        D(seqn.S) ~ (-seqn.β * seqn.I * seqn.S) / (seqn.I + seqn.R + seqn.S),
+        D(ieqn.I) ~ (ieqn.β * ieqn.I * ieqn.S) / (ieqn.I + ieqn.R + ieqn.S) - ieqn.γ * ieqn.I,
     ]
 
     have_eqs = equations(sir_simple)
@@ -120,9 +116,9 @@ end
         @parameters jNO2 = 0.0149 [unit = u"s^-1"]
         @species NO2(t) = 10.0
         rxs = [
-            Reaction(jNO2, [NO2], [], [1], [1])
+            Reaction(jNO2, [NO2], [], [1], [])
         ]
-        rs = ReactionSystem(rxs, t; combinatoric_ratelaws=false, name=:b)
+        rs = complete(ReactionSystem(rxs, t; combinatoric_ratelaws=false, name=:b))
         convert(ODESystem, rs; metadata=Dict(:coupletype=>BCoupler))
     end
 
@@ -160,12 +156,12 @@ end
     ]
     for (i, model) ∈ enumerate(models)
         @testset "permutation $i" begin
-            model_mtk = get_mtk(model)
+            model_mtk = convert(ODESystem, model)
             m = structural_simplify(model_mtk)
             eqstr = string(equations(m))
             @test occursin("b₊c_NO2(t)", eqstr)
             @test occursin("b₊jNO2(t)", eqstr)
-            @test occursin("b₊NO2(t)", string(states(m)))
+            @test occursin("b₊NO2(t)", string(unknowns(m)))
             obstr = string(observed(m))
             @test occursin("a₊j_NO2(t) ~ a₊j_unit", obstr)
             @test occursin("c₊NO2(t) ~ c₊emis", obstr)
@@ -176,9 +172,9 @@ end
 
     @testset "Stable evaluation" begin
         sys = couple(A(), B(), C())
-        eqs1 = string(equations(get_mtk(sys)))
+        eqs1 = string(equations(convert(ODESystem, sys)))
         @test occursin("b₊c_NO2(t)", eqs1)
-        eqs2 = string(equations(get_mtk(sys)))
+        eqs2 = string(equations(convert(ODESystem, sys)))
         @test occursin("b₊c_NO2(t)", eqs2)
         @test eqs1 == eqs2
     end
