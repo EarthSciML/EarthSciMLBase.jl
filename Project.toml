@@ -23,7 +23,7 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 [compat]
 BlockBandedMatrices = "0.13"
 Catalyst = "14"
-DiffEqCallbacks = "2"
+DiffEqCallbacks = "2, 3"
 DifferentialEquations = "7"
 DocStringExtensions = "0.9"
 DomainSets = "0.7"
