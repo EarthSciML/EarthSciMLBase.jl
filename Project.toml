@@ -1,7 +1,7 @@
 name = "EarthSciMLBase"
 uuid = "e53f1632-a13c-4728-9402-0c66d48804b0"
 authors = ["EarthSciML Authors and Contributors"]
-version = "0.16.0"
+version = "0.16.1"
 
 [deps]
 BlockBandedMatrices = "ffab5731-97b5-5995-9138-79e8c1846df0"
