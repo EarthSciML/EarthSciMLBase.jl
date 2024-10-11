@@ -11,14 +11,14 @@ function add_metadata(to, from)
 end
 
 """
-Replace the parameter `p` in the system `sys` with a new variable that has 
+Replace the parameter `p` in the system `sys` with a new variable that has
 the same name, units, and description as `p`.
 
 $(SIGNATURES)
 
-This can be useful to replace a parameter that does not change in time in a model component 
-with one specified by another system that does change in time (or space). For example, the 
-code below specifies a first-order loss equation, and then changes the temperature (which 
+This can be useful to replace a parameter that does not change in time in a model component
+with one specified by another system that does change in time (or space). For example, the
+code below specifies a first-order loss equation, and then changes the temperature (which
 determines the loss rate) with a temperature value that varies in time.
 ```
 """
@@ -36,7 +36,10 @@ function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
     end
 
     newsys = SymbolicUtils.substitute(sys, replace)
-    ODESystem(equations(newsys), ModelingToolkit.get_iv(newsys); 
-        name=nameof(newsys), metadata=ModelingToolkit.get_metadata(sys))
+    continuous_events = ModelingToolkit.get_continuous_events(sys)
+    discrete_events = ModelingToolkit.get_discrete_events(sys)
+    ODESystem(equations(newsys), ModelingToolkit.get_iv(newsys);
+        name=nameof(newsys), metadata=ModelingToolkit.get_metadata(sys),
+        continuous_events=continuous_events,
+        discrete_events=discrete_events)
 end
-

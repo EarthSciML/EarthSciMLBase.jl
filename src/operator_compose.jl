@@ -1,8 +1,8 @@
 export operator_compose
 
 """
-Return the dependent variable, which is the first argument of the term, 
-unless the term is a time derivative, in which case the dependent variable 
+Return the dependent variable, which is the first argument of the term,
+unless the term is a time derivative, in which case the dependent variable
 is the argument of the time derivative.
 """
 function get_dv(term, iv)
@@ -16,7 +16,7 @@ end
 """
 $(SIGNATURES)
 
-Add a system scope to a variable name, for example so that 
+Add a system scope to a variable name, for example so that
 `x` in system `sys1` becomes `sys1₊x`.
 `iv` is the independent variable.
 """
@@ -64,7 +64,7 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
         for (j, b_eq) ∈ enumerate(b_eqs)
             if isequal(bdv, add_scope(b, get_dv(b_eq.lhs, iv), iv))
                 bdv = add_scope(b, get_dv(b_eq.lhs, iv), iv) # Make sure the units are correct.
-                # The dependent variable of the LHS of this equation matches the dependent 
+                # The dependent variable of the LHS of this equation matches the dependent
                 # variable of interest,
                 # so create a new variable to represent the dependent variable
                 # of interest and add it to the RHS of the other equation, and then also set the two
@@ -101,14 +101,21 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
         end
     end
     aa = ODESystem(a_eqs, ModelingToolkit.get_iv(a);
-        name=nameof(a), metadata=ModelingToolkit.get_metadata(a))
+        name=nameof(a),
+        metadata=ModelingToolkit.get_metadata(a),
+        continuous_events=ModelingToolkit.get_continuous_events(a),
+        discrete_events=ModelingToolkit.get_discrete_events(a))
+
     bb = ODESystem(b_eqs, ModelingToolkit.get_iv(b);
-        name=nameof(b), metadata=ModelingToolkit.get_metadata(b))
+        name=nameof(b), metadata=ModelingToolkit.get_metadata(b),
+        continuous_events=ModelingToolkit.get_continuous_events(b),
+        discrete_events=ModelingToolkit.get_discrete_events(b))
     ConnectorSystem(connections, aa, bb)
 end
 
 # PDESystems don't have a compose function, so we just add the equations together
 # here without trying to keep the systems in separate namespaces.
+# TODO(CT): Handle events
 function operator_compose!(a::ModelingToolkit.PDESystem, b::Vector{Symbolics.Equation})::ModelingToolkit.PDESystem
     a_eqs = equations(a)
     for (i, a_eq) ∈ enumerate(a_eqs)

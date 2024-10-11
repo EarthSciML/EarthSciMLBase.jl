@@ -139,13 +139,13 @@ end
         ODESystem([D(y) ~ p], t; name=name,
             metadata=Dict(:coupletype => U2Coupler))
     end
-    
+
     sys1 = U1()
     sys2 = U2()
 
     function EarthSciMLBase.couple2(s1::U1Coupler, s2::U2Coupler)
         s1, s2 = s1.sys, s2.sys
-        @constants uconv = 6.0 [unit=u"kg/m"]
+        @constants uconv = 6.0 [unit = u"kg/m"]
         operator_compose(s1, s2, Dict(s1.x => s2.y => uconv))
     end
 
@@ -177,14 +177,14 @@ end
         ODESystem([y ~ p], t; name=name,
             metadata=Dict(:coupletype => U2Coupler))
     end
-    
-    
+
+
     sys1 = U1()
     sys2 = U2()
 
     function EarthSciMLBase.couple2(s1::U1Coupler, s2::U2Coupler)
         s1, s2 = s1.sys, s2.sys
-        @constants uconv = 6.0 [unit=u"kg/m"]
+        @constants uconv = 6.0 [unit = u"kg/m"]
         operator_compose(s1, s2, Dict(s1.x => s2.y => uconv))
     end
 
@@ -215,8 +215,8 @@ end
         ODESystem([x ~ p], t; name=name,
             metadata=Dict(:coupletype => U2Coupler))
     end
-    
-    
+
+
     sys1 = U1()
     sys2 = U2()
 
@@ -273,4 +273,24 @@ end
 
     eqstr = replace(string(eq), "Symbolics." => "")
     @test eqstr == "Equation[Differential(t)(chem₊SO2(t)) ~ chem₊deposition_ddt_SO2ˍt(t) - chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊O2(t)) ~ -chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊SO4(t)) ~ chem₊α*chem₊O2(t)*chem₊SO2(t)]"
+end
+
+@testset "events" begin
+    @parameters α = 1 [unit = u"kg", description = "α description"]
+    @parameters β = 2 [unit = u"kg*s", description = "β description"]
+    @variables x(t) [unit = u"m", description = "x description"]
+    eq = D(x) ~ α * x / β
+    @named sys1 = ODESystem([eq], t; metadata=:metatest,
+        continuous_events=[x ~ 0],
+        discrete_events=(t == 1.0) => [x ~ x + 1],
+    )
+    @named sys2 = ODESystem([eq], t; metadata=:metatest,
+        continuous_events=[(x ~ 1.0) => [x ~ x + 1], (x ~ 2.0) => [x ~ x - 1]],
+        discrete_events=[(t == 1.0) => [x ~ x + 1], (t == 2.0) => [x ~ x - 1]],
+    )
+    sys3 = operator_compose(sys1, sys2)
+    @test length(ModelingToolkit.get_continuous_events(sys3.from)) == 1
+    @test length(ModelingToolkit.get_discrete_events(sys3.from)) == 1
+    @test length(ModelingToolkit.get_continuous_events(sys3.to)) == 2
+    @test length(ModelingToolkit.get_discrete_events(sys3.to)) == 2
 end

@@ -49,7 +49,7 @@ $(SIGNATURES)
 
 Return a function to  for the observed value of a variable `x` based
 on the input arguments in `coords`.
-`extra_eqs` is a list of additional equations to use to determine 
+`extra_eqs` is a list of additional equations to use to determine
 the value of `x`.
 """
 function observed_function(eqs, x, coords)
@@ -84,7 +84,7 @@ end
 """
 $(SIGNATURES)
 
-Return the ranges representing the discretization of the partial independent 
+Return the ranges representing the discretization of the partial independent
 variables for this domain, based on the discretization intervals given in `Δs`
 """
 function grid(d::DomainInfo{T}, Δs::AbstractVector) where {T<:AbstractFloat}
@@ -136,13 +136,13 @@ end
 """
 $(SIGNATURES)
 
-Return the indexes of the system variables that the state variables of the final 
+Return the indexes of the system variables that the state variables of the final
 simplified system depend on. This should be done before running `structural_simplify`
 on the system.
 """
 function get_needed_vars(sys::ODESystem)
     varvardeps = ModelingToolkit.varvar_dependencies(
-        ModelingToolkit.asgraph(sys), 
+        ModelingToolkit.asgraph(sys),
         ModelingToolkit.variable_dependencies(sys),
     )
     g = SimpleDiGraph(length(unknowns(sys)))
@@ -154,14 +154,14 @@ function get_needed_vars(sys::ODESystem)
     allst = unknowns(sys)
     simpst = unknowns(structural_simplify(sys))
     stidx = [only(findall(isequal(s), allst)) for s in simpst]
-    collect(Graphs.DFSIterator(g, stidx))    
+    collect(Graphs.DFSIterator(g, stidx))
 end
 
 """
 $(SIGNATURES)
 
 Remove equations from an ODESystem where the variable in the LHS is not
-present in any of the equations for the state variables. This can be used to 
+present in any of the equations for the state variables. This can be used to
 remove computationally intensive equations that are not used in the final model.
 """
 function prune_observed(sys::ODESystem)
@@ -171,7 +171,7 @@ function prune_observed(sys::ODESystem)
     deleteindex = []
     for (i, eq) ∈ enumerate(observed(sys))
         lhsvars = Symbolics.tosymbol.(Symbolics.get_variables(eq.lhs); escape=true)
-        # Only keep equations where all variables on the LHS are in at least one 
+        # Only keep equations where all variables on the LHS are in at least one
         # equation describing the system state.
         if !all((var) -> var ∈ needed_vars, lhsvars)
             push!(deleteindex, i)
@@ -179,7 +179,14 @@ function prune_observed(sys::ODESystem)
     end
     obs = observed(sys)
     deleteat!(obs, deleteindex)
-    sys2 = structural_simplify(ODESystem([equations(sys); obs], 
-        ModelingToolkit.get_iv(sys), name=nameof(sys)), split=false)
+    ce = ModelingToolkit.get_continuous_events(sys)
+    de = ModelingToolkit.get_discrete_events(sys)
+    sys2 = structural_simplify(ODESystem([equations(sys); obs],
+            ModelingToolkit.get_iv(sys), name=nameof(sys),
+            metadata=ModelingToolkit.get_metadata(sys),
+            continuous_events=ce,
+            discrete_events=de
+        ), split=false,
+    )
     return sys2, observed(sys)
 end

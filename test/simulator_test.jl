@@ -3,7 +3,7 @@ using Test
 using ModelingToolkit, DomainSets, OrdinaryDiffEq
 using SciMLOperators
 using DifferentialEquations
-using SciMLBase: DiscreteCallback
+using SciMLBase: DiscreteCallback, ReturnCode
 
 struct ExampleOp <: Operator
     α::Num # Multiplier from ODESystem
@@ -44,7 +44,7 @@ t_max = 11.5
 @parameters y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0
 @constants p = 1.0
 @variables(
-    u(t) = 1.0, v(t) = 1.0, x(t) = 1.0, y(t) = 1.0, windspeed(t) = 1.0
+    u(t) = 1.0, v(t) = 1.0, x(t) = 1.0, y(t) = 1.0, windspeed(t)
 )
 Dt = Differential(t)
 
@@ -90,6 +90,7 @@ prob = ODEProblem(structural_simplify(sys), [], (0.0, 1.0), [
     lon => sim.grid[1][1], lat => sim.grid[2][1], lev => sim.grid[3][1]
 ])
 sol1 = solve(prob, Tsit5(), abstol=1e-12, reltol=1e-12)
+@test sol1.retcode == ReturnCode.Success
 @test sol1.u[end] ≈ [-27.15156429366082, -26.264264199779465]
 
 u = init_u(sim)
