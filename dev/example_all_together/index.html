@@ -44,12 +44,12 @@ sys2 = ExampleSys2()
 sys = couple(sys1, sys2)
 
 convert(ODESystem, sys)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} Sys1_{+}c_1\left( t \right)}{\mathrm{d}t} &amp;= Sys1_{+}Sys2_{ddt\_c_{1}ˍt}\left( t \right) - 2 Sys1_{+}c_1\left( t \right) \\
+\frac{\mathrm{d} Sys1_{+}c_2\left( t \right)}{\mathrm{d}t} &amp;= Sys1_{+}Sys2_{ddt\_c_{2}ˍt}\left( t \right) + 2 Sys1_{+}c_1\left( t \right) \\
 Sys1_{+}Sys2_{ddt\_c_{1}ˍt}\left( t \right) &amp;= Sys2_{+}Sys2_{ddt\_c_{1}ˍt}\left( t \right) \\
 Sys1_{+}c_1\left( t \right) &amp;= Sys2_{+}c_1\left( t \right) \\
 Sys1_{+}Sys2_{ddt\_c_{2}ˍt}\left( t \right) &amp;= Sys2_{+}Sys2_{ddt\_c_{2}ˍt}\left( t \right) \\
 Sys1_{+}c_2\left( t \right) &amp;= Sys2_{+}c_2\left( t \right) \\
-\frac{\mathrm{d} Sys1_{+}c_1\left( t \right)}{\mathrm{d}t} &amp;= Sys1_{+}Sys2_{ddt\_c_{1}ˍt}\left( t \right) - 2 Sys1_{+}c_1\left( t \right) \\
-\frac{\mathrm{d} Sys1_{+}c_2\left( t \right)}{\mathrm{d}t} &amp;= Sys1_{+}Sys2_{ddt\_c_{2}ˍt}\left( t \right) + 2 Sys1_{+}c_1\left( t \right) \\
 Sys2_{+}Sys2_{ddt\_c_{1}ˍt}\left( t \right) &amp;=  - Sys2_{+}p_1 \\
 Sys2_{+}Sys2_{ddt\_c_{2}ˍt}\left( t \right) &amp;= Sys2_{+}p_2
 \end{align}
@@ -59,15 +59,15 @@ Sys2_{+}Sys2_{ddt\_c_{2}ˍt}\left( t \right) &amp;= Sys2_{+}p_2
 \end{align}
  \]</p><pre><code class="language-julia hljs">observed(simplified_sys)</code></pre><p class="math-container">\[ \begin{align}
 Sys2_{+}Sys2_{ddt\_c_{1}ˍt}\left( t \right) &amp;=  - Sys2_{+}p_1 \\
-Sys2_{+}c_1\left( t \right) &amp;= Sys1_{+}c_1\left( t \right) \\
 Sys2_{+}Sys2_{ddt\_c_{2}ˍt}\left( t \right) &amp;= Sys2_{+}p_2 \\
+Sys2_{+}c_1\left( t \right) &amp;= Sys1_{+}c_1\left( t \right) \\
 Sys2_{+}c_2\left( t \right) &amp;= Sys1_{+}c_2\left( t \right) \\
 Sys1_{+}Sys2_{ddt\_c_{1}ˍt}\left( t \right) &amp;= Sys2_{+}Sys2_{ddt\_c_{1}ˍt}\left( t \right) \\
 Sys1_{+}Sys2_{ddt\_c_{2}ˍt}\left( t \right) &amp;= Sys2_{+}Sys2_{ddt\_c_{2}ˍt}\left( t \right)
 \end{align}
  \]</p><p>We can also run simulations using this system:</p><pre><code class="language-julia hljs">odeprob = ODEProblem(simplified_sys, [], (0.0,10.0), [])
 odesol = solve(odeprob)
-plot(odesol)</code></pre><img src="d889d4f7.svg" alt="Example block output"/><p>Once we&#39;ve confirmed that our model works in a 0D &quot;box model&quot; setting, we can expand it to 1, 2, or 3 dimensions using by adding in initial  and boundary conditions. We will also add in advection using constant-velocity wind fields add the same time.</p><pre><code class="language-julia hljs">x_min = y_min = t_min = 0.0
+plot(odesol)</code></pre><img src="48858c09.svg" alt="Example block output"/><p>Once we&#39;ve confirmed that our model works in a 0D &quot;box model&quot; setting, we can expand it to 1, 2, or 3 dimensions using by adding in initial  and boundary conditions. We will also add in advection using constant-velocity wind fields add the same time.</p><pre><code class="language-julia hljs">x_min = y_min = t_min = 0.0
 x_max = y_max = t_max = 1.0
 domain = DomainInfo(
     constIC(4.0, t ∈ Interval(t_min, t_max)),
@@ -78,14 +78,14 @@ domain = DomainInfo(
 sys_pde = couple(sys, domain, ConstantWind(t, 1.0, 1.0), Advection())
 
 sys_pde_mtk = convert(PDESystem, sys_pde)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d}}{\mathrm{d}t} Sys1_{+}c_1\left( t, x, y \right) &amp;=  - 2 Sys1_{+}c_1\left( t, x, y \right) + Sys1_{+}Sys2_{ddt\_c_{1}ˍt}\left( t, x, y \right) - \frac{\mathrm{d}}{\mathrm{d}y} Sys1_{+}c_1\left( t, x, y \right) MeanWind_{+}v_{y}\left( t, x, y \right) - \frac{\mathrm{d}}{\mathrm{d}x} Sys1_{+}c_1\left( t, x, y \right) MeanWind_{+}v_{x}\left( t, x, y \right) \\
+\frac{\mathrm{d}}{\mathrm{d}t} Sys1_{+}c_2\left( t, x, y \right) &amp;= 2 Sys1_{+}c_1\left( t, x, y \right) + Sys1_{+}Sys2_{ddt\_c_{2}ˍt}\left( t, x, y \right) - MeanWind_{+}v_{y}\left( t, x, y \right) \frac{\mathrm{d}}{\mathrm{d}y} Sys1_{+}c_2\left( t, x, y \right) - MeanWind_{+}v_{x}\left( t, x, y \right) \frac{\mathrm{d}}{\mathrm{d}x} Sys1_{+}c_2\left( t, x, y \right) \\
 Sys1_{+}Sys2_{ddt\_c_{1}ˍt}\left( t, x, y \right) &amp;= Sys2_{+}Sys2_{ddt\_c_{1}ˍt}\left( t, x, y \right) \\
 Sys1_{+}c_1\left( t, x, y \right) &amp;= Sys2_{+}c_1\left( t, x, y \right) \\
 Sys1_{+}Sys2_{ddt\_c_{2}ˍt}\left( t, x, y \right) &amp;= Sys2_{+}Sys2_{ddt\_c_{2}ˍt}\left( t, x, y \right) \\
 Sys1_{+}c_2\left( t, x, y \right) &amp;= Sys2_{+}c_2\left( t, x, y \right) \\
 MeanWind_{+}v_{x}\left( t, x, y \right) &amp;= ConstantWind_{+}v_{1}\left( t, x, y \right) \\
 MeanWind_{+}v_{y}\left( t, x, y \right) &amp;= ConstantWind_{+}v_{2}\left( t, x, y \right) \\
-\frac{\mathrm{d}}{\mathrm{d}t} Sys1_{+}c_1\left( t, x, y \right) &amp;=  - 2 Sys1_{+}c_1\left( t, x, y \right) + Sys1_{+}Sys2_{ddt\_c_{1}ˍt}\left( t, x, y \right) - \frac{\mathrm{d}}{\mathrm{d}y} Sys1_{+}c_1\left( t, x, y \right) MeanWind_{+}v_{y}\left( t, x, y \right) - \frac{\mathrm{d}}{\mathrm{d}x} Sys1_{+}c_1\left( t, x, y \right) MeanWind_{+}v_{x}\left( t, x, y \right) \\
-\frac{\mathrm{d}}{\mathrm{d}t} Sys1_{+}c_2\left( t, x, y \right) &amp;= 2 Sys1_{+}c_1\left( t, x, y \right) + Sys1_{+}Sys2_{ddt\_c_{2}ˍt}\left( t, x, y \right) - MeanWind_{+}v_{y}\left( t, x, y \right) \frac{\mathrm{d}}{\mathrm{d}y} Sys1_{+}c_2\left( t, x, y \right) - MeanWind_{+}v_{x}\left( t, x, y \right) \frac{\mathrm{d}}{\mathrm{d}x} Sys1_{+}c_2\left( t, x, y \right) \\
 Sys2_{+}Sys2_{ddt\_c_{1}ˍt}\left( t, x, y \right) &amp;=  - Sys2_{+}p_1 \\
 Sys2_{+}Sys2_{ddt\_c_{2}ˍt}\left( t, x, y \right) &amp;= Sys2_{+}p_2 \\
 ConstantWind_{+}v_{1}\left( t, x, y \right) &amp;= ConstantWind_{+}c_{v1} \\
@@ -94,13 +94,13 @@ ConstantWind_{+}v_{2}\left( t, x, y \right) &amp;= ConstantWind_{+}c_{v2}
  \]</p><p>Now we can inspect this new system that we&#39;ve created:</p><pre><code class="language-julia hljs">sys_pde_mtk.dvs</code></pre><p class="math-container">\[ \begin{equation}
 \left[
 \begin{array}{c}
+Sys1_{+}c_1\left( t, x, y \right) \\
+Sys1_{+}c_2\left( t, x, y \right) \\
 Sys1_{+}Sys2_{ddt\_c_{1}ˍt}\left( t, x, y \right) \\
 Sys2_{+}Sys2_{ddt\_c_{1}ˍt}\left( t, x, y \right) \\
-Sys1_{+}c_1\left( t, x, y \right) \\
 Sys2_{+}c_1\left( t, x, y \right) \\
 Sys1_{+}Sys2_{ddt\_c_{2}ˍt}\left( t, x, y \right) \\
 Sys2_{+}Sys2_{ddt\_c_{2}ˍt}\left( t, x, y \right) \\
-Sys1_{+}c_2\left( t, x, y \right) \\
 Sys2_{+}c_2\left( t, x, y \right) \\
 MeanWind_{+}v_{x}\left( t, x, y \right) \\
 ConstantWind_{+}v_{1}\left( t, x, y \right) \\
@@ -132,4 +132,4 @@ anim = @animate for k in 1:length(discrete_t)
     p2 = heatmap(solc2[k, 1:end-1, 1:end-1], title=&quot;c₂ t=\$(discrete_t[k])&quot;, clim=(0,7.0), lab=:none)
     plot(p1, p2, layout=(1,2), size=(800,400))
 end
-gif(anim, fps = 8)</code></pre><img src="c158d100.gif" alt="Example block output"/><p>Because our system is a system of ordinary differential equations rather than partial differential equations, all of the grid cells in the animation above have the same value. Refer to the <a href="../advection/#Advection">advection example</a> for an example of a system of partial differential equations.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../simulator/">« Simulator</a><a class="docs-footer-nextpage" href="../api/">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.7.0 on <span class="colophon-date" title="Friday 11 October 2024 03:24">Friday 11 October 2024</span>. Using Julia version 1.11.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+gif(anim, fps = 8)</code></pre><img src="c158d100.gif" alt="Example block output"/><p>Because our system is a system of ordinary differential equations rather than partial differential equations, all of the grid cells in the animation above have the same value. Refer to the <a href="../advection/#Advection">advection example</a> for an example of a system of partial differential equations.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../simulator/">« Simulator</a><a class="docs-footer-nextpage" href="../api/">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.7.0 on <span class="colophon-date" title="Friday 11 October 2024 17:47">Friday 11 October 2024</span>. Using Julia version 1.11.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
