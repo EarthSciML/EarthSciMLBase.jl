@@ -160,6 +160,22 @@ end
 """
 $(SIGNATURES)
 
+Create a copy of an ODESystem with the given changes.
+"""
+function copy_with_change(sys::ODESystem;
+    eqs=equations(sys),
+    name=nameof(sys),
+    metadata=ModelingToolkit.get_metadata(sys),
+    continuous_events=ModelingToolkit.get_continuous_events(sys),
+    discrete_events=ModelingToolkit.get_discrete_events(sys),
+)
+    ODESystem(eqs, ModelingToolkit.get_iv(sys), name=name, metadata=metadata,
+        continuous_events=continuous_events, discrete_events=discrete_events)
+end
+
+"""
+$(SIGNATURES)
+
 Remove equations from an ODESystem where the variable in the LHS is not
 present in any of the equations for the state variables. This can be used to
 remove computationally intensive equations that are not used in the final model.
@@ -179,14 +195,33 @@ function prune_observed(sys::ODESystem)
     end
     obs = observed(sys)
     deleteat!(obs, deleteindex)
-    ce = ModelingToolkit.get_continuous_events(sys)
-    de = ModelingToolkit.get_discrete_events(sys)
-    sys2 = structural_simplify(ODESystem([equations(sys); obs],
-            ModelingToolkit.get_iv(sys), name=nameof(sys),
-            metadata=ModelingToolkit.get_metadata(sys),
-            continuous_events=ce,
-            discrete_events=de
-        ), split=false,
+    sys2 = structural_simplify(
+        copy_with_change(sys; eqs=[equations(sys); obs]),
+        split=false,
     )
     return sys2, observed(sys)
+end
+
+# Remove extra variable defaults that would cause a solver initialization error.
+# This should be done before running `structural_simplify` on the system.
+function remove_extra_defaults(sys)
+    all_vars = unique(vcat(get_variables.(equations(sys))...))
+
+    unk = Symbol.(unknowns(structural_simplify(sys)))
+
+    # Check if v is not in the unknowns, is a variable, and has a default.
+    checkextra(v) = !(Symbol(v) in unk) &&
+                    v.metadata[Symbolics.VariableSource][1] == :variables &&
+                    (Symbolics.VariableDefaultValue in keys(v.metadata))
+    extra_default_vars = all_vars[checkextra.(all_vars)]
+
+    replacements = []
+    for v in extra_default_vars
+        newmeta = Base.ImmutableDict(filter(kv -> kv[1] != Symbolics.VariableDefaultValue,
+            Dict(v.metadata))...)
+        newv = @set v.metadata = newmeta
+        push!(replacements, v => newv)
+    end
+    new_eqs = substitute.(equations(sys), (Dict(replacements...),))
+    copy_with_change(sys, eqs=new_eqs)
 end

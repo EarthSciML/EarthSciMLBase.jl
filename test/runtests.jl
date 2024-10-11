@@ -11,10 +11,10 @@ using Test, SafeTestsets
     @safetestset "Parameter to Variable" begin include("param_to_var_test.jl") end
     @safetestset "Simulator Utils" begin include("simulator_utils_test.jl") end
     @safetestset "Simulator" begin include("simulator_test.jl") end
-    @safetestset "Docs" begin 
+    @safetestset "Integrated Test" begin include("integrated_test.jl") end
+    @safetestset "Docs" begin
         using Documenter
         using EarthSciMLBase
-        doctest(EarthSciMLBase) 
+        doctest(EarthSciMLBase)
     end
 end
-

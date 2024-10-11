@@ -100,16 +100,8 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
             end
         end
     end
-    aa = ODESystem(a_eqs, ModelingToolkit.get_iv(a);
-        name=nameof(a),
-        metadata=ModelingToolkit.get_metadata(a),
-        continuous_events=ModelingToolkit.get_continuous_events(a),
-        discrete_events=ModelingToolkit.get_discrete_events(a))
-
-    bb = ODESystem(b_eqs, ModelingToolkit.get_iv(b);
-        name=nameof(b), metadata=ModelingToolkit.get_metadata(b),
-        continuous_events=ModelingToolkit.get_continuous_events(b),
-        discrete_events=ModelingToolkit.get_discrete_events(b))
+    aa = copy_with_change(a; eqs=a_eqs)
+    bb = copy_with_change(b; eqs=b_eqs)
     ConnectorSystem(connections, aa, bb)
 end
 

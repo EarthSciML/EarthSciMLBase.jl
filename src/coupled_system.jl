@@ -17,8 +17,8 @@ A system for composing together other systems using the [`couple`](@ref) functio
 $(FIELDS)
 
 Things that can be added to a `CoupledSystem`:
-    * `ModelingToolkit.ODESystem`s. If the ODESystem has a field in the metadata called 
-        `:coupletype` (e.g. `ModelingToolkit.get_metadata(sys)[:coupletype]` returns a struct type 
+    * `ModelingToolkit.ODESystem`s. If the ODESystem has a field in the metadata called
+        `:coupletype` (e.g. `ModelingToolkit.get_metadata(sys)[:coupletype]` returns a struct type
         with a single field called `sys`)
         then that type will be used to check for methods of `EarthSciMLBase.couple` that use that type.
     * [`Operator`](@ref)s
@@ -35,7 +35,7 @@ mutable struct CoupledSystem
     "Initial and boundary conditions and other domain information"
     domaininfo
     """
-    A vector of functions where each function takes as an argument the resulting PDESystem after DomainInfo is 
+    A vector of functions where each function takes as an argument the resulting PDESystem after DomainInfo is
     added to this system, and returns a transformed PDESystem.
     """
     pdefunctions::AbstractVector
@@ -56,14 +56,14 @@ function Base.show(io::IO, cs::CoupledSystem)
     print(io, "CoupledSystem containing $(length(cs.systems)) system(s), $(length(cs.ops)) operator(s), and $(length(cs.callbacks) + length(cs.init_callbacks)) callback(s).")
 end
 
-"""    
+"""
     $(TYPEDSIGNATURES)
 
 Couple multiple ModelingToolkit systems together.
 
-The systems that are arguments to this system can be of type `ModelingToolkit.AbstractSystem`, 
-[`CoupledSystem`](@ref), [`DomainInfo`](@ref), 
-or any type `T` that has a method `couple(::CoupledSystem, ::T)::CoupledSystem` or a method 
+The systems that are arguments to this system can be of type `ModelingToolkit.AbstractSystem`,
+[`CoupledSystem`](@ref), [`DomainInfo`](@ref),
+or any type `T` that has a method `couple(::CoupledSystem, ::T)::CoupledSystem` or a method
 `couple(::T, ::CoupledSystem)::CoupledSystem` defined for it.
 """
 function couple(systems...)::CoupledSystem
@@ -122,10 +122,10 @@ end
 """
 $(SIGNATURES)
 
-Perform bi-directional coupling for two 
+Perform bi-directional coupling for two
 equation systems.
 
-To specify couplings for system pairs, create 
+To specify couplings for system pairs, create
 methods for this function with the signature:
 
 ```julia
@@ -169,7 +169,8 @@ function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, kwar
     connectors = ODESystem(connector_eqs, iv; name=name, kwargs...)
 
     # Compose everything together.
-    compose(connectors, systems...)
+    o = compose(connectors, systems...)
+    remove_extra_defaults(o)
 end
 
 """

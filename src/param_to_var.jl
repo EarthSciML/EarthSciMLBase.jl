@@ -36,10 +36,9 @@ function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
     end
 
     newsys = SymbolicUtils.substitute(sys, replace)
-    continuous_events = ModelingToolkit.get_continuous_events(sys)
-    discrete_events = ModelingToolkit.get_discrete_events(sys)
-    ODESystem(equations(newsys), ModelingToolkit.get_iv(newsys);
-        name=nameof(newsys), metadata=ModelingToolkit.get_metadata(sys),
-        continuous_events=continuous_events,
-        discrete_events=discrete_events)
+    copy_with_change(newsys;
+        metadata=ModelingToolkit.get_metadata(sys),
+        discrete_events=ModelingToolkit.get_discrete_events(sys),
+        continuous_events=ModelingToolkit.get_continuous_events(sys),
+    )
 end
