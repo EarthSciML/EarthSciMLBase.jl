@@ -72,7 +72,7 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, s::Simulator)
         end
         nothing
     end
-    indata = zeros(EarthSciMLBase.utype(s.domaininfo), size(s))
+    indata = zeros(EarthSciMLBase.dtype(s.domaininfo), size(s))
     FunctionOperator(run, indata[:], p=s.p)
 end
 ```
