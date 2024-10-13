@@ -5,7 +5,7 @@ A simulator strategy based on Strang splitting.
 Choose either `SimulatorStrangThreads` or `SimulatorStrangSerial` to run the simulation.
 
 !!! warning
-    `SimulatorStrang` strategies will still work if no operator is included, 
+    `SimulatorStrang` strategies will still work if no operator is included,
     but any callbacks included in the system are executed together with the operators,
     so if there are no operators in the system, the callbacks will not be executed.
 """
@@ -22,7 +22,7 @@ SimulatorStrangThreads(stiffalg, nonstiffalg, timestep)
 
 Perform a simulation using [Strang splitting](https://en.wikipedia.org/wiki/Strang_splitting),
 where the MTK system is assumed to be stiff and the operators are assumed to be non-stiff.
-The solution of the stiff ODE system is parallelized across grid cells 
+The solution of the stiff ODE system is parallelized across grid cells
 using the specified number of threads.
 
 $(FIELDS)

@@ -78,7 +78,7 @@ struct Simulator{T,FT1,FT2,TG}
 end
 
 function Base.show(io::IO, s::Simulator)
-    print(io, "Simulator{$(utype(s.domaininfo))} with $(length(equations(s.sys_mtk))) equation(s), $(length(s.sys.ops)) operator(s), and $(*([length(g) for g in s.grid]...)) grid cells.")
+    print(io, "Simulator{$(dtype(s.domaininfo))} with $(length(equations(s.sys_mtk))) equation(s), $(length(s.sys.ops)) operator(s), and $(*([length(g) for g in s.grid]...)) grid cells.")
 end
 
 "Initialize the state variables."
