@@ -2,9 +2,10 @@ module EarthSciMLBase
 using ModelingToolkit, Symbolics, Catalyst
 using Graphs, MetaGraphsNext
 using DocStringExtensions
-using DynamicQuantities
+using DynamicQuantities, Dates
 using OrdinaryDiffEq, DomainSets
 using SciMLBase: DECallback, CallbackSet
+using Statistics
 using DiffEqCallbacks
 using LinearAlgebra, BlockBandedMatrices
 using Accessors

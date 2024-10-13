@@ -1,5 +1,5 @@
-using Main.EarthSciMLBase: steplength, observed_expression, observed_function, utype, grid,
-    timesteps, icbc, prune_observed
+using Main.EarthSciMLBase: steplength, observed_expression, observed_function, grid,
+    timesteps, icbc, prune_observed, dtype
 using Main.EarthSciMLBase
 using Test
 using ModelingToolkit, DomainSets
@@ -66,10 +66,8 @@ vars = unknowns(sys)
 
 bcs = icbc(domain, vars)
 
-@test utype(domain) == Float64
-@test utype(DomainInfo(constIC(0, t ∈ Interval(0, 1)), constBC(16.0, lon ∈ Interval(0.0, 1.0)), dtype=Float32)) == Float32
-
-@test grid(domain, [0.1π, 0.01π]) ≈ [-π:0.1π:π, -0.45π:0.01π:0.45π]
+@test dtype(domain) == Float64
+@test dtype(DomainInfo(constIC(0, t ∈ Interval(0, 1)), constBC(16.0, lon ∈ Interval(0.0, 1.0)), dtype=Float32)) == Float32
 
 @test timesteps(0:0.1:1, 0:0.15:1) == [0.0, 0.1, 0.15, 0.2, 0.3, 0.4, 0.45, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1.0]
 

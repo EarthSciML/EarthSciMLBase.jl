@@ -46,8 +46,8 @@ function mtk_op(s::Simulator)
         end
         @inbounds @views mapreduce(jcol -> ff(jcol[2], p, t, jcol[1]), hcat, enumerate(eachcol(u)))
     end
-    
-    u = zeros(utype(s.domaininfo), size(s)...)
+
+    u = zeros(dtype(s.domaininfo), size(s)...)
     indata = reshape(u, size(s)[1], :)
     fo = FunctionOperator(f, indata, batch=true, p=s.p)
 
@@ -79,7 +79,7 @@ as described [here](https://docs.sciml.ai/DiffEqDocs/stable/tutorials/advanced_o
 
 $(FIELDS)
 """
-struct SimulatorIMEX <: SimulatorStrategy 
+struct SimulatorIMEX <: SimulatorStrategy
     alg
 end
 

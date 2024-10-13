@@ -1,10 +1,14 @@
 using Test
 using Main.EarthSciMLBase
+using Main.EarthSciMLBase: pvars, grid, time_range, add_partial_derivative_func
 using ModelingToolkit, Catalyst
 using MethodOfLines, DifferentialEquations, DomainSets
-using ModelingToolkit: t_nounits; t=t_nounits
-using ModelingToolkit: D_nounits; D=D_nounits
+using ModelingToolkit: t_nounits;
+t = t_nounits;
+using ModelingToolkit: D_nounits;
+D = D_nounits;
 import SciMLBase
+using Dates
 
 @parameters x y α = 10.0
 @variables u(t) v(t)
@@ -207,4 +211,90 @@ end
     want_replacements = [lat, lon]
     @test isequal(toreplace, want_toreplace)
     @test isequal(replacements, want_replacements)
+end
+
+@testset "xy" begin
+    di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
+        xrange=0:0.1:1, yrange=0:0.1:2)
+
+    @test Symbol.(pvars(di)) == [:x, :y]
+    @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0]
+    @test time_range(di) == (1.7040672e9, 1.704078e9)
+    @test length(di.partial_derivative_funcs) == 0
+end
+
+@testset "xy offset" begin
+    di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime=DateTime(2024, 1, 1),
+        xrange=0:0.1:1, yrange=0:0.1:2)
+
+    @test Symbol.(pvars(di)) == [:x, :y]
+    @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0]
+    @test time_range(di) == (0.0, 10800.0)
+    @test length(di.partial_derivative_funcs) == 0
+end
+
+@testset "xy level" begin
+    di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime=DateTime(2024, 1, 1),
+        xrange=0:0.1:1, yrange=0:0.1:2, levelrange=1:15)
+
+    @test Symbol.(pvars(di)) == [:x, :y, :lev]
+    @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0, 1:15]
+    @test time_range(di) == (0.0, 10800.0)
+    @test length(di.partial_derivative_funcs) == 0
+end
+
+@testset "xy float32" begin
+    di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime=DateTime(2024, 1, 1),
+        xrange=0:0.1:1, yrange=0:0.1:2, levelrange=1:15, dtype=Float32)
+
+    @test Symbol.(pvars(di)) == [:x, :y, :lev]
+    @test grid(di) == [0.0f0:0.1f0:1.0f0, 0.0f0:0.1f0:2.0f0, 1.0f0:15.0f0]
+    @test time_range(di) == (0.0f0, 10800.0f0)
+    @test length(di.partial_derivative_funcs) == 0
+end
+
+@testset "lon lat float32" begin
+    di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime=DateTime(2024, 1, 1),
+        lonrange=-2π:π/10:2π, latrange=0:π/10:π, levelrange=1:0.5:10, dtype=Float32)
+
+    @test Symbol.(pvars(di)) == [:lon, :lat, :lev]
+    @test grid(di) ≈ [Float32(-2π):Float32(π / 10):Float32(2π), 0:Float32(π / 10):Float32(π), 1.0f0:0.5f0:10.0f0]
+    @test time_range(di) == (0.0f0, 10800.0f0)
+    @test length(di.partial_derivative_funcs) == 1
+end
+
+@testset "lon lat" begin
+    di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime=DateTime(2024, 1, 1),
+        lonrange=-2π:π/10:2π, latrange=0:π/5:π, levelrange=1:0.5:10)
+
+    @test Symbol.(pvars(di)) == [:lon, :lat, :lev]
+    @test grid(di) ≈ [-2π:π/10:2π, 0:π/5:π, 1:0.5:10]
+    @test time_range(di) == (0.0, 10800.0)
+    @test length(di.partial_derivative_funcs) == 1
+end
+
+@testset "add pd func" begin
+    di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime=DateTime(2024, 1, 1),
+        lonrange=-2π:π/10:2π, latrange=0:π/5:π, levelrange=1:0.5:10)
+
+    di = add_partial_derivative_func(di, x -> x^2)
+
+    @test Symbol.(pvars(di)) == [:lon, :lat, :lev]
+    @test grid(di) ≈ [-2π:π/10:2π, 0:π/5:π, 1:0.5:10]
+    @test time_range(di) == (0.0, 10800.0)
+    @test length(di.partial_derivative_funcs) == 2
+end
+
+@testset "errors" begin
+    @test_throws AssertionError DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1);
+        latrange=0:1, lonrange=0:1)
+    @test_throws AssertionError DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
+        latrange=0:10, lonrange=0:10)
+    @test_throws AssertionError DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
+        latrange=0:1, xrange=0:10)
+    @test_throws AssertionError DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
+        latrange=0:1, xrange=0:10, lonrange=0:1)
+    @test_throws AssertionError DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3))
+    @test_throws AssertionError DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
+        lonrange=0:1)
 end

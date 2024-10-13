@@ -1,7 +1,7 @@
 export DomainInfo, ICBCcomponent, constIC, constBC, zerogradBC, periodicBC, partialderivatives
 
 """
-Initial and boundary condition components that can be combined to 
+Initial and boundary condition components that can be combined to
 create an DomainInfo object.
 
 $(METHODLIST)
@@ -14,8 +14,8 @@ abstract type BCcomponent <: ICBCcomponent end
 """
 $(SIGNATURES)
 
-Domain information for a ModelingToolkit.jl PDESystem. 
-It can be used with the `+` operator to add initial and boundary conditions 
+Domain information for a ModelingToolkit.jl PDESystem.
+It can be used with the `+` operator to add initial and boundary conditions
 and coordinate transforms to a
 ModelingToolkit.jl ODESystem or Catalyst.jl ReactionSystem.
 
@@ -27,41 +27,146 @@ $(FIELDS)
 struct DomainInfo{T}
     """
     Function that returns spatial derivatives of the partially-independent variables,
-    optionally performing a coordinate transformation first. 
+    optionally performing a coordinate transformation first.
 
     Current function options in this package are:
-    - `partialderivatives_δxyδlonlat`: Returns partial derivatives after transforming any variables named `lat` and `lon` 
+    - `partialderivatives_δxyδlonlat`: Returns partial derivatives after transforming any variables named `lat` and `lon`
     from degrees to cartesian meters, assuming a spherical Earth.
 
-    Other packages may implement additional functions. They are encouraged to use function names starting 
+    Other packages may implement additional functions. They are encouraged to use function names starting
     with `partialderivatives_`.
     """
     partial_derivative_funcs::Vector{Function}
 
+    "The discretization intervals for the partial independent variables."
+    grid_spacing
+
     "The sets of initial and/or boundary conditions."
     icbc::Vector{ICBCcomponent}
 
-    function DomainInfo(icbc::ICBCcomponent...; dtype=Float64)
-        @assert length(icbc) > 0 "At least one initial or boundary condition is required."
-        @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        new{dtype}([], ICBCcomponent[icbc...])
+    "The spatial reference system for the domain."
+    spatial_ref
+
+    "The time offset for the domain."
+    time_offset::T
+
+    function DomainInfo(pdfs, gs, icbc, sr, to::T) where T
+        new{T}(pdfs, gs, icbc, sr, to)
     end
-    function DomainInfo(fdx::Function, icbc::ICBCcomponent...; dtype=Float64) 
+    function DomainInfo(icbc::ICBCcomponent...; dtype=Float64, grid_spacing=nothing,
+        spatial_ref="+proj=longlat +datum=WGS84 +no_defs")
         @assert length(icbc) > 0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        new{dtype}([fdx], ICBCcomponent[icbc...])
+        new{dtype}([], grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
     end
-    function DomainInfo(fdxs::Vector{Function}, icbc::ICBCcomponent...; dtype=Float64) 
+    function DomainInfo(fdx::Function, icbc::ICBCcomponent...; grid_spacing=nothing,
+        dtype=Float64, spatial_ref="+proj=longlat +datum=WGS84 +no_defs")
         @assert length(icbc) > 0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        new{dtype}(fdxs, ICBCcomponent[icbc...])
+        new{dtype}([fdx], grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
+    end
+    function DomainInfo(fdxs::Vector{Function}, icbc::ICBCcomponent...;
+        dtype=Float64, grid_spacing=nothing, spatial_ref="+proj=longlat +datum=WGS84 +no_defs")
+        @assert length(icbc) > 0 "At least one initial or boundary condition is required."
+        @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
+        new{dtype}(fdxs, grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
+    end
+    function DomainInfo(starttime::DateTime, endtime::DateTime;
+        xrange=nothing, yrange=nothing, levelrange=nothing,
+        latrange=nothing, lonrange=nothing, dtype=Float64, level_trans=nothing, offsettime=0.0,
+        spatial_ref="+proj=longlat +datum=WGS84 +no_defs")
+
+        @assert dtype(datetime2unix(starttime)) < dtype(datetime2unix(endtime)) "starttime must be before endtime when represented as $dtype."
+        @assert (!isnothing(xrange) && !isnothing(yrange)) ||
+                (!isnothing(latrange) && !isnothing(lonrange)) "Either x and y ranges or lat and lon ranges must be provided."
+        @assert (isnothing(xrange) && isnothing(yrange)) ||
+                (isnothing(latrange) && isnothing(lonrange)) "Either x and y ranges or lat and lon ranges must be provided, not both."
+
+        # Coordinate transforms
+        fdxs = Vector{Function}()
+        if !isnothing(latrange) # Convert lat/lon to meters.
+            push!(fdxs, partialderivatives_δxyδlonlat)
+        end
+        !isnothing(level_trans) ? push!(fdxs, level_trans) : nothing
+
+        offset = offsettime isa DateTime ? datetime2unix(offsettime) : offsettime
+        ic = constIC(dtype(0.0), ModelingToolkit.t ∈ Interval(dtype.(datetime2unix.([starttime, endtime]) .- offset)...))
+
+        boundaries = [] # Boundary conditions
+        grid_spacing = []
+        if !isnothing(latrange)
+            @assert maximum(abs.(latrange)) <= π "Latitude must be in radians."
+            @assert maximum(abs.(lonrange)) <= 2π "Longitude must be in radians."
+            lon = GlobalScope(only(@parameters lon = mean(lonrange) [unit = u"rad", description = "Longitude"]))
+            lat = GlobalScope(only(@parameters lat = mean(latrange) [unit = u"rad", description = "Latitude"]))
+            push!(boundaries, lon ∈ Interval(dtype.([first(lonrange), last(lonrange)])...))
+            push!(boundaries, lat ∈ Interval(dtype.([first(latrange), last(latrange)])...))
+            push!(grid_spacing, dtype.([step(lonrange), step(latrange)])...)
+        else
+            x = GlobalScope(only(@parameters x = mean(xrange) [unit = u"m", description = "East-West Distance"]))
+            y = GlobalScope(only(@parameters y = mean(yrange) [unit = u"m", description = "North-South Distance"]))
+            push!(boundaries, x ∈ Interval(dtype.([first(xrange), last(xrange)])...))
+            push!(boundaries, y ∈ Interval(dtype.([first(yrange), last(yrange)])...))
+            push!(grid_spacing, dtype.([step(xrange), step(yrange)])...)
+        end
+        if !isnothing(levelrange)
+            lev = only(@parameters lev = mean(levelrange) [description = "Level Index"])
+            push!(boundaries, lev ∈ Interval(dtype.([first(levelrange), last(levelrange)])...))
+            push!(grid_spacing, dtype(step(levelrange)))
+        end
+        bcs = constBC(dtype(0.0), boundaries...)
+        new{dtype}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, offset)
     end
 end
 
 """
 $(SIGNATURES)
 
-Return a vector of equations that define the initial and boundary conditions for the 
+Return the data type of the state variables for this domain,
+based on the data types of the boundary conditions domain intervals.
+"""
+dtype(_::DomainInfo{T}) where {T} = T
+
+"""
+$(SIGNATURES)
+
+Return the ranges representing the discretization of the partial independent
+variables for this domain, based on the discretization intervals given in `Δs`
+"""
+function grid(d::DomainInfo{T}) where {T<:AbstractFloat}
+    i = 1
+    rngs = []
+    @assert length(pvars(d)) == length(d.grid_spacing) "The number of partial independent variables ($(length(pvars(d)))) must equal the number of grid spacings provided ($(length(d.grid_spacing)))."
+    for icbc ∈ d.icbc
+        if icbc isa BCcomponent
+            for pd ∈ icbc.partialdomains
+                rng = T(DomainSets.infimum(pd.domain)):T(d.grid_spacing[i]):T(DomainSets.supremum(pd.domain))
+                push!(rngs, rng)
+                i += 1
+            end
+        end
+    end
+    return rngs
+end
+
+"""
+$(SIGNATURES)
+
+Return the time range associated with this domain.
+"""
+function time_range(d::DomainInfo{T})::Tuple{T,T} where {T<:AbstractFloat}
+    for icbc ∈ d.icbc
+        if icbc isa ICcomponent
+            return DomainSets.infimum(icbc.indepdomain.domain), DomainSets.supremum(icbc.indepdomain.domain)
+        end
+    end
+    throw(ArgumentError("Could not find a time range for this domain."))
+end
+
+"""
+$(SIGNATURES)
+
+Return a vector of equations that define the initial and boundary conditions for the
 given state variables.
 """
 function icbc(di::DomainInfo, states::AbstractVector)::Vector{Equation}
@@ -79,7 +184,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Return the independent variable associated with these 
+Return the independent variable associated with these
 initial and boundary conditions.
 """
 function ivar(di::DomainInfo)
@@ -91,7 +196,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Return the partial independent variables associated with these 
+Return the partial independent variables associated with these
 initial and boundary conditions.
 """
 function pvars(di::DomainInfo)
@@ -138,13 +243,13 @@ function partialderivatives(di::DomainInfo)
     xs = pvars(di)
     δs = Differential.(xs)
     ts = partialderivative_transforms(di)
-    [(x)->(δs[i](x) * ts[i]) for i ∈ eachindex(xs)]
+    [(x) -> (δs[i](x) * ts[i]) for i ∈ eachindex(xs)]
 end
 
 """
 $(TYPEDSIGNATURES)
 
-Construct constant initial conditions equal to the value 
+Construct constant initial conditions equal to the value
 specified by `val`.
 
 $(FIELDS)
@@ -160,9 +265,9 @@ end
 function (ic::constIC)(states::AbstractVector, indepdomain::Symbolics.VarDomainPairing, allpartialdomains::Vector{Symbolics.VarDomainPairing})
     dims = [domain.variables for domain in allpartialdomains]
     statevars = add_dims(states, [indepdomain.variables, dims...])
-    
+
     bcs = Equation[]
-    
+
     for state ∈ statevars
         push!(bcs, state.val.f(indepdomain.domain.left, dims...) ~ ic.val)
     end
@@ -173,7 +278,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Construct constant boundary conditions equal to the value 
+Construct constant boundary conditions equal to the value
 specified by `val`.
 
 $(FIELDS)
@@ -191,11 +296,11 @@ end
 function (bc::constBC)(states::AbstractVector, indepdomain::Symbolics.VarDomainPairing, allpartialdomains::Vector{Symbolics.VarDomainPairing})
     dims = [domain.variables for domain in allpartialdomains]
     statevars = add_dims(states, [indepdomain.variables, dims...])
-    
+
     bcs = Equation[]
 
     activepartialdomainindex = vcat((y -> findall(x -> x == y, allpartialdomains)).(bc.partialdomains)...)
-    
+
     for state ∈ statevars
         for (j, i) ∈ enumerate(activepartialdomainindex)
             domain = bc.partialdomains[j]
@@ -228,7 +333,7 @@ end
 function (bc::zerogradBC)(states::AbstractVector, indepdomain::Symbolics.VarDomainPairing, allpartialdomains::Vector{Symbolics.VarDomainPairing})
     dims = [domain.variables for domain in allpartialdomains]
     statevars = add_dims(states, [indepdomain.variables, dims...])
-    
+
     bcs = Equation[]
 
     activepartialdomainindex = vcat((y -> findall(x -> x == y, allpartialdomains)).(bc.partialdomains)...)
@@ -254,7 +359,7 @@ $(TYPEDSIGNATURES)
 
 Construct periodic boundary conditions for the given `partialdomains`.
 Periodic boundary conditions are defined as when the value at one
-side of the domain is set equal to the value at the other side, so 
+side of the domain is set equal to the value at the other side, so
 that the domain "wraps around" from one side to the other.
 
 $(FIELDS)
@@ -270,7 +375,7 @@ end
 function (bc::periodicBC)(states::AbstractVector, indepdomain::Symbolics.VarDomainPairing, allpartialdomains::Vector{Symbolics.VarDomainPairing})
     dims = [domain.variables for domain in allpartialdomains]
     statevars = add_dims(states, [indepdomain.variables, dims...])
-    
+
     bcs = Equation[]
 
     activepartialdomainindex = vcat((y -> findall(x -> x == y, allpartialdomains)).(bc.partialdomains)...)
@@ -292,7 +397,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Returns the dimensions of the independent and partial domains associated with these 
+Returns the dimensions of the independent and partial domains associated with these
 initial or boundary conditions.
 """
 dims(icbc::ICcomponent) = Num[icbc.indepdomain.variables]
@@ -336,11 +441,17 @@ function replacement_params(localcoords::AbstractVector, globalcoords::AbstractV
     replacements = []
     for (i, gc) in enumerate(gcstr)
         for (j, lc) in enumerate(lcstr)
-            if endswith(lc, "₊"*gc)
+            if endswith(lc, "₊" * gc)
                 push!(toreplace, localcoords[j])
                 push!(replacements, globalcoords[i])
             end
         end
     end
     toreplace, replacements
+end
+
+function add_partial_derivative_func(di::DomainInfo, f::Function)
+    fs = di.partial_derivative_funcs
+    push!(fs, f)
+    @set di.partial_derivative_funcs = fs
 end

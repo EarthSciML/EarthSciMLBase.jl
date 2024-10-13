@@ -102,11 +102,14 @@ partialdomains = [lon ∈ Interval(lon_min, lon_max),
 
 domain = DomainInfo(
     partialderivatives_δxyδlonlat,
-    constIC(16.0, indepdomain), constBC(16.0, partialdomains...))
+    constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
+    grid_spacing = [0.1π, 0.1π, 1])
 nothing #hide
 ```
 
 Note that our domain includes a coordinate transform to convert from degrees latitude and longitude to meters.
+Our domain specification also includes grid spacing the the `lon`, `lat`, and `lev`
+coordinates, which we set as 0.1π, 0.1π, and 1, respectively.
 
 !!! warning
     Initial and boundary conditions are not fully implemented for the `Simulator`, so regardless
@@ -123,12 +126,10 @@ op = ExampleOp(sys.windspeed)
 csys = couple(sys, op, domain)
 ```
 
-...and then create a Simulator. 
-Our simulator specification needs to include grid spacing the the `lon`, `lat`, and `lev`
-coordinates, which we set as 0.1π, 0.1π, and 1, respectively.
+...and then create a Simulator.
 
 ```@example sim
-sim = Simulator(csys, [0.1π, 0.1π, 1])
+sim = Simulator(csys)
 ```
 
 Finally, we can choose a [`EarthSciMLBase.SimulatorStrategy`](@ref) and run the simulation.

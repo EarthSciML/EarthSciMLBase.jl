@@ -3,12 +3,7 @@ export Simulator, init_u
 """
 $(TYPEDSIGNATURES)
 
-Specify a simulator for large-scale model runs. 
-`Δs` represent the grid cell spacing in each dimension; for example `Δs = [0.1, 0.1, 1]` 
-would represent a grid with 0.1 spacing in the first two dimensions and 1 in the third,
-in whatever units the grid is natively in.
-The grid spacings should be given in the same order as the partial independent variables
-are in the provided `DomainInfo`.
+Specify a simulator for large-scale model runs.
 
 $(TYPEDFIELDS)
 """
@@ -36,7 +31,7 @@ struct Simulator{T,FT1,FT2,TG}
     "Functions to get the current values of the coordinate transforms with input arguments of time and the partial independent variables"
     tf_fs::FT2
 
-    function Simulator(sys::CoupledSystem, Δs::AbstractVector{T2}) where {T2<:AbstractFloat}
+    function Simulator(sys::CoupledSystem)
         @assert !isnothing(sys.domaininfo) "The system must have a domain specified; see documentation for EarthSciMLBase.DomainInfo."
         mtk_sys = convert(ODESystem, sys; name=:model)
 
@@ -72,12 +67,13 @@ struct Simulator{T,FT1,FT2,TG}
         end
         tf_fs = Tuple(tf_fs)
 
-        T = utype(sys.domaininfo)
+        T = dtype(sys.domaininfo)
 
-        grd = grid(sys.domaininfo, Δs)
+        grd = grid(sys.domaininfo)
         TG = typeof(grd)
 
-        new{T,typeof(obs_fs),typeof(tf_fs),TG}(sys, mtk_sys, sys.domaininfo, pvals, uvals, pvidx, grd, tuple(Δs...), obs_fs, obs_fs_idx, tf_fs)
+        new{T,typeof(obs_fs),typeof(tf_fs),TG}(sys, mtk_sys, sys.domaininfo, pvals, uvals,
+            pvidx, grd, tuple(sys.domaininfo.grid_spacing...), obs_fs, obs_fs_idx, tf_fs)
     end
 end
 

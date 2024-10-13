@@ -32,7 +32,7 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, s::Simulator)
         end
         nothing
     end
-    indata = zeros(EarthSciMLBase.utype(s.domaininfo), size(s))
+    indata = zeros(EarthSciMLBase.dtype(s.domaininfo), size(s))
     FunctionOperator(run, indata[:], p=s.p)
 end
 
@@ -56,7 +56,7 @@ partialdomains = [lon ∈ Interval(lon_min, lon_max),
 
 domain = DomainInfo(
     partialderivatives_δxyδlonlat,
-    constIC(16.0, indepdomain), constBC(16.0, partialdomains...))
+    constIC(16.0, indepdomain), constBC(16.0, partialdomains...); grid_spacing=[0.1, 0.1, 1.0])
 
 eqs = [Dt(u) ~ -α * √abs(v) + lon,
     Dt(v) ~ -α * √abs(u) + lat + lev * 1e-14,
@@ -68,7 +68,7 @@ op = ExampleOp(sys.windspeed)
 
 csys = couple(sys, op, domain)
 
-sim = Simulator(csys, [0.1, 0.1, 1])
+sim = Simulator(csys)
 st = SimulatorStrangThreads(Tsit5(), Euler(), 1.0)
 
 @test 1 / (sim.tf_fs[1](0.0, 0.0, 0.0, 0.0) * 180 / π) ≈ 111319.44444444445
@@ -133,11 +133,11 @@ sol = run!(sim, st; abstol=1e-12, reltol=1e-12)
     domain = DomainInfo(
         partialderivatives_δxyδlonlat,
         constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
-        dtype=Float32)
+        dtype=Float32, grid_spacing=[0.1, 0.1, 1])
 
     csys = couple(sys, op, domain)
 
-    sim = Simulator(csys, [0.1, 0.1, 1])
+    sim = Simulator(csys)
 
     sol = run!(sim, st)
 
@@ -148,11 +148,11 @@ end
     domain = DomainInfo(
         partialderivatives_δxyδlonlat,
         constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
-        dtype=Float32)
+        dtype=Float32, grid_spacing=[0.1, 0.1, 1])
 
     csys = couple(sys, domain)
 
-    sim = Simulator(csys, [0.1, 0.1, 1])
+    sim = Simulator(csys)
 
     sol = run!(sim, st; abstol=1e-6, reltol=1e-6)
 
@@ -190,7 +190,7 @@ end
     )
     cc = cbt(0)
     csys2 = couple(csys, cb, cc)
-    sim = Simulator(csys2, [0.1, 0.1, 1])
+    sim = Simulator(csys2)
     run!(sim, st)
     @test runcount > 0
     @test cc.runcount > 0
