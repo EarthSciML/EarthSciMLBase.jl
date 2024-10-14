@@ -73,7 +73,7 @@ Run the simualation.
 function run!(s::Simulator{T}, st::SimulatorStrang, u=init_u(s); kwargs...) where {T}
     II = CartesianIndices(size(u)[2:4])
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
-    start, finish = time_range(s.domaininfo)
+    start, finish = tspan(s.domaininfo)
     prob = ODEProblem(s.sys_mtk, [], (start, finish), []; kwargs...)
     stiff_integrators = [init(remake(prob, u0=similar(s.u_init), p=deepcopy(s.p)), st.stiffalg, save_on=false,
         save_start=false, save_end=false, initialize_save=false; kwargs...)

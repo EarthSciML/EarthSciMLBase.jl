@@ -98,7 +98,7 @@ function run!(s::Simulator, st::SimulatorIMEX, u=init_u(s); kwargs...)
     # This works because SciMLOperators can be added together.
     f2 = sum([get_scimlop(op, s) for op ∈ s.sys.ops])
 
-    start, finish = time_range(s.domaininfo)
+    start, finish = tspan(s.domaininfo)
     prob = SplitODEProblem(f1, f2, u, (start, finish), s.p, callback=CallbackSet(get_callbacks(s)), kwargs...)
     solve(prob, st.alg; kwargs...)
 end

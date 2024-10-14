@@ -154,13 +154,17 @@ $(SIGNATURES)
 
 Return the time range associated with this domain.
 """
-function time_range(d::DomainInfo{T})::Tuple{T,T} where {T<:AbstractFloat}
+function tspan(d::DomainInfo{T})::Tuple{T,T} where {T<:AbstractFloat}
     for icbc ∈ d.icbc
         if icbc isa ICcomponent
             return DomainSets.infimum(icbc.indepdomain.domain), DomainSets.supremum(icbc.indepdomain.domain)
         end
     end
     throw(ArgumentError("Could not find a time range for this domain."))
+end
+
+function tspan_datetime(d::DomainInfo)
+    (Float64.(tspan(d)) .+ Float64(d.time_offset)) .|> unix2datetime
 end
 
 """

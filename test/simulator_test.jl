@@ -98,7 +98,7 @@ u = init_u(sim)
 IIchunks, integrators = let
     II = CartesianIndices(size(u)[2:4])
     IIchunks = collect(Iterators.partition(II, length(II) ÷ st.threads))
-    start, finish = EarthSciMLBase.time_range(sim.domaininfo)
+    start, finish = EarthSciMLBase.tspan(sim.domaininfo)
     prob = ODEProblem(sim.sys_mtk, [], (start, finish), [])
     integrators = [init(remake(prob, u0=similar(sim.u_init), p=deepcopy(sim.p)), st.stiffalg, save_on=false,
         save_start=false, save_end=false, initialize_save=false; abstol=1e-12, reltol=1e-12)

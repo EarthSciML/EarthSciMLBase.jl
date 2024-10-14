@@ -1,6 +1,6 @@
 using Test
 using Main.EarthSciMLBase
-using Main.EarthSciMLBase: pvars, grid, time_range, add_partial_derivative_func
+using Main.EarthSciMLBase: pvars, grid, tspan, tspan_datetime, add_partial_derivative_func
 using ModelingToolkit, Catalyst
 using MethodOfLines, DifferentialEquations, DomainSets
 using ModelingToolkit: t_nounits;
@@ -219,7 +219,7 @@ end
 
     @test Symbol.(pvars(di)) == [:x, :y]
     @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0]
-    @test time_range(di) == (1.7040672e9, 1.704078e9)
+    @test tspan(di) == (1.7040672e9, 1.704078e9)
     @test length(di.partial_derivative_funcs) == 0
 end
 
@@ -229,7 +229,8 @@ end
 
     @test Symbol.(pvars(di)) == [:x, :y]
     @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0]
-    @test time_range(di) == (0.0, 10800.0)
+    @test tspan(di) == (0.0, 10800.0)
+    @test tspan_datetime(di) == (DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3))
     @test length(di.partial_derivative_funcs) == 0
 end
 
@@ -239,7 +240,7 @@ end
 
     @test Symbol.(pvars(di)) == [:x, :y, :lev]
     @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0, 1:15]
-    @test time_range(di) == (0.0, 10800.0)
+    @test tspan(di) == (0.0, 10800.0)
     @test length(di.partial_derivative_funcs) == 0
 end
 
@@ -249,7 +250,7 @@ end
 
     @test Symbol.(pvars(di)) == [:x, :y, :lev]
     @test grid(di) == [0.0f0:0.1f0:1.0f0, 0.0f0:0.1f0:2.0f0, 1.0f0:15.0f0]
-    @test time_range(di) == (0.0f0, 10800.0f0)
+    @test tspan(di) == (0.0f0, 10800.0f0)
     @test length(di.partial_derivative_funcs) == 0
 end
 
@@ -259,7 +260,7 @@ end
 
     @test Symbol.(pvars(di)) == [:lon, :lat, :lev]
     @test grid(di) ≈ [Float32(-2π):Float32(π / 10):Float32(2π), 0:Float32(π / 10):Float32(π), 1.0f0:0.5f0:10.0f0]
-    @test time_range(di) == (0.0f0, 10800.0f0)
+    @test tspan(di) == (0.0f0, 10800.0f0)
     @test length(di.partial_derivative_funcs) == 1
 end
 
@@ -269,7 +270,7 @@ end
 
     @test Symbol.(pvars(di)) == [:lon, :lat, :lev]
     @test grid(di) ≈ [-2π:π/10:2π, 0:π/5:π, 1:0.5:10]
-    @test time_range(di) == (0.0, 10800.0)
+    @test tspan(di) == (0.0, 10800.0)
     @test length(di.partial_derivative_funcs) == 1
 end
 
@@ -281,7 +282,7 @@ end
 
     @test Symbol.(pvars(di)) == [:lon, :lat, :lev]
     @test grid(di) ≈ [-2π:π/10:2π, 0:π/5:π, 1:0.5:10]
-    @test time_range(di) == (0.0, 10800.0)
+    @test tspan(di) == (0.0, 10800.0)
     @test length(di.partial_derivative_funcs) == 2
 end
 
