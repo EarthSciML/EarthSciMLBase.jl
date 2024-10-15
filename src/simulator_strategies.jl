@@ -21,47 +21,39 @@ function run!(st::SimulatorStrategy, simulator)
     error("Not implemented.")
 end
 
-"Return a SciMLOperator to apply the MTK system to each column of s.u after reshaping to a matrix."
-function mtk_op(s::Simulator)
+"Return a function to apply the MTK system to each column of s.u after reshaping to a matrix."
+function mtk_func(s::Simulator)
     mtkf = ODEFunction(s.sys_mtk)
     II = CartesianIndices(size(s)[2:4])
+    nrows = size(s)[1]
+    grid = [g for g in s.grid]
     function setp!(p, j) # Set the parameters for the jth grid cell.
         ii = II[j]
-        for (jj, g) ∈ enumerate(s.grid) # Set the coordinates of this grid cell.
+        for (jj, g) ∈ enumerate(grid) # Set the coordinates of this grid cell.
             p[s.pvidx[jj]] = g[ii[jj]]
         end
     end
-    function f(du, u::AbstractMatrix, p, t) # In-place, matrix
-        @inbounds for j ∈ 1:size(u, 2)
-            col = view(u, :, j)
-            ddu = view(du, :, j)
+    function f(du, u, p, t) # In-place
+        umat = reshape(u, nrows, :)
+        dumat = reshape(du, nrows, :)
+        @inbounds for j ∈ 1:size(umat, 2)
+            col = view(umat, :, j)
+            ddu = view(dumat, :, j)
             setp!(p, j)
             @inline mtkf(ddu, col, p, t)
         end
     end
-    function f(u::AbstractMatrix, p, t) # Out-of-place, matrix
+    function f(u, p, t) # Out-of-place
+        umat = reshape(u, nrows, :)
         function ff(u, p, t, j)
             setp!(p, j)
             mtkf(u, p, t)
         end
-        @inbounds @views mapreduce(jcol -> ff(jcol[2], p, t, jcol[1]), hcat, enumerate(eachcol(u)))
+        @inbounds @views mapreduce(jcol -> ff(jcol[2], p, t, jcol[1]), hcat, enumerate(eachcol(umat)))
     end
-
-    u = zeros(dtype(s.domaininfo), size(s)...)
-    indata = reshape(u, size(s)[1], :)
-    fo = FunctionOperator(f, indata, batch=true, p=s.p)
-
-    ncols = size(indata, 2)
-    # Rehape the input vector to a matrix, then apply the FunctionOperator.
-    #op = ScalarOperator(1.0) * TensorProductOperator(I(ncols), fo)
-    op = TensorProductOperator(I(ncols), fo)
-    cache_operator(op, u[:])
-end
-
-function mtk_func(s::Simulator)
     b = repeat([length(unknowns(s.sys_mtk))], length(s) ÷ size(s)[1])
     j = BlockBandedMatrix{Float64}(undef, b, b, (0,0)) # Jacobian prototype
-    ODEFunction(mtk_op(s); jac_prototype=j)
+    ODEFunction(f; jac_prototype=j)
 end
 
 """
@@ -99,6 +91,6 @@ function run!(s::Simulator, st::SimulatorIMEX, u=init_u(s); kwargs...)
     f2 = sum([get_scimlop(op, s) for op ∈ s.sys.ops])
 
     start, finish = tspan(s.domaininfo)
-    prob = SplitODEProblem(f1, f2, u, (start, finish), s.p, callback=CallbackSet(get_callbacks(s)), kwargs...)
+    prob = SplitODEProblem(f1, f2, u[:], (start, finish), s.p, callback=CallbackSet(get_callbacks(s)...); kwargs...)
     solve(prob, st.alg; kwargs...)
 end

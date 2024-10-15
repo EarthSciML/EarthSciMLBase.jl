@@ -113,14 +113,13 @@ EarthSciMLBase.threaded_ode_step!(sim, u, IIchunks, integrators, 0.0, 1.0)
 
 @test sum(abs.(u)) ≈ 212733.04492722102
 
-#@testset "mtk_func" begin
-begin
+@testset "mtk_func" begin
     ucopy = copy(u)
     f = EarthSciMLBase.mtk_func(sim)
-    u = EarthSciMLBase.init_u(sim)
-    du = similar(u)
-    prob = ODEProblem(f, u[:], (0.0, 1.0), sim.p)
-    sol = solve(prob, KenCarp47(linsolve=KrylovJL_GMRES(), autodiff=false))
+    uu = EarthSciMLBase.init_u(sim)
+    du = similar(uu)
+    prob = ODEProblem(f, uu[:], (0.0, 1.0), sim.p)
+    sol = solve(prob, Tsit5())
     uu = reshape(sol.u[end], size(ucopy)...)
     @test uu[:] ≈ ucopy[:] rtol = 0.01
 end
@@ -168,8 +167,9 @@ end
     sol = run!(sim, st; abstol=1e-12, reltol=1e-12)
     @test sum(abs.(sol.u[end])) ≈ 3.77224671877136e7 rtol = 1e-3
 
-    st = SimulatorIMEX(KenCarp47(linsolve=KrylovJL_GMRES(), autodiff=false))
-    @test_broken run!(sim, st)
+    st = SimulatorIMEX(Tsit5())
+    sol = run!(sim, st)
+    @test sum(abs.(sol.u[end])) ≈ 3.3333500929324217e7 rtol = 1e-3 # No Splitting error in this one.
 end
 
 mutable struct cbt
