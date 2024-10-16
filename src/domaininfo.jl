@@ -97,14 +97,14 @@ struct DomainInfo{T}
         if !isnothing(latrange)
             @assert maximum(abs.(latrange)) <= π "Latitude must be in radians."
             @assert maximum(abs.(lonrange)) <= 2π "Longitude must be in radians."
-            lon = GlobalScope(only(@parameters lon = mean(lonrange) [unit = u"rad", description = "Longitude"]))
-            lat = GlobalScope(only(@parameters lat = mean(latrange) [unit = u"rad", description = "Latitude"]))
+            lon = only(@parameters lon = mean(lonrange) [unit = u"rad", description = "Longitude"])
+            lat = only(@parameters lat = mean(latrange) [unit = u"rad", description = "Latitude"])
             push!(boundaries, lon ∈ Interval(dtype.([first(lonrange), last(lonrange)])...))
             push!(boundaries, lat ∈ Interval(dtype.([first(latrange), last(latrange)])...))
             push!(grid_spacing, dtype.([step(lonrange), step(latrange)])...)
         else
-            x = GlobalScope(only(@parameters x = mean(xrange) [unit = u"m", description = "East-West Distance"]))
-            y = GlobalScope(only(@parameters y = mean(yrange) [unit = u"m", description = "North-South Distance"]))
+            x = only(@parameters x = mean(xrange) [unit = u"m", description = "East-West Distance"])
+            y = only(@parameters y = mean(yrange) [unit = u"m", description = "North-South Distance"])
             push!(boundaries, x ∈ Interval(dtype.([first(xrange), last(xrange)])...))
             push!(boundaries, y ∈ Interval(dtype.([first(yrange), last(yrange)])...))
             push!(grid_spacing, dtype.([step(xrange), step(yrange)])...)

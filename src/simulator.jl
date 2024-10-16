@@ -47,8 +47,15 @@ struct Simulator{T,FT1,FT2,TG}
         iv = ivar(sys.domaininfo)
         pv = pvars(sys.domaininfo)
         @assert length(pv) == 3 "Currently only 3D simulations are supported."
-        pvidx = [only(findall(v -> split(String(Symbol(v)), "₊")[end] == String(Symbol(p)), parameters(mtk_sys))) for p ∈ pv]
-        @assert !any(isnothing.(pvidx)) error("Partial independent variables $(pv[isnothing.(pvidx)]) not found in $(parameters(mtk_sys)).")
+        _pvidx = [findall(v -> split(String(Symbol(v)), "₊")[end] == String(Symbol(p)), parameters(mtk_sys)) for p ∈ pv]
+        for (i, idx) in enumerate(_pvidx)
+            if length(idx) > 1
+                error("Partial independent variable '$(pv[i])' has multiple matches in system parameters: [$(parameters(mtk_sys)[idx])].")
+            elseif length(idx) == 0
+                error("Partial independent variable '$(pv[i])' not found in system parameters [$(parameters(mtk_sys))].")
+            end
+        end
+        pvidx = only.(_pvidx)
 
         # Get functions for observed variables
         obs_fs_idx = Dict()

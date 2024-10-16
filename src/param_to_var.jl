@@ -26,7 +26,11 @@ function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
     params = parameters(sys)
     replace = Dict()
     for p ∈ ps
+        if p in ModelingToolkit.tosymbol.(unknowns(sys), escape=false) # Skip if it is already a variable.
+            continue
+        end
         iparam = findfirst(isequal(p), Symbol.(params))
+        @assert !isnothing(iparam) "Parameter `$p` not found in the system parameters [$(Symbol.(params))]"
         param = params[iparam]
 
         iv = ModelingToolkit.get_iv(sys)
@@ -35,6 +39,9 @@ function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
         replace[param] = newvar
     end
 
+    if isempty(replace)
+        return sys # Nothing to replace
+    end
     newsys = SymbolicUtils.substitute(sys, replace)
     copy_with_change(newsys;
         metadata=ModelingToolkit.get_metadata(sys),
