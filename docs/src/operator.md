@@ -46,7 +46,7 @@ end
 ```
 In the case above, we're setting up our operator so that it can hold a parameter from our ODE system.
 
-Next, we need to define a method of `EarthSciMLBase.get_scimlop` for our operator. This method will be called by the simulator to get a [`SciMLOperators.AbstractSciMLOperator`](https://docs.sciml.ai/SciMLOperators/stable/interface/) that will be used conjuction with the ModelingToolkit system above to integrate the simulation forward in time.
+Next, we need to define a method of `EarthSciMLBase.get_scimlop` for our operator. This method will be called to get a [`SciMLOperators.AbstractSciMLOperator`](https://docs.sciml.ai/SciMLOperators/stable/interface/) that will be used conjunction with the ModelingToolkit system above to integrate the simulation forward in time.
 
 ```@example sim
 function EarthSciMLBase.get_scimlop(op::ExampleOp, mtk_sys, domain::DomainInfo, obs_functions, coordinate_transform_functions, u0, p)
@@ -116,7 +116,7 @@ coordinates, which we set as 0.1π, 0.1π, and 1, respectively.
     of the conditions you specify, the initial conditions will be the default values
     of the variables in the ODE system, and the boundary conditions will be zero.
 
-## Coupling and Running the Simulator
+## Coupling and Running the Simulation
 
 Next, initialize our operator, giving the the `windspeed` observed variable, and we can couple our ODESystem, Operator, and Domain together into a single model:
 
@@ -126,8 +126,8 @@ op = ExampleOp(sys.windspeed)
 csys = couple(sys, op, domain)
 ```
 
-Finally, we can choose a [`EarthSciMLBase.SimulatorStrategy`](@ref) and run the simulation.
-We choose the [`SimulatorStrangThreads`](@ref) strategy, which needs us to 
+Finally, we can choose a [`EarthSciMLBase.SolverStrategy`](@ref) and run the simulation.
+We choose the [`SolverStrangThreads`](@ref) strategy, which needs us to 
 specify an ODE solver from the [options available in DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/) for both the MTK system.
 We choose the `Tsit5` solver.
 Then we create an [ODEProblem](https://docs.sciml.ai/DiffEqDocs/stable/types/ode_types/) which can be used to run the simulation.
