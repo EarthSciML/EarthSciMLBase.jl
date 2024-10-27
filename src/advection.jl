@@ -47,7 +47,7 @@ Apply advection to a model.
 """
 struct Advection end
 
-# Create a system of equations that apply advection to the variables in `vars`, 
+# Create a system of equations that apply advection to the variables in `vars`,
 # using the given initial and boundary conditions to determine which directions
 # to advect in.
 function advection(vars, di::DomainInfo)
@@ -67,13 +67,13 @@ function advection(vars, di::DomainInfo)
 end
 
 function couple(c::CoupledSystem, _::Advection)::CoupledSystem
-    @assert isa(c.domaininfo, DomainInfo) "The system must have initial and boundary conditions (i.e. DomainInfo) to add advection."
+    dom = domain(c)
 
     # Add in a model component to allow the specification of the wind velocity.
-    push!(c.systems, MeanWind(ivar(c.domaininfo), c.domaininfo))
+    push!(c.systems, MeanWind(ivar(dom), dom))
 
     function f(sys::ModelingToolkit.PDESystem)
-        eqs = advection(sys.dvs, c.domaininfo)
+        eqs = advection(sys.dvs, dom)
         operator_compose!(sys, eqs)
     end
     push!(c.pdefunctions, f)

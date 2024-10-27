@@ -119,6 +119,9 @@ struct DomainInfo{T}
     end
 end
 
+Base.size(d::DomainInfo) = (length(g) for g ∈ grid(d))
+Base.size(d::DomainInfo, i) = length(grid(d)[i])
+
 """
 $(SIGNATURES)
 
@@ -146,7 +149,7 @@ function grid(d::DomainInfo{T}) where {T<:AbstractFloat}
             end
         end
     end
-    return rngs
+    return [rng for rng in rngs]
 end
 
 """

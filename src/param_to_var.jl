@@ -30,7 +30,7 @@ function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
             continue
         end
         iparam = findfirst(isequal(p), Symbol.(params))
-        @assert !isnothing(iparam) "Parameter `$p` not found in the system parameters [$(Symbol.(params))]"
+        @assert !isnothing(iparam) "Parameter `$p` not found in the system parameters $(Symbol.(params))"
         param = params[iparam]
 
         iv = ModelingToolkit.get_iv(sys)

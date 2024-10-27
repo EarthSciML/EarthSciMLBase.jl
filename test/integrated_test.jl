@@ -1,5 +1,5 @@
 using Test
-using ModelingToolkit, Catalyst, Main.EarthSciMLBase
+using ModelingToolkit, Catalyst, EarthSciMLBase
 using ModelingToolkit: t_nounits, D_nounits
 using OrdinaryDiffEq: ODEProblem, solve
 using SciMLBase: ReturnCode
@@ -58,7 +58,7 @@ end
 
 p = Photolysis()
 @testset "Photolysis single" begin
-    prob = ODEProblem(structural_simplify(p), [], (0.0, 1.0))
+    prob = ODEProblem(structural_simplify(EarthSciMLBase.remove_extra_defaults(p)), [], (0.0, 1.0))
     sol = solve(prob)
     @test sol.retcode == ReturnCode.Success
 end

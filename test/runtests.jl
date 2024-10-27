@@ -9,8 +9,8 @@ using Test, SafeTestsets
     @safetestset "Advection" begin include("advection_test.jl") end
     @safetestset "Coordinate Transformation" begin include("coord_trans_test.jl") end
     @safetestset "Parameter to Variable" begin include("param_to_var_test.jl") end
-    @safetestset "Simulator Utils" begin include("simulator_utils_test.jl") end
-    @safetestset "Simulator" begin include("simulator_test.jl") end
+    @safetestset "Coupled System Utils" begin include("coupled_system_utils_test.jl") end
+    @safetestset "Solver Strategies" begin include("solver_strategy_test.jl") end
     @safetestset "Integrated Test" begin include("integrated_test.jl") end
     @safetestset "Docs" begin
         using Documenter

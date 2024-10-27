@@ -179,3 +179,86 @@ function remove_extra_defaults(sys)
     new_eqs = substitute.(equations(sys), (Dict(replacements...),))
     copy_with_change(sys, eqs=new_eqs)
 end
+
+"Initialize the state variables."
+function init_u(mtk_sys::ODESystem, d::DomainInfo)
+    vars = unknowns(mtk_sys)
+    dflts = ModelingToolkit.get_defaults(mtk_sys)
+    u0 = [dflts[u] for u ∈ vars]
+
+    T = dtype(d)
+    g = grid(d)
+    u = Array{T}(undef, length(vars), size(d)...)
+    # Set initial conditions
+    for i ∈ eachindex(u0), j ∈ eachindex(g[1]), k ∈ eachindex(g[2]), l ∈ eachindex(g[3])
+        u[i, j, k, l] = u0[i]
+    end
+    u
+end
+
+function default_params(mtk_sys::AbstractSystem)
+    dflts = ModelingToolkit.get_defaults(mtk_sys)
+    [dflts[p] for p ∈ parameters(mtk_sys)]
+end
+
+# Return the indexes of the coordinate parameters in the parameter vector.
+function coord_idx(mtk_sys::AbstractSystem, domain::DomainInfo)
+    pv = pvars(domain)
+    _pvidx = [findall(v -> split(String(Symbol(v)), "₊")[end] == String(Symbol(p)), parameters(mtk_sys)) for p ∈ pv]
+    for (i, idx) in enumerate(_pvidx)
+        if length(idx) > 1
+            error("Partial independent variable '$(pv[i])' has multiple matches in system parameters: [$(parameters(mtk_sys)[idx])].")
+        elseif length(idx) == 0
+            error("Partial independent variable '$(pv[i])' not found in system parameters [$(parameters(mtk_sys))].")
+        end
+    end
+    only.(_pvidx)
+end
+
+# Create a function to set the coordinates in a parameter vector for a given grid cell
+function coord_setter(sys_mtk::ODESystem, domain::DomainInfo)
+    icoord = coord_idx(sys_mtk, domain)
+    II = CartesianIndices(tuple(size(domain)...))
+    grd = grid(domain)
+    function setp!(p, ii::CartesianIndex) # Set the parameters for the give grid cell index.
+        for (jj, g) ∈ enumerate(grd) # Set the coordinates of this grid cell.
+            p[icoord[jj]] = g[ii[jj]]
+        end
+    end
+    function setp!(p, j::Int) # Set the parameters for the jth grid cell.
+        setp!(p, II[j])
+    end
+    return setp!
+end
+
+# Create functions to get concrete values for the observed variables.
+# The return value is a function that returns the function when
+# given a value.
+function obs_functions(obs_eqs, domain::DomainInfo)
+    pv = pvars(domain)
+    iv = ivar(domain)
+
+    obs_fs_idx = Dict()
+    obs_fs = []
+    for (i, x) ∈ enumerate([eq.lhs for eq ∈ obs_eqs])
+        obs_fs_idx[x] = i
+        push!(obs_fs, observed_function(obs_eqs, x, [iv, pv...]))
+    end
+    obs_fs = Tuple(obs_fs)
+
+    (v) -> obs_fs[obs_fs_idx[v]]
+end
+
+# Return functions to perform coordinate transforms for each of the coordinates.
+function coord_trans_functions(obs_eqs, domain::DomainInfo)
+    pv = pvars(domain)
+    iv = ivar(domain)
+
+    # Get functions for coordinate transforms
+    tf_fs = []
+    @variables 🌈🐉🏒 # Dummy variable.
+    for tf ∈ partialderivative_transforms(domain)
+        push!(tf_fs, observed_function([obs_eqs..., 🌈🐉🏒 ~ tf], 🌈🐉🏒, [iv, pv...]))
+    end
+    tf_fs = Tuple(tf_fs)
+end
