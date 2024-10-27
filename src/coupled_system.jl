@@ -15,7 +15,7 @@ Things that can be added to a `CoupledSystem`:
     * [Callbacks](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/)
     * Types `X` that implement a `EarthSciMLBase.init_callback(::X, sys::CoupledSystem, sys_mtk, obs_eqs, domain::DomainInfo)::DECallback` method
     * Other `CoupledSystem`s
-    * Types `X` that implement a `EarthSciMLBase.couple(::X, ::CoupledSystem)` or `EarthSciMLBase.couple(::CoupledSystem, ::X)` method.
+    * Types `X` that implement a `EarthSciMLBase.couple2(::X, ::CoupledSystem)` or `EarthSciMLBase.couple2(::CoupledSystem, ::X)` method.
     * `Tuple`s or `AbstractVector`s of any of the things above.
 """
 mutable struct CoupledSystem
@@ -83,11 +83,11 @@ function couple(systems...)::CoupledSystem
             push!(o.callbacks, sys)
         elseif (sys isa Tuple) || (sys isa AbstractVector)
             o = couple(o, sys...)
-        elseif hasmethod(init_callback, (typeof(sys), Any, Any, Any, Any))
+        elseif hasmethod(init_callback, (typeof(sys), CoupledSystem, Any, Any, DomainInfo))
             push!(o.init_callbacks, sys)
-        elseif applicable(couple, o, sys)
-            o = couple(o, sys)
-        elseif applicable(couple, sys, o)
+        elseif hasmethod(couple2, (CoupledSystem, typeof(sys)))
+            o = couple2(o, sys)
+        elseif hasmethod(couple2, (typeof(sys), CoupledSystem))
             o = couple(sys, o)
         else
             error("Cannot couple a $(typeof(sys)).")
@@ -219,7 +219,7 @@ end
 """
 Types that implement an:
 
-`init_callback(x, sys, obs_eqs, domain, u0, p)::DECallback`
+`init_callback(x, sys::CoupledSystem, obs_eqs, domain::DomainInfo)::DECallback`
 
 method can also be coupled into a `CoupledSystem`.
 The `init_callback` function will be run before the simulator is run

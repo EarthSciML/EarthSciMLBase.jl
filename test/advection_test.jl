@@ -1,4 +1,4 @@
-using Main.EarthSciMLBase
+using EarthSciMLBase
 using Test
 using DomainSets, MethodOfLines, ModelingToolkit, DifferentialEquations
 using ModelingToolkit: t, D
@@ -46,7 +46,7 @@ using Dates, DomainSets
     eq = equations(combined_mtk)
     eqstr = string(eq)
 
-    @test occursin("- MeanWind₊v_x(t, x)*Differential(x)(examplesys₊y(t, x))", eqstr) || 
+    @test occursin("- MeanWind₊v_x(t, x)*Differential(x)(examplesys₊y(t, x))", eqstr) ||
         occursin("- Differential(x)(examplesys₊y(t, x))*MeanWind₊v_x(t, x)", eqstr)
 
     @test_broken begin # Test fails because PDEs don't currently work with units.

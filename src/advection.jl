@@ -66,7 +66,7 @@ function advection(vars, di::DomainInfo)
     eqs
 end
 
-function couple(c::CoupledSystem, _::Advection)::CoupledSystem
+function couple2(c::CoupledSystem, _::Advection)::CoupledSystem
     dom = domain(c)
 
     # Add in a model component to allow the specification of the wind velocity.
@@ -79,7 +79,6 @@ function couple(c::CoupledSystem, _::Advection)::CoupledSystem
     push!(c.pdefunctions, f)
     c
 end
-couple(a::Advection, c::CoupledSystem)::CoupledSystem = couple(c, a)
 
 struct ConstantWindCoupler
     sys
