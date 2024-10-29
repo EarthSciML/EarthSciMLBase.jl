@@ -236,7 +236,7 @@ end
 
 @testset "xy level" begin
     di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime=DateTime(2024, 1, 1),
-        xrange=0:0.1:1, yrange=0:0.1:2, levelrange=1:15)
+        xrange=0:0.1:1, yrange=0:0.1:2, levrange=1:15)
 
     @test Symbol.(pvars(di)) == [:x, :y, :lev]
     @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0, 1:15]
@@ -246,7 +246,7 @@ end
 
 @testset "xy float32" begin
     di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime=DateTime(2024, 1, 1),
-        xrange=0:0.1:1, yrange=0:0.1:2, levelrange=1:15, dtype=Float32)
+        xrange=0:0.1:1, yrange=0:0.1:2, levrange=1:15, dtype=Float32)
 
     @test Symbol.(pvars(di)) == [:x, :y, :lev]
     @test grid(di) == [0.0f0:0.1f0:1.0f0, 0.0f0:0.1f0:2.0f0, 1.0f0:15.0f0]
@@ -256,7 +256,7 @@ end
 
 @testset "lon lat float32" begin
     di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime=DateTime(2024, 1, 1),
-        lonrange=-2π:π/10:2π, latrange=0:π/10:π, levelrange=1:0.5:10, dtype=Float32)
+        lonrange=-2π:π/10:2π, latrange=0:π/10:π, levrange=1:0.5:10, dtype=Float32)
 
     @test Symbol.(pvars(di)) == [:lon, :lat, :lev]
     @test grid(di) ≈ [Float32(-2π):Float32(π / 10):Float32(2π), 0:Float32(π / 10):Float32(π), 1.0f0:0.5f0:10.0f0]
@@ -266,7 +266,7 @@ end
 
 @testset "lon lat" begin
     di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime=DateTime(2024, 1, 1),
-        lonrange=-2π:π/10:2π, latrange=0:π/5:π, levelrange=1:0.5:10)
+        lonrange=-2π:π/10:2π, latrange=0:π/5:π, levrange=1:0.5:10)
 
     @test Symbol.(pvars(di)) == [:lon, :lat, :lev]
     @test grid(di) ≈ [-2π:π/10:2π, 0:π/5:π, 1:0.5:10]
@@ -276,7 +276,7 @@ end
 
 @testset "add pd func" begin
     di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime=DateTime(2024, 1, 1),
-        lonrange=-2π:π/10:2π, latrange=0:π/5:π, levelrange=1:0.5:10)
+        lonrange=-2π:π/10:2π, latrange=0:π/5:π, levrange=1:0.5:10)
 
     di = add_partial_derivative_func(di, x -> x^2)
 

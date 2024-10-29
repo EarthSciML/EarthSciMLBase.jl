@@ -72,7 +72,7 @@ struct DomainInfo{T}
         new{dtype}(fdxs, grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
     end
     function DomainInfo(starttime::DateTime, endtime::DateTime;
-        xrange=nothing, yrange=nothing, levelrange=nothing,
+        xrange=nothing, yrange=nothing, levrange=nothing,
         latrange=nothing, lonrange=nothing, dtype=Float64, level_trans=nothing, offsettime=0.0,
         spatial_ref="+proj=longlat +datum=WGS84 +no_defs")
 
@@ -109,10 +109,10 @@ struct DomainInfo{T}
             push!(boundaries, y ∈ Interval(dtype.([first(yrange), last(yrange)])...))
             push!(grid_spacing, dtype.([step(xrange), step(yrange)])...)
         end
-        if !isnothing(levelrange)
-            lev = only(@parameters lev = mean(levelrange) [description = "Level Index"])
-            push!(boundaries, lev ∈ Interval(dtype.([first(levelrange), last(levelrange)])...))
-            push!(grid_spacing, dtype(step(levelrange)))
+        if !isnothing(levrange)
+            lev = only(@parameters lev = mean(levrange) [description = "Level Index"])
+            push!(boundaries, lev ∈ Interval(dtype.([first(levrange), last(levrange)])...))
+            push!(grid_spacing, dtype(step(levrange)))
         end
         bcs = constBC(dtype(0.0), boundaries...)
         new{dtype}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, offset)
@@ -134,16 +134,30 @@ dtype(_::DomainInfo{T}) where {T} = T
 $(SIGNATURES)
 
 Return the ranges representing the discretization of the partial independent
-variables for this domain, based on the discretization intervals given in `Δs`
+variables for this domain, based on the discretization intervals given in `Δs`.
 """
-function grid(d::DomainInfo{T}) where {T<:AbstractFloat}
+function grid(d::DomainInfo{T}) where T
+    if !((d.grid_spacing isa Base.AbstractVecOrTuple) &&
+        (length(pvars(d)) == length(d.grid_spacing)))
+        throw(ArgumentError("The number of partial independent variables ($(length(pvars(d)))) must equal the number of grid spacings provided ($(d.grid_spacing))."))
+    end
+    endpts = endpoints(d)
+    [s:d:e for ((s, e), d) in zip(endpts, d.grid_spacing)]
+end
+
+"""
+$(SIGNATURES)
+
+Return the endpoints of the partial independent
+variables for this domain.
+"""
+function endpoints(d::DomainInfo{T}) where T
     i = 1
     rngs = []
-    @assert length(pvars(d)) == length(d.grid_spacing) "The number of partial independent variables ($(length(pvars(d)))) must equal the number of grid spacings provided ($(length(d.grid_spacing)))."
     for icbc ∈ d.icbc
         if icbc isa BCcomponent
             for pd ∈ icbc.partialdomains
-                rng = T(DomainSets.infimum(pd.domain)):T(d.grid_spacing[i]):T(DomainSets.supremum(pd.domain))
+                rng = (T(DomainSets.infimum(pd.domain)), T(DomainSets.supremum(pd.domain)))
                 push!(rngs, rng)
                 i += 1
             end
