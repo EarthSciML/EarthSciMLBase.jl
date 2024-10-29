@@ -49,7 +49,7 @@ In the case above, we're setting up our operator so that it can hold a parameter
 Next, we need to define a method of `EarthSciMLBase.get_scimlop` for our operator. This method will be called to get a [`SciMLOperators.AbstractSciMLOperator`](https://docs.sciml.ai/SciMLOperators/stable/interface/) that will be used conjunction with the ModelingToolkit system above to integrate the simulation forward in time.
 
 ```@example sim
-function EarthSciMLBase.get_scimlop(op::ExampleOp, mtk_sys, domain::DomainInfo, obs_functions, coordinate_transform_functions, u0, p)
+function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, domain::DomainInfo, obs_functions, coordinate_transform_functions, u0, p)
     obs_f = obs_functions(op.α)
     grd = EarthSciMLBase.grid(domain)
     function run(du, u, p, t)

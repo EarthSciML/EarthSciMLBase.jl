@@ -9,7 +9,7 @@ struct ExampleOp <: Operator
     α::Num # Multiplier from ODESystem
 end
 
-function EarthSciMLBase.get_scimlop(op::ExampleOp, mtk_sys, domain::DomainInfo, obs_functions, coordinate_transform_functions, u0, p)
+function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, domain::DomainInfo, obs_functions, coordinate_transform_functions, u0, p)
     obs_f = obs_functions(op.α)
     grd = EarthSciMLBase.grid(domain)
     function run(du, u, p, t)

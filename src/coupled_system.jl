@@ -211,7 +211,7 @@ function nonstiff_ops(sys::CoupledSystem, sys_mtk, obs_eqs, domain, u0, p)
     obs_funcs = obs_functions(obs_eqs, domain)
     coord_trans_funcs = coord_trans_functions(obs_eqs, domain)
     nonstiff_op = length(sys.ops) > 0 ?
-        sum([get_scimlop(op, sys_mtk, domain, obs_funcs, coord_trans_funcs, u0, p) for op ∈ sys.ops]) :
+        sum([get_scimlop(op, sys, sys_mtk, domain, obs_funcs, coord_trans_funcs, u0, p) for op ∈ sys.ops]) :
         NullOperator(length(u0))
     nonstiff_op = cache_operator(nonstiff_op, u0)
 end
