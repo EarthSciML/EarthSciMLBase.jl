@@ -123,7 +123,7 @@ function copy_with_change(sys::ODESystem;
     continuous_events=ModelingToolkit.get_continuous_events(sys),
     discrete_events=ModelingToolkit.get_discrete_events(sys),
 )
-    ODESystem(eqs, ModelingToolkit.get_iv(sys), name=name, metadata=metadata,
+    ODESystem(eqs, ModelingToolkit.get_iv(sys); name=name, metadata=metadata,
         continuous_events=continuous_events, discrete_events=discrete_events)
 end
 
@@ -137,7 +137,7 @@ remove computationally intensive equations that are not used in the final model.
 function prune_observed(sys::ODESystem)
     needed_var_idxs = get_needed_vars(sys)
     needed_vars = Symbolics.tosymbol.(unknowns(sys)[needed_var_idxs]; escape=true)
-    sys = structural_simplify(sys, split=false)
+    sys = structural_simplify(sys)
     deleteindex = []
     for (i, eq) ∈ enumerate(observed(sys))
         lhsvars = Symbolics.tosymbol.(Symbolics.get_variables(eq.lhs); escape=true)
@@ -149,10 +149,7 @@ function prune_observed(sys::ODESystem)
     end
     obs = observed(sys)
     deleteat!(obs, deleteindex)
-    sys2 = structural_simplify(
-        copy_with_change(sys; eqs=[equations(sys); obs]),
-        split=false,
-    )
+    sys2 = structural_simplify(copy_with_change(sys; eqs=[equations(sys); obs]))
     return sys2, observed(sys)
 end
 
@@ -198,13 +195,14 @@ end
 
 function default_params(mtk_sys::AbstractSystem)
     dflts = ModelingToolkit.get_defaults(mtk_sys)
-    [dflts[p] for p ∈ parameters(mtk_sys)]
+    MTKParameters(mtk_sys, dflts)
 end
 
-# Return the indexes of the coordinate parameters in the parameter vector.
-function coord_idx(mtk_sys::AbstractSystem, domain::DomainInfo)
+# Return the coordinate parameters from the parameter vector.
+function coord_params(mtk_sys::AbstractSystem, domain::DomainInfo)
     pv = pvars(domain)
-    _pvidx = [findall(v -> split(String(Symbol(v)), "₊")[end] == String(Symbol(p)), parameters(mtk_sys)) for p ∈ pv]
+    params = parameters(mtk_sys)
+    _pvidx = [findall(v -> split(String(Symbol(v)), "₊")[end] == String(Symbol(p)), params) for p ∈ pv]
     for (i, idx) in enumerate(_pvidx)
         if length(idx) > 1
             error("Partial independent variable '$(pv[i])' has multiple matches in system parameters: [$(parameters(mtk_sys)[idx])].")
@@ -212,18 +210,18 @@ function coord_idx(mtk_sys::AbstractSystem, domain::DomainInfo)
             error("Partial independent variable '$(pv[i])' not found in system parameters [$(parameters(mtk_sys))].")
         end
     end
-    only.(_pvidx)
+    params[only.(_pvidx)]
 end
 
 # Create a function to set the coordinates in a parameter vector for a given grid cell
 function coord_setter(sys_mtk::ODESystem, domain::DomainInfo)
-    icoord = coord_idx(sys_mtk, domain)
+    coords = coord_params(sys_mtk, domain)
+    coord_setter = setp(sys_mtk, coords)
     II = CartesianIndices(tuple(size(domain)...))
     grd = grid(domain)
-    function setp!(p, ii::CartesianIndex) # Set the parameters for the give grid cell index.
-        for (jj, g) ∈ enumerate(grd) # Set the coordinates of this grid cell.
-            p[icoord[jj]] = g[ii[jj]]
-        end
+    function setp!(p, ii::CartesianIndex) # Set the parameters for the given grid cell index.
+        vals = (g[ii[jj]] for (jj, g) ∈ enumerate(grd)) # Get the coordinates of this grid cell.
+        coord_setter(p, vals)
     end
     function setp!(p, j::Int) # Set the parameters for the jth grid cell.
         setp!(p, II[j])

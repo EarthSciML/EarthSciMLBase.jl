@@ -1,5 +1,5 @@
 function _mtk_grid_func(sys_mtk, setp!)
-    mtkf = eval(generate_function(sys_mtk)[2])
+    mtkf = ODEFunction(sys_mtk)
     nrows = length(unknowns(sys_mtk))
     function f(du::AbstractVector, u::AbstractVector, p, t) # In-place
         umat = reshape(u, nrows, :)

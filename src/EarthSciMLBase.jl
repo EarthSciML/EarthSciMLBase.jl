@@ -9,6 +9,7 @@ using SciMLBase: DECallback, CallbackSet, ODEProblem
 using Statistics
 using DiffEqCallbacks
 using LinearAlgebra, BlockBandedMatrices
+using SymbolicIndexingInterface: setp
 using Accessors
 using Graphs
 
