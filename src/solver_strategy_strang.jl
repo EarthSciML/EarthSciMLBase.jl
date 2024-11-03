@@ -56,6 +56,11 @@ Perform a simulation using [Strang splitting](https://en.wikipedia.org/wiki/Stra
 where the MTK system is assumed to be stiff and the operators are assumed to be non-stiff.
 The solution will be calculated in serial.
 
+Additional kwargs for ODEProblem constructor:
+- u0: initial condtions; if "nothing", default values will be used.
+- p: parameters; if "nothing", default values will be used.
+- nonstiff_params: parameters for the [`Operator`](@ref)s.
+
 $(FIELDS)
 """
 struct SolverStrangSerial <: SolverStrang
@@ -71,7 +76,7 @@ end
 nthreads(st::SolverStrangThreads) = st.threads
 nthreads(st::SolverStrangSerial) = 1
 
-function SciMLBase.ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, p=nothing,
+function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, p=nothing,
         nonstiff_params=nothing, name=:model, kwargs...)
 
     sys_mtk, obs_eqs = convert(ODESystem, s; simplify=true, name=name)

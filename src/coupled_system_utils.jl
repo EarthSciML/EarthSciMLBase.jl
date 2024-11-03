@@ -119,12 +119,76 @@ Create a copy of an ODESystem with the given changes.
 function copy_with_change(sys::ODESystem;
     eqs=equations(sys),
     name=nameof(sys),
+    unknowns=unknowns(sys),
+    parameters=parameters(sys),
     metadata=ModelingToolkit.get_metadata(sys),
     continuous_events=ModelingToolkit.get_continuous_events(sys),
     discrete_events=ModelingToolkit.get_discrete_events(sys),
 )
-    ODESystem(eqs, ModelingToolkit.get_iv(sys); name=name, metadata=metadata,
+    ODESystem(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
+        name=name, metadata=metadata,
         continuous_events=continuous_events, discrete_events=discrete_events)
+end
+
+# Get variables effected by this event.
+function get_affected_vars(event)
+    vars = []
+    if event.affects isa AbstractVector
+        for aff in event.affects
+            push!(vars, aff.lhs)
+        end
+    else
+        push!(vars, event.affects.pars...)
+        push!(vars, event.affects.sts...)
+        push!(vars, event.affects.discretes...)
+    end
+    unique(vars)
+end
+
+function var2symbol(var)
+    if var isa Symbolics.CallWithMetadata
+        var = var.f
+    elseif iscall(var)
+        var = operation(var)
+    end
+    Symbolics.tosymbol(var; escape=false)
+end
+
+function var_in_eqs(var, eqs)
+    any([any(isequal.((var2symbol(var),), var2symbol.(get_variables(eq)))) for eq in eqs])
+end
+
+# Return the discrete events that affect variables that are
+# needed to specify the state variables of the given system.
+# This function should be run after running `structural_simplify`.
+function filter_discrete_events(simplified_sys)
+    de = ModelingToolkit.get_discrete_events(simplified_sys)
+    needed_eqs = equations(simplified_sys)
+    keep = []
+    for e in de
+        evars = EarthSciMLBase.get_affected_vars(e)
+        if any(var_in_eqs.(evars, (needed_eqs,)))
+            push!(keep, e)
+        end
+    end
+    keep
+end
+
+# Add the namespace to the affects of the discrete events.
+# This should be done before doing anything else to the system because the
+# events get ignored by default.
+# TODO(CT): This is probably only necessary due a bug in MTK. Remove this when fixed.
+function namespace_events(sys)
+    events = ModelingToolkit.get_discrete_events(sys)
+    for sys2 in ModelingToolkit.get_systems(sys)
+        events2 = ModelingToolkit.get_discrete_events(sys2)
+        for ev in events2
+            af = ModelingToolkit.namespace_affects(ev.affects, sys2)
+            ev2 = @set ev.affects = af
+            push!(events, ev2)
+        end
+    end
+    copy_with_change(sys; discrete_events=events)
 end
 
 """
@@ -147,22 +211,32 @@ function prune_observed(sys::ODESystem)
             push!(deleteindex, i)
         end
     end
+    discrete_events = filter_discrete_events(sys)
     obs = observed(sys)
     deleteat!(obs, deleteindex)
-    sys2 = structural_simplify(copy_with_change(sys; eqs=[equations(sys); obs]))
+    sys2 = structural_simplify(copy_with_change(sys;
+        eqs=[equations(sys); obs],
+        discrete_events=discrete_events,
+    ))
     return sys2, observed(sys)
+end
+
+# Get the unknown variables in the system of equations.
+function get_unknowns(eqs)
+    all_vars = unique(vcat(get_variables.(eqs)...))
+    unk = [v.metadata[Symbolics.VariableSource][1] == :variables for v in all_vars]
+    all_vars[unk]
 end
 
 # Remove extra variable defaults that would cause a solver initialization error.
 # This should be done before running `structural_simplify` on the system.
 function remove_extra_defaults(sys)
-    all_vars = unique(vcat(get_variables.(equations(sys))...))
+    all_vars = get_unknowns(equations(sys))
 
     unk = Symbol.(unknowns(structural_simplify(sys)))
 
     # Check if v is not in the unknowns, is a variable, and has a default.
     checkextra(v) = !(Symbol(v) in unk) &&
-                    v.metadata[Symbolics.VariableSource][1] == :variables &&
                     (Symbolics.VariableDefaultValue in keys(v.metadata))
     extra_default_vars = all_vars[checkextra.(all_vars)]
 
@@ -174,7 +248,8 @@ function remove_extra_defaults(sys)
         push!(replacements, v => newv)
     end
     new_eqs = substitute.(equations(sys), (Dict(replacements...),))
-    copy_with_change(sys, eqs=new_eqs)
+    new_unk = get_unknowns(new_eqs)
+    copy_with_change(sys; eqs=new_eqs, unknowns=new_unk, parameters=parameters(sys))
 end
 
 "Initialize the state variables."
@@ -202,7 +277,8 @@ end
 function coord_params(mtk_sys::AbstractSystem, domain::DomainInfo)
     pv = pvars(domain)
     params = parameters(mtk_sys)
-    _pvidx = [findall(v -> split(String(Symbol(v)), "₊")[end] == String(Symbol(p)), params) for p ∈ pv]
+
+    _pvidx = [findall(v -> split(String(var2symbol(v)), "₊")[end] == String(var2symbol(p)), params) for p ∈ pv]
     for (i, idx) in enumerate(_pvidx)
         if length(idx) > 1
             error("Partial independent variable '$(pv[i])' has multiple matches in system parameters: [$(parameters(mtk_sys)[idx])].")

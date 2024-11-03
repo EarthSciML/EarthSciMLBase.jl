@@ -1,9 +1,10 @@
-using Main.EarthSciMLBase
+using EarthSciMLBase
 using ModelingToolkit
 using ModelingToolkit: t, D
 using Test
 using Catalyst
 using DynamicQuantities
+using OrdinaryDiffEq
 
 @testset "Composed System" begin
     struct SEqnCoupler
@@ -106,7 +107,7 @@ end
             j_NO2 ~ j_unit
         ]
         ODESystem(eqs, t, [j_NO2], [j_unit]; name=:a,
-            metadata=Dict(:coupletype=>ACoupler))
+            metadata=Dict(:coupletype => ACoupler))
     end
 
     struct BCoupler
@@ -119,7 +120,7 @@ end
             Reaction(jNO2, [NO2], [], [1], [])
         ]
         rs = complete(ReactionSystem(rxs, t; combinatoric_ratelaws=false, name=:b))
-        convert(ODESystem, rs; metadata=Dict(:coupletype=>BCoupler))
+        convert(ODESystem, rs; metadata=Dict(:coupletype => BCoupler))
     end
 
     function EarthSciMLBase.couple2(b::BCoupler, a::ACoupler)
@@ -135,7 +136,7 @@ end
         @parameters emis = 1 [unit = u"s^-1"]
         @variables NO2(t) = 0.00014 [unit = u"s^-1"]
         eqs = [NO2 ~ emis]
-        ODESystem(eqs, t, [NO2], [emis]; name=:c, metadata=Dict(:coupletype=>CCoupler))
+        ODESystem(eqs, t, [NO2], [emis]; name=:c, metadata=Dict(:coupletype => CCoupler))
     end
 
     function EarthSciMLBase.couple2(b::BCoupler, c::CCoupler)
@@ -178,4 +179,118 @@ end
         @test occursin("b₊c_NO2(t)", eqs2)
         @test eqs1 == eqs2
     end
+end
+
+mutable struct ParamTest
+    y
+end
+(t::ParamTest)(x) = t.y - x
+
+function update_affect!(integ, u, p, ctx)
+    integ.p[only(p)].y = integ.t
+end
+
+@testset "Event filtering" begin
+    p1 = ParamTest(1)
+    tp1 = typeof(p1)
+    @parameters (p_1::tp1)(..) = p1
+    @parameters p_2(ModelingToolkit.t_nounits) = 1
+    @parameters (p_3::tp1)(..) = ParamTest(1)
+    @parameters p_4(ModelingToolkit.t_nounits) = 1
+    @variables x(ModelingToolkit.t_nounits) = 0
+    @variables x2(ModelingToolkit.t_nounits) = 0
+    @variables x3(ModelingToolkit.t_nounits) = 0
+
+    event1 = [1.0, 2, 3] => (update_affect!, [], [p_1], [], p1)
+    event2 = [1.0, 2, 3] => [p_2 ~ t]
+    event3 = [1.0, 2, 3] => (update_affect!, [], [p_3], [], nothing)
+    event4 = [1.0, 2, 3] => [p_4 ~ t]
+
+    sys = ODESystem([
+            ModelingToolkit.D_nounits(x) ~ p_1(x),
+            ModelingToolkit.D_nounits(x2) ~ p_2 - x2,
+            x3 ~ p_3(x2) + p_4,
+        ],
+        ModelingToolkit.t_nounits; name=:test,
+        discrete_events=[event1, event2, event3, event4],
+    )
+    sys = EarthSciMLBase.remove_extra_defaults(sys)
+
+    prob = ODEProblem(structural_simplify(sys), [], (0, 100), [])
+    sol = solve(prob, abstol=1e-8, reltol=1e-8)
+    @test sol[x][end] ≈ 3
+    @test sol[x2][end] ≈ 3
+
+    @testset "affected vars" begin
+        de = ModelingToolkit.get_discrete_events(sys)
+        @test isequal(only(EarthSciMLBase.get_affected_vars(de[1])), p_1)
+        @test isequal(only(EarthSciMLBase.get_affected_vars(de[2])), p_2)
+        @test isequal(only(EarthSciMLBase.get_affected_vars(de[3])), p_3)
+        @test isequal(only(EarthSciMLBase.get_affected_vars(de[4])), p_4)
+    end
+
+    @testset "variable in equations" begin
+        sys2 = structural_simplify(sys)
+        @test EarthSciMLBase.var_in_eqs(p_1, equations(sys2)) == true
+        @test EarthSciMLBase.var_in_eqs(p_2, equations(sys2)) == true
+        @test EarthSciMLBase.var_in_eqs(p_3, equations(sys2)) == false
+        @test EarthSciMLBase.var_in_eqs(p_4, equations(sys2)) == false
+    end
+
+    @testset "filter events" begin
+        kept_events = EarthSciMLBase.filter_discrete_events(structural_simplify(sys))
+        @test length(kept_events) == 2
+        @test EarthSciMLBase.var2symbol(only(EarthSciMLBase.get_affected_vars(kept_events[1]))) == :p_1
+        @test EarthSciMLBase.var2symbol(only(EarthSciMLBase.get_affected_vars(kept_events[2]))) == :p_2
+    end
+
+    @testset "prune observed" begin
+        sys2, obs = EarthSciMLBase.prune_observed(sys)
+        @test length(equations(sys2)) == 2
+        @test length(ModelingToolkit.get_discrete_events(sys2)) == 2
+        @test length(obs) == 1
+    end
+
+    sys2, _ = EarthSciMLBase.prune_observed(sys)
+    prob = ODEProblem(sys2, [], (0, 100), [])
+    sol = solve(prob, abstol=1e-8, reltol=1e-8)
+    @test sol[x][end] ≈ 3
+    @test sol[x2][end] ≈ 3
+end
+
+@testset "Composed System with Events" begin
+    function create_sys(; name=:test)
+        tp1 = typeof(ParamTest(1))
+        @parameters (p_1::tp1)(..) = ParamTest(1)
+        @parameters p_2(ModelingToolkit.t_nounits) = 1
+        @parameters (p_3::tp1)(..) = ParamTest(1)
+        @parameters p_4(ModelingToolkit.t_nounits) = 1
+        @variables x(ModelingToolkit.t_nounits) = 0
+        @variables x2(ModelingToolkit.t_nounits) = 0
+        @variables x3(ModelingToolkit.t_nounits) = 0
+
+        event1 = [1.0, 2, 3] => (update_affect!, [], [p_1], [], nothing)
+        event2 = [1.0, 2, 3] => [p_2 ~ t]
+        event3 = [1.0, 2, 3] => (update_affect!, [], [p_3], [], nothing)
+        event4 = [1.0, 2, 3] => [p_4 ~ t]
+
+        ODESystem([
+                ModelingToolkit.D_nounits(x) ~ p_1(x),
+                ModelingToolkit.D_nounits(x2) ~ p_2 - x2,
+                x3 ~ p_3(x2) + p_4,
+            ],
+            ModelingToolkit.t_nounits; name=name,
+            discrete_events=[event1, event2, event3, event4],
+        )
+    end
+
+    sys_composed = compose(ODESystem(Equation[], ModelingToolkit.t_nounits; name=:coupled),
+        create_sys(name=:a), create_sys(name=:b))
+    sysc = EarthSciMLBase.namespace_events(sys_composed)
+    sysc2 = EarthSciMLBase.remove_extra_defaults(sysc)
+    sysc3, obs = EarthSciMLBase.prune_observed(sysc2)
+    prob = ODEProblem(sysc3, [], (0, 100), [])
+    sol = solve(prob, abstol=1e-8, reltol=1e-8)
+    @test length(sol.u[end]) == 4
+    @test all(sol.u[end] .≈ 3)
 end

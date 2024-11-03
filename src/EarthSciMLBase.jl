@@ -4,8 +4,10 @@ using ModelingToolkit: AbstractSystem
 using Graphs, MetaGraphsNext
 using DocStringExtensions
 using DynamicQuantities, Dates
-using OrdinaryDiffEq, DomainSets
-using SciMLBase: DECallback, CallbackSet, ODEProblem
+using DomainSets
+using SciMLBase: DECallback, CallbackSet, ODEProblem, SplitODEProblem, reinit!, solve!,
+    init, remake
+using SciMLOperators: cache_operator, NullOperator
 using Statistics
 using DiffEqCallbacks
 using LinearAlgebra, BlockBandedMatrices
