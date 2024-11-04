@@ -108,6 +108,9 @@ function get_needed_vars(original_sys::ODESystem, simplified_sys)
     allst = unknowns(original_sys)
     simpst = unknowns(simplified_sys)
     stidx = [only(findall(isequal(s), allst)) for s in simpst]
+    if length(stidx) == 0
+        return []
+    end
     idx = collect(Graphs.DFSIterator(g, stidx))
     unknowns(original_sys)[idx]
 end
