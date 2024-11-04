@@ -35,7 +35,7 @@ end
 function ODEProblem(sys::CoupledSystem, st::SolverIMEX; u0=nothing, p=nothing,
     name=:model, kwargs...)
 
-    sys_mtk, obs_eqs = convert(ODESystem, sys; simplify=true, name=name)
+    sys_mtk, obs_eqs = convert(ODESystem, sys; name=name)
     dom = domain(sys)
 
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
@@ -47,7 +47,7 @@ function ODEProblem(sys::CoupledSystem, st::SolverIMEX; u0=nothing, p=nothing,
     f2 = nonstiff_ops(sys, sys_mtk, obs_eqs, dom, u0, p)
 
     cb = get_callbacks(sys, sys_mtk, obs_eqs, dom)
-    start, finish = tspan(dom)
+    start, finish = get_tspan(dom)
     SplitODEProblem(f1, f2, u0[:], (start, finish), p,
         callback=CallbackSet(cb...); kwargs...)
 end

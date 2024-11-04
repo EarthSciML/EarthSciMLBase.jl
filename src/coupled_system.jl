@@ -137,11 +137,15 @@ Get the ODE ModelingToolkit ODESystem representation of a [`CoupledSystem`](@ref
 
 kwargs:
 - name: The desired name for the resulting ODESystem
-- simplify: if true, the observed variables that are not needed to specify the state variables
-    will be pruned and returned as a second return value after the ODESystem, which will be
-    structurally simplified.
+- simplify: Whether to run `structural_simplify` on the resulting ODESystem
+- prune: Whether to prune the extra observed equations to improve performance
+
+Return values:
+- The ODESystem representation of the CoupledSystem
+- The extra observed equations which have been pruned to improve performance
 """
-function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, simplify=false, kwargs...)
+function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, simplify=true,
+    prune=true, kwargs...)
     connector_eqs = Equation[]
     systems = copy(sys.systems)
     for (i, a) ∈ enumerate(systems)
@@ -165,12 +169,19 @@ function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, simp
 
     # Compose everything together.
     o = compose(connectors, systems...)
-    o = remove_extra_defaults(o)
-    if simplify
-        return prune_observed(o)
+    o = namespace_events(o)
+    o_simplified = structural_simplify(o)
+    if prune
+        o, obs = prune_observed(o, o_simplified)
     else
-        return o
+        obs = []
     end
+    o_simplified = structural_simplify(o)
+    o = remove_extra_defaults(o, o_simplified)
+    if simplify
+        o = structural_simplify(o)
+    end
+    return o, obs
 end
 
 """
@@ -179,7 +190,7 @@ end
 Get the ModelingToolkit PDESystem representation of a [`CoupledSystem`](@ref).
 """
 function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name=:model, kwargs...)::ModelingToolkit.AbstractSystem
-    o = convert(ODESystem, sys; name, kwargs...)
+    o, _ = convert(ODESystem, sys; name=name, simplify=false, prune=false, kwargs...)
 
     if sys.domaininfo !== nothing
         o += sys.domaininfo
@@ -211,8 +222,8 @@ function nonstiff_ops(sys::CoupledSystem, sys_mtk, obs_eqs, domain, u0, p)
     obs_funcs = obs_functions(obs_eqs, domain)
     coord_trans_funcs = coord_trans_functions(obs_eqs, domain)
     nonstiff_op = length(sys.ops) > 0 ?
-        sum([get_scimlop(op, sys, sys_mtk, domain, obs_funcs, coord_trans_funcs, u0, p) for op ∈ sys.ops]) :
-        NullOperator(length(u0))
+                  sum([get_scimlop(op, sys, sys_mtk, domain, obs_funcs, coord_trans_funcs, u0, p) for op ∈ sys.ops]) :
+                  NullOperator(length(u0))
     nonstiff_op = cache_operator(nonstiff_op, u0)
 end
 

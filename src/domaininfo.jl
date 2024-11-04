@@ -1,4 +1,5 @@
-export DomainInfo, ICBCcomponent, constIC, constBC, zerogradBC, periodicBC, partialderivatives
+export DomainInfo, ICBCcomponent, constIC, constBC, zerogradBC, periodicBC, partialderivatives,
+    get_tspan, get_tspan_datetime
 
 """
 Initial and boundary condition components that can be combined to
@@ -169,9 +170,9 @@ end
 """
 $(SIGNATURES)
 
-Return the time range associated with this domain.
+Return the time range associated with this domain, returning the values as Unix times.
 """
-function tspan(d::DomainInfo{T})::Tuple{T,T} where {T<:AbstractFloat}
+function get_tspan(d::DomainInfo{T})::Tuple{T,T} where {T<:AbstractFloat}
     for icbc ∈ d.icbc
         if icbc isa ICcomponent
             return DomainSets.infimum(icbc.indepdomain.domain), DomainSets.supremum(icbc.indepdomain.domain)
@@ -180,8 +181,13 @@ function tspan(d::DomainInfo{T})::Tuple{T,T} where {T<:AbstractFloat}
     throw(ArgumentError("Could not find a time range for this domain."))
 end
 
-function tspan_datetime(d::DomainInfo)
-    (Float64.(tspan(d)) .+ Float64(d.time_offset)) .|> unix2datetime
+"""
+$(SIGNATURES)
+
+Return the time range associated with this domain, returning the values as DateTimes.
+"""
+function get_tspan_datetime(d::DomainInfo)
+    (Float64.(get_tspan(d)) .+ Float64(d.time_offset)) .|> unix2datetime
 end
 
 """
@@ -437,7 +443,7 @@ domains(di::DomainInfo) = unique(vcat(domains.(di.icbc)...))
 function Base.:(+)(sys::ModelingToolkit.ODESystem, di::DomainInfo)::ModelingToolkit.PDESystem
     dimensions = dims(di)
     allvars = unknowns(sys)
-    statevars = unknowns(structural_simplify(sys))
+    statevars = unknowns(sys)
     ps = parameters(sys)
     toreplace, replacements = replacement_params(ps, pvars(di))
     dvs = add_dims(allvars, dimensions) # Add new dimensions to dependent variables.

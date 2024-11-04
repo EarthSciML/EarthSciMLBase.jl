@@ -94,21 +94,22 @@ Return the indexes of the system variables that the state variables of the final
 simplified system depend on. This should be done before running `structural_simplify`
 on the system.
 """
-function get_needed_vars(sys::ODESystem)
+function get_needed_vars(original_sys::ODESystem, simplified_sys)
     varvardeps = ModelingToolkit.varvar_dependencies(
-        ModelingToolkit.asgraph(sys),
-        ModelingToolkit.variable_dependencies(sys),
+        ModelingToolkit.asgraph(original_sys),
+        ModelingToolkit.variable_dependencies(original_sys),
     )
-    g = SimpleDiGraph(length(unknowns(sys)))
+    g = SimpleDiGraph(length(unknowns(original_sys)))
     for (i, es) in enumerate(varvardeps.badjlist)
         for e in es
             add_edge!(g, i, e)
         end
     end
-    allst = unknowns(sys)
-    simpst = unknowns(structural_simplify(sys))
+    allst = unknowns(original_sys)
+    simpst = unknowns(simplified_sys)
     stidx = [only(findall(isequal(s), allst)) for s in simpst]
-    collect(Graphs.DFSIterator(g, stidx))
+    idx = collect(Graphs.DFSIterator(g, stidx))
+    unknowns(original_sys)[idx]
 end
 
 """
@@ -161,9 +162,9 @@ end
 # Return the discrete events that affect variables that are
 # needed to specify the state variables of the given system.
 # This function should be run after running `structural_simplify`.
-function filter_discrete_events(simplified_sys)
+function filter_discrete_events(simplified_sys, obs_eqs)
     de = ModelingToolkit.get_discrete_events(simplified_sys)
-    needed_eqs = equations(simplified_sys)
+    needed_eqs = vcat(equations(simplified_sys), obs_eqs)
     keep = []
     for e in de
         evars = EarthSciMLBase.get_affected_vars(e)
@@ -198,27 +199,27 @@ Remove equations from an ODESystem where the variable in the LHS is not
 present in any of the equations for the state variables. This can be used to
 remove computationally intensive equations that are not used in the final model.
 """
-function prune_observed(sys::ODESystem)
-    needed_var_idxs = get_needed_vars(sys)
-    needed_vars = Symbolics.tosymbol.(unknowns(sys)[needed_var_idxs]; escape=true)
-    sys = structural_simplify(sys)
+function prune_observed(original_sys::ODESystem, simplified_sys)
+    needed_vars = var2symbol.(get_needed_vars(original_sys, simplified_sys))
     deleteindex = []
-    for (i, eq) ∈ enumerate(observed(sys))
-        lhsvars = Symbolics.tosymbol.(Symbolics.get_variables(eq.lhs); escape=true)
+    obs = observed(simplified_sys)
+    for (i, eq) ∈ enumerate(obs)
+        lhsvars = var2symbol.(Symbolics.get_variables(eq.lhs))
         # Only keep equations where all variables on the LHS are in at least one
         # equation describing the system state.
         if !all((var) -> var ∈ needed_vars, lhsvars)
             push!(deleteindex, i)
         end
     end
-    discrete_events = filter_discrete_events(sys)
-    obs = observed(sys)
     deleteat!(obs, deleteindex)
-    sys2 = structural_simplify(copy_with_change(sys;
-        eqs=[equations(sys); obs],
+    discrete_events = filter_discrete_events(simplified_sys, obs)
+    new_eqs = [equations(simplified_sys); obs]
+    sys2 = copy_with_change(simplified_sys;
+        eqs=new_eqs,
+        unknowns=get_unknowns(new_eqs),
         discrete_events=discrete_events,
-    ))
-    return sys2, observed(sys)
+    )
+    return sys2, observed(simplified_sys)
 end
 
 # Get the unknown variables in the system of equations.
@@ -229,14 +230,13 @@ function get_unknowns(eqs)
 end
 
 # Remove extra variable defaults that would cause a solver initialization error.
-# This should be done before running `structural_simplify` on the system.
-function remove_extra_defaults(sys)
-    all_vars = get_unknowns(equations(sys))
+function remove_extra_defaults(original_sys, simplified_sys)
+    all_vars = unknowns(original_sys)
 
-    unk = Symbol.(unknowns(structural_simplify(sys)))
+    unk = var2symbol.(get_needed_vars(original_sys, simplified_sys))
 
-    # Check if v is not in the unknowns, is a variable, and has a default.
-    checkextra(v) = !(Symbol(v) in unk) &&
+    # Check if v is not in the unknowns and has a default.
+    checkextra(v) = !(var2symbol(v) in unk) &&
                     (Symbolics.VariableDefaultValue in keys(v.metadata))
     extra_default_vars = all_vars[checkextra.(all_vars)]
 
@@ -247,9 +247,10 @@ function remove_extra_defaults(sys)
         newv = @set v.metadata = newmeta
         push!(replacements, v => newv)
     end
-    new_eqs = substitute.(equations(sys), (Dict(replacements...),))
+    new_eqs = substitute.(equations(original_sys), (Dict(replacements...),))
     new_unk = get_unknowns(new_eqs)
-    copy_with_change(sys; eqs=new_eqs, unknowns=new_unk, parameters=parameters(sys))
+    copy_with_change(original_sys; eqs=new_eqs, unknowns=new_unk,
+        parameters=parameters(original_sys))
 end
 
 "Initialize the state variables."

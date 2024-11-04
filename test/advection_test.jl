@@ -1,6 +1,7 @@
 using EarthSciMLBase
 using Test
-using DomainSets, MethodOfLines, ModelingToolkit, DifferentialEquations
+using DomainSets, ModelingToolkit
+using MethodOfLines, DifferentialEquations
 using ModelingToolkit: t, D
 import SciMLBase
 using DynamicQuantities
@@ -41,7 +42,7 @@ using Dates, DomainSets
     @test length(equations(combined_mtk)) == 6
     @test length(combined_mtk.ivs) == 2
     @test length(combined_mtk.dvs) == 6
-    @test length(combined_mtk.bcs) == 3
+    @test length(combined_mtk.bcs) == 18
 
     eq = equations(combined_mtk)
     eqstr = string(eq)

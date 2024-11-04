@@ -58,7 +58,7 @@ end
 
 p = Photolysis()
 @testset "Photolysis single" begin
-    prob = ODEProblem(structural_simplify(EarthSciMLBase.remove_extra_defaults(p)), [], (0.0, 1.0))
+    prob = ODEProblem(structural_simplify(p), [], (0.0, 1.0))
     sol = solve(prob)
     @test sol.retcode == ReturnCode.Success
 end
@@ -79,10 +79,9 @@ end
 
 @testset "Coupled model" begin
     model = couple(c, p, e)
-    sys = convert(ODESystem, model)
-    sys2, sys2obs = EarthSciMLBase.prune_observed(sys)
+    sys, _ = convert(ODESystem, model)
 
-    prob = ODEProblem(sys2, [], (0.0, 1.0))
+    prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob, u0=[1.0])
     @test sol.retcode == ReturnCode.Success
 end

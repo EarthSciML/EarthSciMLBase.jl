@@ -79,7 +79,7 @@ nthreads(st::SolverStrangSerial) = 1
 function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, p=nothing,
         nonstiff_params=nothing, name=:model, kwargs...)
 
-    sys_mtk, obs_eqs = convert(ODESystem, s; simplify=true, name=name)
+    sys_mtk, obs_eqs = convert(ODESystem, s; name=name)
 
     dom = domain(s)
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
@@ -87,8 +87,8 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, p=nothing,
 
     II = CartesianIndices(tuple(size(dom)...))
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
-    start, finish = tspan(dom)
-    prob = ODEProblem(sys_mtk, [], (start, finish), []; st.stiff_kwargs...)
+    start, finish = get_tspan(dom)
+    prob = ODEProblem(sys_mtk, [], (start, start+st.timestep), []; st.stiff_kwargs...)
     stiff_integrators = [init(remake(prob, u0=zeros(length(unknowns(sys_mtk))), p=deepcopy(p)),
         st.stiffalg, save_on=false, save_start=false, save_end=false, initialize_save=false;
         st.stiff_kwargs...) for _ in 1:length(IIchunks)]
@@ -147,6 +147,7 @@ function single_ode_step!(setp!, u, IIchunk, integrator, time, step_length)
         setp!(integrator.p, ii)
         solve!(integrator)
         @assert length(integrator.sol.u) == 0
+        @assert integrator.t == time + step_length
         uii .= integrator.u
     end
 end

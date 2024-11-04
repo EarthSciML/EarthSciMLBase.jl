@@ -68,7 +68,7 @@ op = ExampleOp(sys.windspeed)
 
 csys = Main.EarthSciMLBase.EarthSciMLBase.couple(sys, op, domain)
 
-sys_mtk, obs_eqs = convert(ODESystem, csys; simplify=true)
+sys_mtk, obs_eqs = convert(ODESystem, csys)
 tf_fs = EarthSciMLBase.coord_trans_functions(obs_eqs, domain)
 
 @test 1 / (tf_fs[1](0.0, 0.0, 0.0, 0.0) * 180 / π) ≈ 111319.44444444445
@@ -103,7 +103,7 @@ st = SolverStrangThreads(Tsit5(), 1.0)
 IIchunks, integrators = let
     II = CartesianIndices(size(u)[2:4])
     IIchunks = collect(Iterators.partition(II, length(II) ÷ st.threads))
-    start, finish = EarthSciMLBase.tspan(domain)
+    start, finish = get_tspan(domain)
     prob = ODEProblem(sys_mtk, [], (start, finish), [])
     integrators = [init(remake(prob, u0=zeros(length(unknowns(sys_mtk))), p=deepcopy(p)), st.stiffalg, save_on=false,
         save_start=false, save_end=false, initialize_save=false; abstol=1e-12, reltol=1e-12)

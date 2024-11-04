@@ -89,7 +89,9 @@ bcs = icbc(domain, vars)
     )
 
     @testset "single system" begin
-        sys2, sys2obs = prune_observed(sys)
+        sys_simple = structural_simplify(sys)
+        sys2, sys2obs = prune_observed(sys, sys_simple)
+        sys2 = structural_simplify(sys2)
 
         @test isequal(equations(sys2), eqs[1:1])
         @test issetequal(observed(sys2), eqs[2:2])
@@ -106,9 +108,9 @@ bcs = icbc(domain, vars)
     @testset "nested system" begin
         @named sysx = ODESystem([D(x) ~ x], t)
         sys_nested = compose(sysx, sys)
-
-        sys2, sys2obs = prune_observed(sys_nested)
-
+        sys_nested_simple = structural_simplify(sys_nested)
+        sys2, sys2obs = prune_observed(sys_nested, sys_nested_simple)
+        sys2 = structural_simplify(sys2)
         observed(sys2)
 
         @test length(equations(sys2)) == 2

@@ -63,9 +63,7 @@ using OrdinaryDiffEq
 
     sir = couple(seqn, ieqn, reqn)
 
-    sirfinal = convert(PDESystem, sir)
-
-    sir_simple = structural_simplify(sirfinal)
+    sirfinal, _ = convert(ODESystem, sir)
 
     want_eqs = [
         D(reqn.R) ~ reqn.γ * reqn.I,
@@ -73,7 +71,8 @@ using OrdinaryDiffEq
         D(ieqn.I) ~ (ieqn.β * ieqn.I * ieqn.S) / (ieqn.I + ieqn.R + ieqn.S) - ieqn.γ * ieqn.I,
     ]
 
-    have_eqs = equations(sir_simple)
+    have_eqs = equations(sirfinal)
+    obs = observed(sirfinal)
     for eq in want_eqs
         @test eq in have_eqs
     end
@@ -157,8 +156,7 @@ end
     ]
     for (i, model) ∈ enumerate(models)
         @testset "permutation $i" begin
-            model_mtk = convert(ODESystem, model)
-            m = structural_simplify(model_mtk)
+            m, _ = convert(ODESystem, model)
             eqstr = string(equations(m))
             @test occursin("b₊c_NO2(t)", eqstr)
             @test occursin("b₊jNO2(t)", eqstr)
@@ -173,9 +171,10 @@ end
 
     @testset "Stable evaluation" begin
         sys = couple(A(), B(), C())
-        eqs1 = string(equations(convert(ODESystem, sys)))
+        s, _ = convert(ODESystem, sys)
+        eqs1 = string(equations(s))
         @test occursin("b₊c_NO2(t)", eqs1)
-        eqs2 = string(equations(convert(ODESystem, sys)))
+        eqs2 = string(equations(s))
         @test occursin("b₊c_NO2(t)", eqs2)
         @test eqs1 == eqs2
     end
@@ -214,7 +213,7 @@ end
         ModelingToolkit.t_nounits; name=:test,
         discrete_events=[event1, event2, event3, event4],
     )
-    sys = EarthSciMLBase.remove_extra_defaults(sys)
+    sys = EarthSciMLBase.remove_extra_defaults(sys, structural_simplify(sys))
 
     prob = ODEProblem(structural_simplify(sys), [], (0, 100), [])
     sol = solve(prob, abstol=1e-8, reltol=1e-8)
@@ -238,21 +237,21 @@ end
     end
 
     @testset "filter events" begin
-        kept_events = EarthSciMLBase.filter_discrete_events(structural_simplify(sys))
+        kept_events = EarthSciMLBase.filter_discrete_events(structural_simplify(sys), [])
         @test length(kept_events) == 2
         @test EarthSciMLBase.var2symbol(only(EarthSciMLBase.get_affected_vars(kept_events[1]))) == :p_1
         @test EarthSciMLBase.var2symbol(only(EarthSciMLBase.get_affected_vars(kept_events[2]))) == :p_2
     end
 
     @testset "prune observed" begin
-        sys2, obs = EarthSciMLBase.prune_observed(sys)
+        sys2, obs = EarthSciMLBase.prune_observed(sys, structural_simplify(sys))
         @test length(equations(sys2)) == 2
         @test length(ModelingToolkit.get_discrete_events(sys2)) == 2
         @test length(obs) == 1
     end
 
-    sys2, _ = EarthSciMLBase.prune_observed(sys)
-    prob = ODEProblem(sys2, [], (0, 100), [])
+    sys2, _ = EarthSciMLBase.prune_observed(sys, structural_simplify(sys))
+    prob = ODEProblem(structural_simplify(sys2), [], (0, 100), [])
     sol = solve(prob, abstol=1e-8, reltol=1e-8)
     @test sol[x][end] ≈ 3
     @test sol[x2][end] ≈ 3
@@ -287,9 +286,9 @@ end
     sys_composed = compose(ODESystem(Equation[], ModelingToolkit.t_nounits; name=:coupled),
         create_sys(name=:a), create_sys(name=:b))
     sysc = EarthSciMLBase.namespace_events(sys_composed)
-    sysc2 = EarthSciMLBase.remove_extra_defaults(sysc)
-    sysc3, obs = EarthSciMLBase.prune_observed(sysc2)
-    prob = ODEProblem(sysc3, [], (0, 100), [])
+    sysc2 = EarthSciMLBase.remove_extra_defaults(sysc, structural_simplify(sysc))
+    sysc3, obs = EarthSciMLBase.prune_observed(sysc2, structural_simplify(sysc2))
+    prob = ODEProblem(structural_simplify(sysc3), [], (0, 100), [])
     sol = solve(prob, abstol=1e-8, reltol=1e-8)
     @test length(sol.u[end]) == 4
     @test all(sol.u[end] .≈ 3)
