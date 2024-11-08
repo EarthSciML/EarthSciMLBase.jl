@@ -14,7 +14,7 @@ using Dates, DomainSets
     function ExampleSys()
         @variables y(t) [unit = u"kg"]
         @parameters p = 1.0 [unit = u"kg/s"]
-        ODESystem([D(y) ~ p], t; name=:examplesys,
+        ODESystem([D(y) ~ p], t, [y], [x, p]; name=:examplesys,
             metadata=Dict(:coupletype=>ExampleSysCoupler2))
     end
 
@@ -39,10 +39,10 @@ using Dates, DomainSets
     combined_pde = couple(combined, domain, ConstantWind(t, 1.0u"m/s"), Advection())
     combined_mtk = convert(PDESystem, combined_pde)
 
-    @test length(equations(combined_mtk)) == 6
+    @test length(equations(combined_mtk)) == 7
     @test length(combined_mtk.ivs) == 2
-    @test length(combined_mtk.dvs) == 6
-    @test length(combined_mtk.bcs) == 18
+    @test length(combined_mtk.dvs) == 7
+    @test length(combined_mtk.bcs) == 21
 
     eq = equations(combined_mtk)
     eqstr = string(eq)

@@ -93,8 +93,9 @@ $(SIGNATURES)
 Return the indexes of the system variables that the state variables of the final
 simplified system depend on. This should be done before running `structural_simplify`
 on the system.
+`extra_vars` is a list of additional variables that need to be kept.
 """
-function get_needed_vars(original_sys::ODESystem, simplified_sys)
+function get_needed_vars(original_sys::ODESystem, simplified_sys::ODESystem, extra_vars=[])
     varvardeps = ModelingToolkit.varvar_dependencies(
         ModelingToolkit.asgraph(original_sys),
         ModelingToolkit.variable_dependencies(original_sys),
@@ -112,7 +113,7 @@ function get_needed_vars(original_sys::ODESystem, simplified_sys)
         return []
     end
     idx = collect(Graphs.DFSIterator(g, stidx))
-    unknowns(original_sys)[idx]
+    unique(vcat(unknowns(original_sys)[idx], extra_vars))
 end
 
 """
@@ -202,8 +203,8 @@ Remove equations from an ODESystem where the variable in the LHS is not
 present in any of the equations for the state variables. This can be used to
 remove computationally intensive equations that are not used in the final model.
 """
-function prune_observed(original_sys::ODESystem, simplified_sys)
-    needed_vars = var2symbol.(get_needed_vars(original_sys, simplified_sys))
+function prune_observed(original_sys::ODESystem, simplified_sys, extra_vars)
+    needed_vars = var2symbol.(get_needed_vars(original_sys, simplified_sys, extra_vars))
     deleteindex = []
     obs = observed(simplified_sys)
     for (i, eq) ∈ enumerate(obs)
@@ -222,7 +223,7 @@ function prune_observed(original_sys::ODESystem, simplified_sys)
         unknowns=get_unknowns(new_eqs),
         discrete_events=discrete_events,
     )
-    return sys2, observed(simplified_sys)
+    return sys2
 end
 
 # Get the unknown variables in the system of equations.
@@ -277,12 +278,23 @@ function default_params(mtk_sys::AbstractSystem)
     MTKParameters(mtk_sys, dflts)
 end
 
+# return whether the part of a after the last "₊" character matches b.
+function is_matching_suffix(a, b)
+    is_matching_suffix(a, var2symbol(b))
+end
+function is_matching_suffix(a, b::Symbol)
+    split(String(var2symbol(a)), "₊")[end] == String(b)
+end
+function matching_suffix_idx(a::AbstractVector, b)
+    findall(v -> is_matching_suffix(v, b), a)
+end
+
 # Return the coordinate parameters from the parameter vector.
 function coord_params(mtk_sys::AbstractSystem, domain::DomainInfo)
     pv = pvars(domain)
     params = parameters(mtk_sys)
 
-    _pvidx = [findall(v -> split(String(var2symbol(v)), "₊")[end] == String(var2symbol(p)), params) for p ∈ pv]
+    _pvidx = [matching_suffix_idx(params, p) for p ∈ pv]
     for (i, idx) in enumerate(_pvidx)
         if length(idx) > 1
             error("Partial independent variable '$(pv[i])' has multiple matches in system parameters: [$(parameters(mtk_sys)[idx])].")
@@ -307,36 +319,4 @@ function coord_setter(sys_mtk::ODESystem, domain::DomainInfo)
         setp!(p, II[j])
     end
     return setp!
-end
-
-# Create functions to get concrete values for the observed variables.
-# The return value is a function that returns the function when
-# given a value.
-function obs_functions(obs_eqs, domain::DomainInfo)
-    pv = pvars(domain)
-    iv = ivar(domain)
-
-    obs_fs_idx = Dict()
-    obs_fs = []
-    for (i, x) ∈ enumerate([eq.lhs for eq ∈ obs_eqs])
-        obs_fs_idx[x] = i
-        push!(obs_fs, observed_function(obs_eqs, x, [iv, pv...]))
-    end
-    obs_fs = Tuple(obs_fs)
-
-    (v) -> obs_fs[obs_fs_idx[v]]
-end
-
-# Return functions to perform coordinate transforms for each of the coordinates.
-function coord_trans_functions(obs_eqs, domain::DomainInfo)
-    pv = pvars(domain)
-    iv = ivar(domain)
-
-    # Get functions for coordinate transforms
-    tf_fs = []
-    @variables 🌈🐉🏒 # Dummy variable.
-    for tf ∈ partialderivative_transforms(domain)
-        push!(tf_fs, observed_function([obs_eqs..., 🌈🐉🏒 ~ tf], 🌈🐉🏒, [iv, pv...]))
-    end
-    tf_fs = Tuple(tf_fs)
 end

@@ -1,6 +1,6 @@
 using Test
-using Main.EarthSciMLBase
-using Main.EarthSciMLBase: pvars, grid, get_tspan, get_tspan_datetime, add_partial_derivative_func
+using EarthSciMLBase
+using EarthSciMLBase: pvars, grid, get_tspan, get_tspan_datetime, add_partial_derivative_func
 using ModelingToolkit, Catalyst
 using MethodOfLines, DifferentialEquations, DomainSets
 using ModelingToolkit: t_nounits;
@@ -177,7 +177,7 @@ end
 end
 
 @testset "Simplify" begin
-    @parameters x
+    @parameters x = 1
     domain = DomainInfo(
         constIC(16.0, t ∈ Interval(0, 1)),
         periodicBC(x ∈ Interval(0, 1)),
@@ -189,7 +189,7 @@ end
         ODESystem([
                 v ~ 2u,
                 D(v) ~ v
-            ], t; name=:sys)
+            ], t, [u, v], [x]; name=:sys)
     end
 
     sys_domain = couple(ExSys(), domain)

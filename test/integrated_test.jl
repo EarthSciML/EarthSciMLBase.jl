@@ -79,7 +79,7 @@ end
 
 @testset "Coupled model" begin
     model = couple(c, p, e)
-    sys, _ = convert(ODESystem, model)
+    sys = convert(ODESystem, model)
 
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob, u0=[1.0])

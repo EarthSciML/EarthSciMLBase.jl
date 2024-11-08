@@ -240,8 +240,15 @@ $(TYPEDSIGNATURES)
 Return transform factor to multiply each partial derivative operator by,
 for example to convert from degrees to meters.
 """
+function partialderivative_transforms(mtk_sys::ODESystem, di::DomainInfo)
+    xs = coord_params(mtk_sys, di)
+    partialderivative_transforms(xs, di)
+end
 function partialderivative_transforms(di::DomainInfo)
     xs = pvars(di)
+    partialderivative_transforms(xs, di)
+end
+function partialderivative_transforms(xs, di::DomainInfo)
     fs = Dict()
     for f in di.partial_derivative_funcs
         for (k, v) ∈ f(xs)
@@ -259,6 +266,28 @@ function partialderivative_transforms(di::DomainInfo)
     end
     ts
 end
+
+function partialderivative_transform_vars(mtk_sys, di::DomainInfo)
+    xs = coord_params(mtk_sys, di)
+    iv = ivar(di)
+    ts = partialderivative_transforms(mtk_sys, di)
+    vs = []
+    for (i, x) in enumerate(xs)
+        n = Symbol("δ$(x)_transform")
+        v = only(@variables $n(iv) [unit=ModelingToolkit.get_unit(ts[i]),
+            description = "Transform factor for $(x)"])
+        push!(vs, v)
+    end
+    vs
+end
+
+function partialderivative_transform_eqs(mtk_sys, di::DomainInfo)
+    vs = partialderivative_transform_vars(mtk_sys, di)
+    ts = partialderivative_transforms(mtk_sys, di)
+    eqs = vs .~ ts
+    ODESystem(eqs, ivar(di); name=:transforms)
+end
+
 
 
 """

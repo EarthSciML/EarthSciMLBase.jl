@@ -40,41 +40,43 @@ There is also a variable `windspeed` which is "observed" based on the parameters
 Next, we define an operator. To do so, first we create a new type that is a subtype of [`Operator`](@ref):
 
 ```@example sim
-mutable struct ExampleOp <: Operator
-    α::Num # Multiplier from ODESystem
+struct ExampleOp <: Operator
 end
 ```
-In the case above, we're setting up our operator so that it can hold a parameter from our ODE system.
 
 Next, we need to define a method of `EarthSciMLBase.get_scimlop` for our operator. This method will be called to get a [`SciMLOperators.AbstractSciMLOperator`](https://docs.sciml.ai/SciMLOperators/stable/interface/) that will be used conjunction with the ModelingToolkit system above to integrate the simulation forward in time.
 
 ```@example sim
-function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, domain::DomainInfo, obs_functions, coordinate_transform_functions, u0, p)
-    obs_f = obs_functions(op.α)
+function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, domain::DomainInfo, u0, p)
+    α, trans1, trans2, trans3 = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
+
+    obs_f! = ModelingToolkit.build_explicit_observed_function(mtk_sys,
+        [α, trans1, trans2, trans3], checkbounds=false, return_inplace=true)[2]
+
+    setp! = EarthSciMLBase.coord_setter(mtk_sys, domain)
+    obscache = zeros(EarthSciMLBase.dtype(domain), 4)
     grd = EarthSciMLBase.grid(domain)
+
     function run(du, u, p, t)
         u = reshape(u, size(u0)...)
         du = reshape(du, size(u0)...)
+        II = CartesianIndices(size(u)[2:end])
         for ix ∈ 1:size(u, 1)
-            for (i, c1) ∈ enumerate(grd[1])
-                for (j, c2) ∈ enumerate(grd[2])
-                    for (k, c3) ∈ enumerate(grd[3])
-                        # Demonstrate coordinate transforms
-                        t1 = coordinate_transform_functions[1](t, c1, c2, c3)
-                        t2 = coordinate_transform_functions[2](t, c1, c2, c3)
-                        t3 = coordinate_transform_functions[3](t, c1, c2, c3)
-                        # Demonstrate calculating observed value.
-                        fv = obs_f(t, c1, c2, c3)
-                        # Set derivative value.
-                        du[ix, i, j, k] = (t1 + t2 + t3) * fv
-                    end
-                end
+            for I in II
+                # Demonstrate coordinate transforms and observed values
+                uu = view(u, :, I)
+                setp!(p, I)
+                obs_f!(obscache, u, p, t)
+                t1, t2, t3, fv = obscache
+                # Set derivative value.
+                du[ix, I] = (t1 + t2 + t3) * fv
             end
         end
         nothing
     end
     FunctionOperator(run, u0[:], p=p)
 end
+nothing
 ```
 The function above also doesn't have any physical meaning, but it demonstrates some functionality of the `Operator` "`s`".
 First, it retrieves a function to get the current value of an observed variable in our
@@ -82,6 +84,16 @@ ODE system using the `obs_functions` argement, and it demonstrates how to call t
 function to get that value.
 It also demonstrates how to get coordinate transforms using the `coordinate_transform_functions` argument.
 Coordinate transforms are discussed in more detail in the documentation for the [`DomainInfo`](@ref) type.
+
+We also need to define a method of `EarthSciMLBase.get_needed_vars`, which will return which variables are needed by the operator.
+
+```@example sim
+function EarthSciMLBase.get_needed_vars(::ExampleOp, csys, mtk_sys, domain::DomainInfo)
+    ts = EarthSciMLBase.partialderivative_transform_vars(mtk_sys, domain)
+    return [mtk_sys.sys₊windspeed, ts...]
+end
+nothing
+```
 
 ## Domain
 
@@ -121,7 +133,7 @@ coordinates, which we set as 0.1π, 0.1π, and 1, respectively.
 Next, initialize our operator, giving the the `windspeed` observed variable, and we can couple our ODESystem, Operator, and Domain together into a single model:
 
 ```@example sim
-op = ExampleOp(sys.windspeed)
+op = ExampleOp()
 
 csys = couple(sys, op, domain)
 ```

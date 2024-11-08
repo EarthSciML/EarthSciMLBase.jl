@@ -59,7 +59,6 @@ The solution will be calculated in serial.
 Additional kwargs for ODEProblem constructor:
 - u0: initial condtions; if "nothing", default values will be used.
 - p: parameters; if "nothing", default values will be used.
-- nonstiff_params: parameters for the [`Operator`](@ref)s.
 
 $(FIELDS)
 """
@@ -77,9 +76,9 @@ nthreads(st::SolverStrangThreads) = st.threads
 nthreads(st::SolverStrangSerial) = 1
 
 function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, p=nothing,
-        nonstiff_params=nothing, name=:model, kwargs...)
+        name=:model, kwargs...)
 
-    sys_mtk, obs_eqs = convert(ODESystem, s; name=name)
+    sys_mtk = convert(ODESystem, s; name=name)
 
     dom = domain(s)
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
@@ -93,15 +92,15 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, p=nothing,
         st.stiffalg, save_on=false, save_start=false, save_end=false, initialize_save=false;
         st.stiff_kwargs...) for _ in 1:length(IIchunks)]
 
-    nonstiff_op = nonstiff_ops(s, sys_mtk, obs_eqs, dom, u0, nonstiff_params)
+    nonstiff_op = nonstiff_ops(s, sys_mtk, dom, u0, p)
 
     setp! = coord_setter(sys_mtk, dom)
 
     cb = CallbackSet(
         stiff_callback(setp!, u0, st, IIchunks, stiff_integrators),
-        get_callbacks(s, sys_mtk, obs_eqs, dom)...,
+        get_callbacks(s, sys_mtk, dom)...,
     )
-    ODEProblem(nonstiff_op, u0[:], (start, finish), nonstiff_params; callback=cb,
+    ODEProblem(nonstiff_op, u0[:], (start, finish), p; callback=cb,
         dt=st.timestep, kwargs...)
 end
 

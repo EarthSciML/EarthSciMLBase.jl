@@ -2,38 +2,44 @@ using EarthSciMLBase
 using Test
 using ModelingToolkit, DomainSets, OrdinaryDiffEq
 using SciMLOperators
-using DifferentialEquations
 using SciMLBase: DiscreteCallback, ReturnCode
 
 struct ExampleOp <: Operator
-    α::Num # Multiplier from ODESystem
 end
 
-function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, domain::DomainInfo, obs_functions, coordinate_transform_functions, u0, p)
-    obs_f = obs_functions(op.α)
+function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, domain::DomainInfo, u0, p)
+    α, trans1, trans2, trans3 = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
+
+    obs_f! = ModelingToolkit.build_explicit_observed_function(mtk_sys,
+        [α, trans1, trans2, trans3], checkbounds=false, return_inplace=true)[2]
+
+    setp! = EarthSciMLBase.coord_setter(mtk_sys, domain)
+    obscache = zeros(EarthSciMLBase.dtype(domain), 4)
     grd = EarthSciMLBase.grid(domain)
+
     function run(du, u, p, t)
         u = reshape(u, size(u0)...)
         du = reshape(du, size(u0)...)
+        II = CartesianIndices(size(u)[2:end])
         for ix ∈ 1:size(u, 1)
-            for (i, c1) ∈ enumerate(grd[1])
-                for (j, c2) ∈ enumerate(grd[2])
-                    for (k, c3) ∈ enumerate(grd[3])
-                        # Demonstrate coordinate transforms
-                        t1 = coordinate_transform_functions[1](t, c1, c2, c3)
-                        t2 = coordinate_transform_functions[2](t, c1, c2, c3)
-                        t3 = coordinate_transform_functions[3](t, c1, c2, c3)
-                        # Demonstrate calculating observed value.
-                        fv = obs_f(t, c1, c2, c3)
-                        # Set derivative value.
-                        du[ix, i, j, k] = (t1 + t2 + t3) * fv
-                    end
-                end
+            for I in II
+                # Demonstrate coordinate transforms and observed values
+                uu = view(u, :, I)
+                setp!(p, I)
+                obs_f!(obscache, u, p, t)
+                t1, t2, t3, fv = obscache
+                # Set derivative value.
+                du[ix, I] = (t1 + t2 + t3) * fv
             end
         end
         nothing
     end
     FunctionOperator(run, u0[:], p=p)
+end
+
+function EarthSciMLBase.get_needed_vars(::ExampleOp, csys, mtk_sys, domain::DomainInfo)
+    ts = EarthSciMLBase.partialderivative_transform_vars(mtk_sys, domain)
+    return [mtk_sys.sys₊windspeed, ts...]
 end
 
 t_min = 0.0
@@ -62,31 +68,39 @@ eqs = [Dt(u) ~ -α * √abs(v) + lon,
     Dt(v) ~ -α * √abs(u) + lat + lev * 1e-14,
     windspeed ~ lat + lon + lev,
 ]
-sys = ODESystem(eqs, t, name=:Test₊sys)
+sys = ODESystem(eqs, t, name=:sys)
 
-op = ExampleOp(sys.windspeed)
+op = ExampleOp()
 
-csys = Main.EarthSciMLBase.EarthSciMLBase.couple(sys, op, domain)
+csys = EarthSciMLBase.couple(sys, op, domain)
 
-sys_mtk, obs_eqs = convert(ODESystem, csys)
-tf_fs = EarthSciMLBase.coord_trans_functions(obs_eqs, domain)
+sys_mtk = convert(ODESystem, csys)
 
-@test 1 / (tf_fs[1](0.0, 0.0, 0.0, 0.0) * 180 / π) ≈ 111319.44444444445
-@test 1 / (tf_fs[2](0.0, 0.0, 0.0, 0.0) * 180 / π) ≈ 111320.00000000001
-@test tf_fs[3](0.0, 0.0, 0.0, 0.0) == 1.0
+@test Symbol.(EarthSciMLBase.partialderivative_transform_vars(sys_mtk, domain)) == [
+    Symbol("δsys₊lon_transform(t)"),
+    Symbol("δsys₊lat_transform(t)"),
+    Symbol("δsys₊lev_transform(t)")]
 
-obs_fs = EarthSciMLBase.obs_functions(obs_eqs, domain)
-@test obs_fs(sys.windspeed)(0.0, 1.0, 3.0, 2.0) == 6.0
-@test obs_fs(op.α)(0.0, 1.0, 3.0, 2.0) == 6.0
+obs_f = ModelingToolkit.build_explicit_observed_function(sys_mtk,
+    EarthSciMLBase.get_needed_vars(op, csys, sys_mtk, domain))
+p = EarthSciMLBase.default_params(sys_mtk)
+
+obs_vals = obs_f([0.0, 0], p, 0.0)
+@test 1 / (obs_vals[2] * 180 / π) ≈ 111319.44444444445
+@test 1 / (obs_vals[3] * 180 / π) ≈ 111320.00000000001
+@test obs_vals[4] == 1.0
+
+p2 = MTKParameters(sys_mtk, [sys_mtk.sys₊lon => 1.0, sys_mtk.sys₊lat => 3.0, sys_mtk.sys₊lev => 2.0], [0.0, 0.0])
+obs_vals = obs_f([0.0, 0], p2, 0.0)
+@test obs_vals[1] == 6.0
 
 u = EarthSciMLBase.init_u(sys_mtk, domain)
-p = EarthSciMLBase.default_params(sys_mtk)
-scimlop = EarthSciMLBase.nonstiff_ops(csys, sys_mtk, obs_eqs, domain, u, p)
+scimlop = EarthSciMLBase.nonstiff_ops(csys, sys_mtk, domain, u, p)
 du = similar(u)
 du .= 0
 @views scimlop(du[:], u[:], p, 0.0)
 
-@test sum(abs.(du)) ≈ 26094.203039436292
+@test sum(abs.(du)) ≈ 26094.193871228505
 
 setp! = EarthSciMLBase.coord_setter(sys_mtk, domain)
 
@@ -122,14 +136,31 @@ EarthSciMLBase.threaded_ode_step!(setp!, u, IIchunks, integrators, 0.0, 1.0)
     ucopy = copy(u)
     f = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, p)
     uu = EarthSciMLBase.init_u(sys_mtk, domain)
-    du = similar(uu)
     prob = ODEProblem(f, uu[:], (0.0, 1.0), p)
     sol = solve(prob, Tsit5())
     uu = reshape(sol.u[end], size(ucopy)...)
-    @test uu[:] ≈ ucopy[:] rtol = 0.01
+    @test uu[:] ≈ u[:] rtol = 0.01
+
+    @testset "scimlop" begin
+        f = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, p; scimlop=true)
+        uu = EarthSciMLBase.init_u(sys_mtk, domain)
+        prob = ODEProblem(f, uu[:], (0.0, 1.0), p)
+        sol = solve(prob, Tsit5())
+        uu = reshape(sol.u[end], size(ucopy)...)
+        @test uu[:] ≈ u[:] rtol = 0.01
+    end
+
+    f = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, p; jac=true, tgrad=true)
+    du = zeros(length(ucopy), length(ucopy))
+    f.jac(du, ucopy[:], p, 0.0)
+    @test sum(du) ≈ 5.825018312792475
+
+    @testset "tgrad" begin
+        du .= 0
+        f.tgrad(du, ucopy[:], p, 0.0)
+        @test sum(du) ≈ 0.0
+    end
 end
-
-
 
 prob = ODEProblem(csys, st)
 sol = solve(prob, Euler(); dt=1.0, abstol=1e-12, reltol=1e-12)
@@ -193,7 +224,7 @@ end
 mutable struct cbt
     runcount::Int
 end
-function EarthSciMLBase.init_callback(c::cbt, sys, sys_mtk, obs_eqs, dom)
+function EarthSciMLBase.init_callback(c::cbt, sys, sys_mtk, dom)
     DiscreteCallback((u, t, integrator) -> true,
         (_) -> c.runcount += 1,
     )

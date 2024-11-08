@@ -46,7 +46,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    op, _ = convert(ODESystem, combined)
+    op = convert(ODESystem, combined)
     eq = equations(op)
 
     eqstr = replace(string(eq), "Symbolics." => "")
@@ -65,7 +65,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    op, _ = convert(ODESystem, combined)
+    op = convert(ODESystem, combined)
     eq = equations(op)
     eqstr = replace(string(eq), "Symbolics." => "")
     @test eqstr == "Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_ddt_yˍt(t)]"
@@ -91,7 +91,7 @@ end
     end
 
     combined = couple(sys1, sys2)
-    sys_combined, _ = convert(ODESystem, combined)
+    sys_combined = convert(ODESystem, combined)
 
     streq = string(equations(sys_combined))
     @test occursin("sys1₊sysnonode_y(t)", streq)
@@ -109,7 +109,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    op, _ = convert(ODESystem, combined)
+    op = convert(ODESystem, combined)
     streq = string(equations(op))
     @test occursin("sys1₊p", streq)
     @test occursin("sys1₊sys22_ddt_yˍt(t)", streq)
@@ -146,7 +146,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    op, _ = convert(ODESystem, combined)
+    op = convert(ODESystem, combined)
     streq = string(equations(op))
     @test occursin("sys1₊p", streq)
     @test occursin("sys1₊sys2_ddt_yˍt(t)", streq)
@@ -184,7 +184,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    op, _ = convert(ODESystem, combined)
+    op = convert(ODESystem, combined)
     streq = string(equations(op))
     @test occursin("sys1₊p", streq)
     @test occursin("sys1₊sys2_y(t)", streq)
@@ -220,7 +220,7 @@ end
 
     combined = couple(sys1, sys2)
 
-    sys, _ = convert(ODESystem, combined)
+    sys = convert(ODESystem, combined)
     @test occursin("sys1₊sys2_x(t)", string(equations(sys)))
 end
 
@@ -261,7 +261,7 @@ end
     end
 
     combined = couple(rn, dep)
-    cs, _ = convert(ODESystem, combined)
+    cs = convert(ODESystem, combined)
     eq = equations(cs)
 
     eqstr = replace(string(eq), "Symbolics." => "")

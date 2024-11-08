@@ -83,7 +83,7 @@ function couple(systems...)::CoupledSystem
             push!(o.callbacks, sys)
         elseif (sys isa Tuple) || (sys isa AbstractVector)
             o = couple(o, sys...)
-        elseif hasmethod(init_callback, (typeof(sys), CoupledSystem, Any, Any, DomainInfo))
+        elseif hasmethod(init_callback, (typeof(sys), CoupledSystem, Any, DomainInfo))
             push!(o.init_callbacks, sys)
         elseif hasmethod(couple2, (CoupledSystem, typeof(sys)))
             o = couple2(o, sys)
@@ -164,24 +164,31 @@ function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, simp
             end
         end
     end
+
     iv = ModelingToolkit.get_iv(first(systems))
     connectors = ODESystem(connector_eqs, iv; name=name, kwargs...)
 
     # Compose everything together.
     o = compose(connectors, systems...)
     o = namespace_events(o)
+    if !isnothing(sys.domaininfo)
+        o = extend(o, partialderivative_transform_eqs(o, sys.domaininfo))
+    end
     o_simplified = structural_simplify(o)
+    # Add coordinate transform equations.
     if prune
-        o, obs = prune_observed(o, o_simplified)
-    else
-        obs = []
+        extra_vars = []
+        if !isnothing(sys.domaininfo)
+            extra_vars = operator_vars(sys, o_simplified, sys.domaininfo)
+        end
+        o = prune_observed(o, o_simplified, extra_vars)
     end
     o_simplified = structural_simplify(o)
     o = remove_extra_defaults(o, o_simplified)
     if simplify
         o = structural_simplify(o)
     end
-    return o, obs
+    return o
 end
 
 """
@@ -190,7 +197,7 @@ end
 Get the ModelingToolkit PDESystem representation of a [`CoupledSystem`](@ref).
 """
 function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name=:model, kwargs...)::ModelingToolkit.AbstractSystem
-    o, _ = convert(ODESystem, sys; name=name, simplify=false, prune=false, kwargs...)
+    o = convert(ODESystem, sys; name=name, simplify=false, prune=false, kwargs...)
 
     if sys.domaininfo !== nothing
         o += sys.domaininfo
@@ -218,19 +225,21 @@ end
 
 # Combine the non-stiff operators into a single operator.
 # This works because SciMLOperators can be added together.
-function nonstiff_ops(sys::CoupledSystem, sys_mtk, obs_eqs, domain, u0, p)
-    obs_funcs = obs_functions(obs_eqs, domain)
-    coord_trans_funcs = coord_trans_functions(obs_eqs, domain)
+function nonstiff_ops(sys::CoupledSystem, sys_mtk, domain, u0, p)
     nonstiff_op = length(sys.ops) > 0 ?
-                  sum([get_scimlop(op, sys, sys_mtk, domain, obs_funcs, coord_trans_funcs, u0, p) for op ∈ sys.ops]) :
+                  sum([get_scimlop(op, sys, sys_mtk, domain, u0, p) for op ∈ sys.ops]) :
                   NullOperator(length(u0))
     nonstiff_op = cache_operator(nonstiff_op, u0)
+end
+
+function operator_vars(sys::CoupledSystem, mtk_sys, domain::DomainInfo)
+    unique(vcat([get_needed_vars(op, sys, mtk_sys, domain) for op in sys.ops]...))
 end
 
 """
 Types that implement an:
 
-`init_callback(x, sys::CoupledSystem, obs_eqs, domain::DomainInfo)::DECallback`
+`init_callback(x, sys::CoupledSystem, sys_mtk, domain::DomainInfo)::DECallback`
 
 method can also be coupled into a `CoupledSystem`.
 The `init_callback` function will be run before the simulator is run
@@ -238,8 +247,8 @@ to get the callback.
 """
 init_callback() = error("Not implemented")
 
-function get_callbacks(sys::CoupledSystem, sys_mtk, obs_eqs, domain::DomainInfo)
-    extra_cb = [init_callback(c, sys, sys_mtk, obs_eqs, domain::DomainInfo) for c ∈ sys.init_callbacks]
+function get_callbacks(sys::CoupledSystem, sys_mtk, domain::DomainInfo)
+    extra_cb = [init_callback(c, sys, sys_mtk, domain::DomainInfo) for c ∈ sys.init_callbacks]
     [sys.callbacks; extra_cb]
 end
 

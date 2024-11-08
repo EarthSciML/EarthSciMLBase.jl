@@ -35,7 +35,7 @@ end
 function ODEProblem(sys::CoupledSystem, st::SolverIMEX; u0=nothing, p=nothing,
     name=:model, kwargs...)
 
-    sys_mtk, obs_eqs = convert(ODESystem, sys; name=name)
+    sys_mtk = convert(ODESystem, sys; name=name)
     dom = domain(sys)
 
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
@@ -44,9 +44,9 @@ function ODEProblem(sys::CoupledSystem, st::SolverIMEX; u0=nothing, p=nothing,
     f1 = mtk_grid_func(sys_mtk, dom, u0, p; jac=st.stiff_jac,
         sparse=st.stiff_sparse, scimlop=st.stiff_scimlop, tgrad=st.stiff_tgrad)
 
-    f2 = nonstiff_ops(sys, sys_mtk, obs_eqs, dom, u0, p)
+    f2 = nonstiff_ops(sys, sys_mtk, dom, u0, p)
 
-    cb = get_callbacks(sys, sys_mtk, obs_eqs, dom)
+    cb = get_callbacks(sys, sys_mtk, dom)
     start, finish = get_tspan(dom)
     SplitODEProblem(f1, f2, u0[:], (start, finish), p,
         callback=CallbackSet(cb...); kwargs...)

@@ -63,7 +63,7 @@ using OrdinaryDiffEq
 
     sir = couple(seqn, ieqn, reqn)
 
-    sirfinal, _ = convert(ODESystem, sir)
+    sirfinal = convert(ODESystem, sir)
 
     want_eqs = [
         D(reqn.R) ~ reqn.γ * reqn.I,
@@ -156,7 +156,7 @@ end
     ]
     for (i, model) ∈ enumerate(models)
         @testset "permutation $i" begin
-            m, _ = convert(ODESystem, model)
+            m = convert(ODESystem, model)
             eqstr = string(equations(m))
             @test occursin("b₊c_NO2(t)", eqstr)
             @test occursin("b₊jNO2(t)", eqstr)
@@ -171,7 +171,7 @@ end
 
     @testset "Stable evaluation" begin
         sys = couple(A(), B(), C())
-        s, _ = convert(ODESystem, sys)
+        s = convert(ODESystem, sys)
         eqs1 = string(equations(s))
         @test occursin("b₊c_NO2(t)", eqs1)
         eqs2 = string(equations(s))
@@ -244,13 +244,12 @@ end
     end
 
     @testset "prune observed" begin
-        sys2, obs = EarthSciMLBase.prune_observed(sys, structural_simplify(sys))
+        sys2 = EarthSciMLBase.prune_observed(sys, structural_simplify(sys), [])
         @test length(equations(sys2)) == 2
         @test length(ModelingToolkit.get_discrete_events(sys2)) == 2
-        @test length(obs) == 1
     end
 
-    sys2, _ = EarthSciMLBase.prune_observed(sys, structural_simplify(sys))
+    sys2 = EarthSciMLBase.prune_observed(sys, structural_simplify(sys), [])
     prob = ODEProblem(structural_simplify(sys2), [], (0, 100), [])
     sol = solve(prob, abstol=1e-8, reltol=1e-8)
     @test sol[x][end] ≈ 3
@@ -287,7 +286,7 @@ end
         create_sys(name=:a), create_sys(name=:b))
     sysc = EarthSciMLBase.namespace_events(sys_composed)
     sysc2 = EarthSciMLBase.remove_extra_defaults(sysc, structural_simplify(sysc))
-    sysc3, obs = EarthSciMLBase.prune_observed(sysc2, structural_simplify(sysc2))
+    sysc3 = EarthSciMLBase.prune_observed(sysc2, structural_simplify(sysc2), [])
     prob = ODEProblem(structural_simplify(sysc3), [], (0, 100), [])
     sol = solve(prob, abstol=1e-8, reltol=1e-8)
     @test length(sol.u[end]) == 4

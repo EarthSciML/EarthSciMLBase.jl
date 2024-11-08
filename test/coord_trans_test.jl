@@ -1,3 +1,4 @@
+using Test
 using EarthSciMLBase
 using ModelingToolkit, DomainSets
 using ModelingToolkit: t, D
@@ -31,7 +32,7 @@ end
         @variables c(t) = 5.0 [unit = u"kg"]
         @constants t_c = 1.0 [unit = u"s"] # constant to make `sin` unitless
         @constants c_c = 1.0 [unit = u"kg/s"] # constant to make equation units work out
-        ODESystem([D(c) ~ sin(t / t_c) * c_c], t, name=:examplesys)
+        ODESystem([D(c) ~ sin(t / t_c) * c_c], t, [c], [lon, lat, lev], name=:examplesys)
     end
     examplesys = Example()
 
@@ -49,14 +50,14 @@ end
     sys_mtk = convert(PDESystem, composed_sys)
 
     have_eq = equations(sys_mtk)
-    @assert length(have_eq) == 1
+    @assert length(have_eq) == 4
     @variables examplesys₊c(..) MeanWind₊v_lon(..) MeanWind₊v_lat(..) MeanWind₊v_lev(..)
     @constants examplesys₊t_c = 1.0 examplesys₊c_c = 1.0
     want_eq = Differential(t)(examplesys₊c(t, lat, lon, lev)) ~ examplesys₊c_c * sin(t / examplesys₊t_c) +
                                                                 (-MeanWind₊v_lat(t, lat, lon, lev) * Differential(lat)(examplesys₊c(t, lat, lon, lev))) / EarthSciMLBase.lat2meters +
                                                                 (-MeanWind₊v_lon(t, lat, lon, lev) * Differential(lon)(examplesys₊c(t, lat, lon, lev))) / (EarthSciMLBase.lon2m * cos(lat)) -
                                                                 MeanWind₊v_lev(t, lat, lon, lev) * Differential(lev)(examplesys₊c(t, lat, lon, lev))
-    @test isequal(have_eq[1], want_eq)
+    @test isequal(have_eq[4], want_eq)
 end
 
 @testset "DomainInfo" begin
