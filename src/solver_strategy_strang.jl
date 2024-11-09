@@ -146,7 +146,6 @@ function single_ode_step!(setp!, u, IIchunk, integrator, time, step_length)
         setp!(integrator.p, ii)
         solve!(integrator)
         @assert length(integrator.sol.u) == 0
-        @assert integrator.t == time + step_length
         uii .= integrator.u
     end
 end

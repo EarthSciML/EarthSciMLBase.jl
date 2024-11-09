@@ -13,7 +13,7 @@ Things that can be added to a `CoupledSystem`:
     * [`Operator`](@ref)s
     * [`DomainInfo`](@ref)s
     * [Callbacks](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/)
-    * Types `X` that implement a `EarthSciMLBase.init_callback(::X, sys::CoupledSystem, sys_mtk, obs_eqs, domain::DomainInfo)::DECallback` method
+    * Types `X` that implement a `EarthSciMLBase.init_callback(::X, sys::CoupledSystem, sys_mtk, domain::DomainInfo)::DECallback` method
     * Other `CoupledSystem`s
     * Types `X` that implement a `EarthSciMLBase.couple2(::X, ::CoupledSystem)` or `EarthSciMLBase.couple2(::CoupledSystem, ::X)` method.
     * `Tuple`s or `AbstractVector`s of any of the things above.
