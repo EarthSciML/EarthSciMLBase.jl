@@ -179,23 +179,6 @@ function filter_discrete_events(simplified_sys, obs_eqs)
     keep
 end
 
-# Add the namespace to the affects of the discrete events.
-# This should be done before doing anything else to the system because the
-# events get ignored by default.
-# TODO(CT): This is probably only necessary due a bug in MTK. Remove this when fixed.
-function namespace_events(sys)
-    events = ModelingToolkit.get_discrete_events(sys)
-    for sys2 in ModelingToolkit.get_systems(sys)
-        events2 = ModelingToolkit.get_discrete_events(sys2)
-        for ev in events2
-            af = ModelingToolkit.namespace_affects(ev.affects, sys2)
-            ev2 = @set ev.affects = af
-            push!(events, ev2)
-        end
-    end
-    copy_with_change(sys; discrete_events=events)
-end
-
 """
 $(SIGNATURES)
 
@@ -229,15 +212,20 @@ end
 # Get the unknown variables in the system of equations.
 function get_unknowns(eqs)
     all_vars = unique(vcat(get_variables.(eqs)...))
-    unk = [v.metadata[Symbolics.VariableSource][1] == :variables for v in all_vars]
-    all_vars[unk]
+    unk = []
+    for v in all_vars
+        if !isnothing(v.metadata) && v.metadata[Symbolics.VariableSource][1] == :variables
+            push!(unk, v)
+        end
+    end
+    unk
 end
 
 # Remove extra variable defaults that would cause a solver initialization error.
 function remove_extra_defaults(original_sys, simplified_sys)
     all_vars = unknowns(original_sys)
 
-    unk = var2symbol.(get_needed_vars(original_sys, simplified_sys))
+    unk = var2symbol.(unknowns(simplified_sys))
 
     # Check if v is not in the unknowns and has a default.
     checkextra(v) = !(var2symbol(v) in unk) &&

@@ -284,8 +284,8 @@ end
 
     sys_composed = compose(ODESystem(Equation[], ModelingToolkit.t_nounits; name=:coupled),
         create_sys(name=:a), create_sys(name=:b))
-    sysc = EarthSciMLBase.namespace_events(sys_composed)
-    sysc2 = EarthSciMLBase.remove_extra_defaults(sysc, structural_simplify(sysc))
+    sys_flattened = ModelingToolkit.flatten(sys_composed)
+    sysc2 = EarthSciMLBase.remove_extra_defaults(sys_flattened, structural_simplify(sys_flattened))
     sysc3 = EarthSciMLBase.prune_observed(sysc2, structural_simplify(sysc2), [])
     prob = ODEProblem(structural_simplify(sysc3), [], (0, 100), [])
     sol = solve(prob, abstol=1e-8, reltol=1e-8)
