@@ -145,7 +145,7 @@ Return values:
 - The extra observed equations which have been pruned to improve performance
 """
 function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, simplify=true,
-    prune=true, kwargs...)
+    prune=true, extra_vars=[], kwargs...)
     connector_eqs = Equation[]
     systems = copy(sys.systems)
     for (i, a) ∈ enumerate(systems)
@@ -177,11 +177,11 @@ function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, simp
     o_simplified = structural_simplify(o)
     # Add coordinate transform equations.
     if prune
-        extra_vars = []
+        extra_vars2 = []
         if !isnothing(sys.domaininfo)
-            extra_vars = operator_vars(sys, o_simplified, sys.domaininfo)
+            extra_vars2 = operator_vars(sys, o_simplified, sys.domaininfo)
         end
-        o = prune_observed(o, o_simplified, extra_vars)
+        o = prune_observed(o, o_simplified, vcat(extra_vars, extra_vars2))
     end
     o_simplified = structural_simplify(o)
     o = remove_extra_defaults(o, o_simplified)
