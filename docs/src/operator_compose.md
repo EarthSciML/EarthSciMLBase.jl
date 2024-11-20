@@ -68,13 +68,10 @@ combined_mtk = convert(ODESystem, combined)
 ```
 
 The simplified equation should be D(x) = p + sys2_xˍt:
-```@example operator_compose
-combined_simplified = structural_simplify(combined_mtk)
-```
 
  where sys2_xˍt is also equal to p:
 ```@example operator_compose
-observed(combined_simplified)
+observed(combined_mtk)
 ```
 
 ### Example with non-matching variables
@@ -100,7 +97,7 @@ function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSys3Couple
 end
 
 combined = couple(sys1, sys2)
-combined_simplified = structural_simplify(convert(ODESystem, combined))
+combined_simplified = convert(ODESystem, combined)
 ```
 
 ```@example operator_compose
@@ -131,7 +128,7 @@ function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODEC
 end
 
 combined = couple(sys1, sys2)
-sys_combined = structural_simplify(convert(ODESystem, combined))
+sys_combined = convert(ODESystem, combined)
 ```
 
 ```@example operator_compose
@@ -160,14 +157,14 @@ function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODE2
 end
 
 combined = couple(sys1, sys2)
-combined_simplified = structural_simplify(convert(ODESystem, combined))
+combined_simplified = convert(ODESystem, combined)
 ```
 
 ```@example operator_compose
 observed(combined_simplified)
 ```
 
-!warn
+!warning
     The `operator_compose` function will not work correctly if any of the variables to be 
     composed are part of a `NonlinearSystem` rather than an `ODESystem`. The reason for this
     is because `operator_compose` works by matching the left-hand sides of the equations in
