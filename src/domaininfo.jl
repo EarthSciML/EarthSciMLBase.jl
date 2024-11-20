@@ -1,4 +1,5 @@
-export DomainInfo, ICBCcomponent, constIC, constBC, zerogradBC, periodicBC, partialderivatives
+export DomainInfo, ICBCcomponent, constIC, constBC, zerogradBC, periodicBC, partialderivatives,
+    get_tspan, get_tspan_datetime
 
 """
 Initial and boundary condition components that can be combined to
@@ -72,7 +73,7 @@ struct DomainInfo{T}
         new{dtype}(fdxs, grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
     end
     function DomainInfo(starttime::DateTime, endtime::DateTime;
-        xrange=nothing, yrange=nothing, levelrange=nothing,
+        xrange=nothing, yrange=nothing, levrange=nothing,
         latrange=nothing, lonrange=nothing, dtype=Float64, level_trans=nothing, offsettime=0.0,
         spatial_ref="+proj=longlat +datum=WGS84 +no_defs")
 
@@ -97,27 +98,30 @@ struct DomainInfo{T}
         if !isnothing(latrange)
             @assert maximum(abs.(latrange)) <= π "Latitude must be in radians."
             @assert maximum(abs.(lonrange)) <= 2π "Longitude must be in radians."
-            lon = GlobalScope(only(@parameters lon = mean(lonrange) [unit = u"rad", description = "Longitude"]))
-            lat = GlobalScope(only(@parameters lat = mean(latrange) [unit = u"rad", description = "Latitude"]))
+            lon = only(@parameters lon = mean(lonrange) [unit = u"rad", description = "Longitude"])
+            lat = only(@parameters lat = mean(latrange) [unit = u"rad", description = "Latitude"])
             push!(boundaries, lon ∈ Interval(dtype.([first(lonrange), last(lonrange)])...))
             push!(boundaries, lat ∈ Interval(dtype.([first(latrange), last(latrange)])...))
             push!(grid_spacing, dtype.([step(lonrange), step(latrange)])...)
         else
-            x = GlobalScope(only(@parameters x = mean(xrange) [unit = u"m", description = "East-West Distance"]))
-            y = GlobalScope(only(@parameters y = mean(yrange) [unit = u"m", description = "North-South Distance"]))
+            x = only(@parameters x = mean(xrange) [unit = u"m", description = "East-West Distance"])
+            y = only(@parameters y = mean(yrange) [unit = u"m", description = "North-South Distance"])
             push!(boundaries, x ∈ Interval(dtype.([first(xrange), last(xrange)])...))
             push!(boundaries, y ∈ Interval(dtype.([first(yrange), last(yrange)])...))
             push!(grid_spacing, dtype.([step(xrange), step(yrange)])...)
         end
-        if !isnothing(levelrange)
-            lev = only(@parameters lev = mean(levelrange) [description = "Level Index"])
-            push!(boundaries, lev ∈ Interval(dtype.([first(levelrange), last(levelrange)])...))
-            push!(grid_spacing, dtype(step(levelrange)))
+        if !isnothing(levrange)
+            lev = only(@parameters lev = mean(levrange) [description = "Level Index"])
+            push!(boundaries, lev ∈ Interval(dtype.([first(levrange), last(levrange)])...))
+            push!(grid_spacing, dtype(step(levrange)))
         end
         bcs = constBC(dtype(0.0), boundaries...)
         new{dtype}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, offset)
     end
 end
+
+Base.size(d::DomainInfo) = (length(g) for g ∈ grid(d))
+Base.size(d::DomainInfo, i) = length(grid(d)[i])
 
 """
 $(SIGNATURES)
@@ -131,36 +135,59 @@ dtype(_::DomainInfo{T}) where {T} = T
 $(SIGNATURES)
 
 Return the ranges representing the discretization of the partial independent
-variables for this domain, based on the discretization intervals given in `Δs`
+variables for this domain, based on the discretization intervals given in `Δs`.
 """
-function grid(d::DomainInfo{T}) where {T<:AbstractFloat}
-    i = 1
-    rngs = []
-    @assert length(pvars(d)) == length(d.grid_spacing) "The number of partial independent variables ($(length(pvars(d)))) must equal the number of grid spacings provided ($(length(d.grid_spacing)))."
-    for icbc ∈ d.icbc
-        if icbc isa BCcomponent
-            for pd ∈ icbc.partialdomains
-                rng = T(DomainSets.infimum(pd.domain)):T(d.grid_spacing[i]):T(DomainSets.supremum(pd.domain))
-                push!(rngs, rng)
-                i += 1
-            end
-        end
+function grid(d::DomainInfo{T}) where T
+    if !((d.grid_spacing isa Base.AbstractVecOrTuple) &&
+        (length(pvars(d)) == length(d.grid_spacing)))
+        throw(ArgumentError("The number of partial independent variables ($(length(pvars(d)))) must equal the number of grid spacings provided ($(d.grid_spacing))."))
     end
-    return rngs
+    endpts = endpoints(d)
+    [s:d:e for ((s, e), d) in zip(endpts, d.grid_spacing)]
 end
 
 """
 $(SIGNATURES)
 
-Return the time range associated with this domain.
+Return the endpoints of the partial independent
+variables for this domain.
 """
-function time_range(d::DomainInfo{T})::Tuple{T,T} where {T<:AbstractFloat}
+function endpoints(d::DomainInfo{T}) where T
+    i = 1
+    rngs = []
+    for icbc ∈ d.icbc
+        if icbc isa BCcomponent
+            for pd ∈ icbc.partialdomains
+                rng = (T(DomainSets.infimum(pd.domain)), T(DomainSets.supremum(pd.domain)))
+                push!(rngs, rng)
+                i += 1
+            end
+        end
+    end
+    return [rng for rng in rngs]
+end
+
+"""
+$(SIGNATURES)
+
+Return the time range associated with this domain, returning the values as Unix times.
+"""
+function get_tspan(d::DomainInfo{T})::Tuple{T,T} where {T<:AbstractFloat}
     for icbc ∈ d.icbc
         if icbc isa ICcomponent
             return DomainSets.infimum(icbc.indepdomain.domain), DomainSets.supremum(icbc.indepdomain.domain)
         end
     end
     throw(ArgumentError("Could not find a time range for this domain."))
+end
+
+"""
+$(SIGNATURES)
+
+Return the time range associated with this domain, returning the values as DateTimes.
+"""
+function get_tspan_datetime(d::DomainInfo)
+    (Float64.(get_tspan(d)) .+ Float64(d.time_offset)) .|> unix2datetime
 end
 
 """
@@ -213,8 +240,15 @@ $(TYPEDSIGNATURES)
 Return transform factor to multiply each partial derivative operator by,
 for example to convert from degrees to meters.
 """
+function partialderivative_transforms(mtk_sys::ODESystem, di::DomainInfo)
+    xs = coord_params(mtk_sys, di)
+    partialderivative_transforms(xs, di)
+end
 function partialderivative_transforms(di::DomainInfo)
     xs = pvars(di)
+    partialderivative_transforms(xs, di)
+end
+function partialderivative_transforms(xs, di::DomainInfo)
     fs = Dict()
     for f in di.partial_derivative_funcs
         for (k, v) ∈ f(xs)
@@ -232,6 +266,28 @@ function partialderivative_transforms(di::DomainInfo)
     end
     ts
 end
+
+function partialderivative_transform_vars(mtk_sys, di::DomainInfo)
+    xs = coord_params(mtk_sys, di)
+    iv = ivar(di)
+    ts = partialderivative_transforms(mtk_sys, di)
+    vs = []
+    for (i, x) in enumerate(xs)
+        n = Symbol("δ$(x)_transform")
+        v = only(@variables $n(iv) [unit=ModelingToolkit.get_unit(ts[i]),
+            description = "Transform factor for $(x)"])
+        push!(vs, v)
+    end
+    vs
+end
+
+function partialderivative_transform_eqs(mtk_sys, di::DomainInfo)
+    vs = partialderivative_transform_vars(mtk_sys, di)
+    ts = partialderivative_transforms(mtk_sys, di)
+    eqs = vs .~ ts
+    ODESystem(eqs, ivar(di); name=:transforms)
+end
+
 
 
 """
@@ -416,7 +472,7 @@ domains(di::DomainInfo) = unique(vcat(domains.(di.icbc)...))
 function Base.:(+)(sys::ModelingToolkit.ODESystem, di::DomainInfo)::ModelingToolkit.PDESystem
     dimensions = dims(di)
     allvars = unknowns(sys)
-    statevars = unknowns(structural_simplify(sys))
+    statevars = unknowns(sys)
     ps = parameters(sys)
     toreplace, replacements = replacement_params(ps, pvars(di))
     dvs = add_dims(allvars, dimensions) # Add new dimensions to dependent variables.

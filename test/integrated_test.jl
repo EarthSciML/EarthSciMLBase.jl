@@ -1,5 +1,5 @@
 using Test
-using ModelingToolkit, Catalyst, Main.EarthSciMLBase
+using ModelingToolkit, Catalyst, EarthSciMLBase
 using ModelingToolkit: t_nounits, D_nounits
 using OrdinaryDiffEq: ODEProblem, solve
 using SciMLBase: ReturnCode
@@ -80,9 +80,8 @@ end
 @testset "Coupled model" begin
     model = couple(c, p, e)
     sys = convert(ODESystem, model)
-    sys2, sys2obs = EarthSciMLBase.prune_observed(sys)
 
-    prob = ODEProblem(sys2, [], (0.0, 1.0))
+    prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob, u0=[1.0])
     @test sol.retcode == ReturnCode.Success
 end

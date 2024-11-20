@@ -28,6 +28,29 @@ function add_scope(sys, v, iv)
     add_metadata(vv, v)
 end
 
+# Convert translation dictionary to the format (a_var => b_var, factor)
+function normalize_translate(translate::AbstractVector)
+    function process_entry(entry::Pair)
+        if entry.second isa Pair
+            return (entry.first => entry.second.first, entry.second.second)
+        else
+            return (entry.first => entry.second, 1)
+        end
+    end
+    process_entry.(translate)
+end
+function normalize_translate(translate::T) where {T<:AbstractDict}
+    normalize_translate([k => v for (k, v) in translate])
+end
+function normalize_translate(translate)
+    error("Invalid translation object: $translate")
+end
+
+function get_matching_translate(translate, a)
+    idx = findall(x -> isequal(x[1].first, a), translate)
+    translate[idx]
+end
+
 """
 $(SIGNATURES)
 
@@ -41,60 +64,77 @@ The left hand sides of two equations will be considered matching if:
 
 """
 function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESystem, translate=Dict())
+    translate = normalize_translate(translate)
     a_eqs = deepcopy(equations(a))
     b_eqs = deepcopy(equations(b))
     iv = ModelingToolkit.get_iv(a) # independent variable
     aname = String(nameof(a))
     bname = String(nameof(b))
     connections = Equation[]
-    for (i, a_eq) ∈ enumerate(a_eqs)
-        adv = add_scope(a, get_dv(a_eq.lhs, iv), iv) # dependent variable
-        if adv ∉ keys(translate) # If adv is not in the translation dictionary, then assume it is the same in both systems.
-            bdv, conv = add_scope(b, get_dv(a_eq.lhs, iv), iv), 1
-        else
-            tt = translate[adv]
-            if length(tt) == 1 # Handle the optional inclusion of a conversion factor.
-                bdv, conv = tt, 1
-            elseif length(tt) == 2
-                bdv, conv = tt
-            else
-                error("Invalid transformation for dependent variable $adv: $tt")
-            end
+    all_matches = []
+    all_beq_matches = []
+    for a_eq in a_eqs
+        if isequal(a_eq.lhs, 0)
+            # If the LHS == 0 (i.e. everything has already been shifted to the RHS),
+            # there's not anything we can do.
+            push!(all_matches, [])
+            push!(all_beq_matches, [])
+            continue
         end
-        for (j, b_eq) ∈ enumerate(b_eqs)
-            if isequal(bdv, add_scope(b, get_dv(b_eq.lhs, iv), iv))
-                bdv = add_scope(b, get_dv(b_eq.lhs, iv), iv) # Make sure the units are correct.
+        adv = add_scope(a, get_dv(a_eq.lhs, iv), iv) # dependent variable
+        matches = get_matching_translate(translate, adv)
+        if length(matches) == 0 # If adv is not in the translation dictionary, then assume it is the same in both systems.
+            bdv, conv = add_scope(b, get_dv(a_eq.lhs, iv), iv), 1
+            matches = [(adv => bdv, conv)]
+        end
+        b_eq_matches = [
+            # If the LHS == 0 (i.e. everything has already been shifted to the RHS),
+            # there's not anything we can do.
+            [!isequal(b_eq.lhs, 0) && isequal(abdv.second, add_scope(b, get_dv(b_eq.lhs, iv), iv)) for b_eq in b_eqs]
+            for (abdv, _) in matches
+        ]
+        push!(all_matches, matches)
+        push!(all_beq_matches, b_eq_matches)
+    end
+    for i in eachindex(a_eqs)
+        matches = all_matches[i]
+        b_eq_matches = all_beq_matches[i]
+        for (ii, match) in enumerate(matches)
+            adv, bdv, conv = match[1].first, match[1].second, match[2]
+            js = (1:length(b_eqs))[b_eq_matches[ii]]
+            for j in js
+                bdv = add_scope(b, get_dv(b_eqs[j].lhs, iv), iv) # Make sure the units are correct.
                 # The dependent variable of the LHS of this equation matches the dependent
                 # variable of interest,
                 # so create a new variable to represent the dependent variable
                 # of interest and add it to the RHS of the other equation, and then also set the two
                 # dependent variables to be equal.
-                bvar = String(Symbolics.tosymbol(b_eq.lhs, escape=false))
-                if operation(b_eq.lhs) == Differential(iv)
+                bvar = String(Symbolics.tosymbol(b_eqs[j].lhs, escape=false))
+                if operation(b_eqs[j].lhs) == Differential(iv)
                     # The LHS of this equation is the time derivative of the dependent variable of interest,
                     var1 = Symbol("$(bname)_ddt_$(bvar)")
                     term1 = (@variables $var1(iv))[1]
-                    term1 = add_metadata(term1, b_eq.lhs)
-                    b_eqs[j] = term1 ~ b_eq.rhs
+                    term1 = add_metadata(term1, b_eqs[j].lhs)
+                    b_eqs[j] = term1 ~ b_eqs[j].rhs
 
                     var2 = Symbol("$(aname)₊", var1)
                     term2 = (@variables $var2(iv))[1]
-                    term2 = add_metadata(term2, b_eq.lhs)
+                    term2 = add_metadata(term2, b_eqs[j].lhs)
                     var3 = Symbol("$(bname)₊", var1)
                     term3 = (@variables $var3(iv))[1]
-                    term3 = add_metadata(term3, b_eq.lhs)
+                    term3 = add_metadata(term3, b_eqs[j].lhs)
                     push!(connections, term2 ~ term3)
-                    a_eqs[i] = a_eq.lhs ~ a_eq.rhs + term1 * conv
+                    a_eqs[i] = a_eqs[i].lhs ~ a_eqs[i].rhs + term1 * conv
                     # Now set the dependent variables in the two systems to be equal.
                     push!(connections, adv ~ bdv * conv)
                 else # The LHS of this equation is the dependent variable of interest.
                     var1 = Symbol("$(bname)_$(bvar)")
                     term1 = (@variables $var1(iv))[1]
-                    term1 = add_metadata(term1, b_eq.lhs * conv)
+                    term1 = add_metadata(term1, b_eqs[j].lhs * conv)
                     var2 = Symbol("$(aname)₊", var1)
                     term2 = (@variables $var2(iv))[1]
-                    term2 = add_metadata(term2, b_eq.lhs * conv)
-                    a_eqs[i] = a_eq.lhs ~ a_eq.rhs + term1
+                    term2 = add_metadata(term2, b_eqs[j].lhs * conv)
+                    a_eqs[i] = a_eqs[i].lhs ~ a_eqs[i].rhs + term1
                     push!(connections, term2 ~ bdv * conv)
                 end
             end

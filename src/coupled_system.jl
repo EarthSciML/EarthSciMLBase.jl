@@ -1,17 +1,6 @@
 export CoupledSystem, ConnectorSystem, couple
 
 """
-Types that implement an:
-
-`init_callback(x, Simulator)::DECallback`
-
-method can also be coupled into a `CoupledSystem`.
-The `init_callback` function will be run before the simulator is run
-to get the callback.
-"""
-init_callback() = error("Not implemented")
-
-"""
 A system for composing together other systems using the [`couple`](@ref) function.
 
 $(FIELDS)
@@ -24,16 +13,16 @@ Things that can be added to a `CoupledSystem`:
     * [`Operator`](@ref)s
     * [`DomainInfo`](@ref)s
     * [Callbacks](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/)
-    * Types `X` that implement a `EarthSciMLBase.get_callback(::X, ::Simulator)::DECallback` method
+    * Types `X` that implement a `EarthSciMLBase.init_callback(::X, sys::CoupledSystem, sys_mtk, domain::DomainInfo)::DECallback` method
     * Other `CoupledSystem`s
-    * Types `X` that implement a `EarthSciMLBase.couple(::X, ::CoupledSystem)` or `EarthSciMLBase.couple(::CoupledSystem, ::X)` method.
+    * Types `X` that implement a `EarthSciMLBase.couple2(::X, ::CoupledSystem)` or `EarthSciMLBase.couple2(::CoupledSystem, ::X)` method.
     * `Tuple`s or `AbstractVector`s of any of the things above.
 """
 mutable struct CoupledSystem
     "Model components to be composed together"
     systems::Vector{ModelingToolkit.AbstractSystem}
     "Initial and boundary conditions and other domain information"
-    domaininfo
+    domaininfo::Union{Nothing,DomainInfo}
     """
     A vector of functions where each function takes as an argument the resulting PDESystem after DomainInfo is
     added to this system, and returns a transformed PDESystem.
@@ -94,11 +83,11 @@ function couple(systems...)::CoupledSystem
             push!(o.callbacks, sys)
         elseif (sys isa Tuple) || (sys isa AbstractVector)
             o = couple(o, sys...)
-        elseif hasmethod(init_callback, (typeof(sys), Simulator))
+        elseif hasmethod(init_callback, (typeof(sys), CoupledSystem, Any, DomainInfo))
             push!(o.init_callbacks, sys)
-        elseif applicable(couple, o, sys)
-            o = couple(o, sys)
-        elseif applicable(couple, sys, o)
+        elseif hasmethod(couple2, (CoupledSystem, typeof(sys)))
+            o = couple2(o, sys)
+        elseif hasmethod(couple2, (typeof(sys), CoupledSystem))
             o = couple(sys, o)
         else
             error("Cannot couple a $(typeof(sys)).")
@@ -115,7 +104,7 @@ function get_coupletype(sys::ModelingToolkit.AbstractSystem)
     end
     T = md[:coupletype]
     @assert ((length(fieldnames(T)) == 1) && (only(fieldnames(T)) == :sys))
-        "The `couple_type` $T must have a single field named `:sys` and no other fields"
+    "The `couple_type` $T must have a single field named `:sys` and no other fields"
     T
 end
 
@@ -145,9 +134,19 @@ couple2() = nothing
 $(SIGNATURES)
 
 Get the ODE ModelingToolkit ODESystem representation of a [`CoupledSystem`](@ref).
+
+kwargs:
+- name: The desired name for the resulting ODESystem
+- simplify: Whether to run `structural_simplify` on the resulting ODESystem
+- prune: Whether to prune the extra observed equations to improve performance
+
+Return values:
+- The ODESystem representation of the CoupledSystem
+- The extra observed equations which have been pruned to improve performance
 """
-function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, kwargs...)::ModelingToolkit.AbstractSystem
-    connector_eqs = []
+function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, simplify=true,
+    prune=true, extra_vars=[], kwargs...)
+    connector_eqs = Equation[]
     systems = copy(sys.systems)
     for (i, a) ∈ enumerate(systems)
         for (j, b) ∈ enumerate(systems)
@@ -165,12 +164,31 @@ function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, kwar
             end
         end
     end
+
     iv = ModelingToolkit.get_iv(first(systems))
     connectors = ODESystem(connector_eqs, iv; name=name, kwargs...)
 
     # Compose everything together.
     o = compose(connectors, systems...)
-    remove_extra_defaults(o)
+    if !isnothing(sys.domaininfo)
+        o = extend(o, partialderivative_transform_eqs(o, sys.domaininfo))
+    end
+    o = ModelingToolkit.flatten(o)
+    o_simplified = structural_simplify(o)
+    # Add coordinate transform equations.
+    if prune
+        extra_vars2 = []
+        if !isnothing(sys.domaininfo)
+            extra_vars2 = operator_vars(sys, o_simplified, sys.domaininfo)
+        end
+        o = prune_observed(o, o_simplified, vcat(extra_vars, extra_vars2))
+    end
+    o_simplified = structural_simplify(o)
+    o = remove_extra_defaults(o, o_simplified)
+    if simplify
+        o = structural_simplify(o)
+    end
+    return o
 end
 
 """
@@ -179,7 +197,7 @@ end
 Get the ModelingToolkit PDESystem representation of a [`CoupledSystem`](@ref).
 """
 function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name=:model, kwargs...)::ModelingToolkit.AbstractSystem
-    o = convert(ODESystem, sys; name, kwargs...)
+    o = convert(ODESystem, sys; name=name, simplify=false, prune=false, kwargs...)
 
     if sys.domaininfo !== nothing
         o += sys.domaininfo
@@ -203,4 +221,38 @@ struct ConnectorSystem
     eqs::Vector{Equation}
     from::ModelingToolkit.AbstractSystem
     to::ModelingToolkit.AbstractSystem
+end
+
+# Combine the non-stiff operators into a single operator.
+# This works because SciMLOperators can be added together.
+function nonstiff_ops(sys::CoupledSystem, sys_mtk, domain, u0, p)
+    nonstiff_op = length(sys.ops) > 0 ?
+                  sum([get_scimlop(op, sys, sys_mtk, domain, u0, p) for op ∈ sys.ops]) :
+                  NullOperator(length(u0))
+    nonstiff_op = cache_operator(nonstiff_op, u0)
+end
+
+function operator_vars(sys::CoupledSystem, mtk_sys, domain::DomainInfo)
+    unique(vcat([get_needed_vars(op, sys, mtk_sys, domain) for op in sys.ops]...))
+end
+
+"""
+Types that implement an:
+
+`init_callback(x, sys::CoupledSystem, sys_mtk, domain::DomainInfo)::DECallback`
+
+method can also be coupled into a `CoupledSystem`.
+The `init_callback` function will be run before the simulator is run
+to get the callback.
+"""
+init_callback() = error("Not implemented")
+
+function get_callbacks(sys::CoupledSystem, sys_mtk, domain::DomainInfo)
+    extra_cb = [init_callback(c, sys, sys_mtk, domain::DomainInfo) for c ∈ sys.init_callbacks]
+    [sys.callbacks; extra_cb]
+end
+
+function domain(s::CoupledSystem)
+    @assert !isnothing(s.domaininfo) "The system must have a domain specified; see documentation for EarthSciMLBase.DomainInfo."
+    s.domaininfo
 end

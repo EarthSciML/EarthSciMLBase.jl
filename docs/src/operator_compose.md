@@ -11,8 +11,8 @@ The left hand sides of two equations will be considered matching if:
 
 1. They are both time derivatives of the same variable.
 2. The first one is a time derivative of a variable and the second one is the variable itself.
-3. There is an entry in the optional `translate` dictionary that maps the dependent variable in the first system to the dependent variable in the second system, e.g. `Dict(sys1.sys.x => sys2.sys.y)`.
-4. There is an entry in the optional `translate` dictionary that maps the dependent variable in the first system to the dependent variable in the second system, with a conversion factor, e.g. `Dict(sys1.sys.x => sys2.sys.y => 6)`.
+3. There is an entry in the optional `translate` dictionary or array that maps the dependent variable in the first system to the dependent variable in the second system, e.g. `[sys1.sys.x => sys2.sys.y]`.
+4. There is an entry in the optional `translate` dictionary or array that maps the dependent variable in the first system to the dependent variable in the second system, with a conversion factor, e.g. `[sys1.sys.x => sys2.sys.y => 6]`.
 
 Perhaps we can make this somewhat clearer with some examples.
 
@@ -96,7 +96,7 @@ sys2 = ExampleSys3()
 
 function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSys3Coupler)
     sys1, sys2 = sys1.sys, sys2.sys
-    operator_compose(sys1, sys2, Dict(sys1.x => sys2.y))
+    operator_compose(sys1, sys2, [sys1.x => sys2.y])
 end
 
 combined = couple(sys1, sys2)
@@ -127,7 +127,7 @@ sys2 = ExampleSysNonODE()
 
 function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODECoupler)
     sys1, sys2 = sys1.sys, sys2.sys
-    operator_compose(sys1, sys2, Dict(sys1.x => sys2.y))
+    operator_compose(sys1, sys2, [sys1.x => sys2.y])
 end
 
 combined = couple(sys1, sys2)
@@ -140,7 +140,7 @@ observed(sys_combined)
 
 ### Example with non-matching variables and a conversion factor
 
-Finally, this last example shows the fourth case, where a conversion factor is included in the translation dictionary.
+Finally, this last example shows the fourth case, where a conversion factor is included in the translation dictionary or array.
 
 ```@example operator_compose
 struct ExampleSysNonODE2Coupler sys end
@@ -156,7 +156,7 @@ sys2 = ExampleSysNonODE2()
 
 function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODE2Coupler)
     sys1, sys2 = sys1.sys, sys2.sys
-    operator_compose(sys1, sys2, Dict(sys1.x => sys2.y => 6.0))
+    operator_compose(sys1, sys2, [sys1.x => sys2.y => 6.0])
 end
 
 combined = couple(sys1, sys2)
@@ -166,3 +166,10 @@ combined_simplified = structural_simplify(convert(ODESystem, combined))
 ```@example operator_compose
 observed(combined_simplified)
 ```
+
+!warn
+    The `operator_compose` function will not work correctly if any of the variables to be 
+    composed are part of a `NonlinearSystem` rather than an `ODESystem`. The reason for this
+    is because `operator_compose` works by matching the left-hand sides of the equations in
+    the two systems, but `NonlinearSystem`s move all of the terms to the right-hand side of
+    the equation when they are created.

@@ -1,6 +1,6 @@
-using Main.EarthSciMLBase: steplength, observed_expression, observed_function, grid,
+using EarthSciMLBase: steplength, grid,
     timesteps, icbc, prune_observed, dtype
-using Main.EarthSciMLBase
+using EarthSciMLBase
 using Test
 using ModelingToolkit, DomainSets
 using ModelingToolkit: t_nounits;
@@ -27,26 +27,12 @@ eqs = [D(u) ~ -α * √abs(v) + lon,
 
 @named sys = ODESystem(eqs, t)
 sys = structural_simplify(sys)
+p = MTKParameters(sys, [])
 
-xx = observed_expression(observed(sys), x)
+xf = ModelingToolkit.build_explicit_observed_function(sys, x)
 
-@test isequal(xx, -1.0 + 6α)
-
-coords = [α]
-xf = observed_function(observed(sys), x, coords)
-
-@test isequal(xf(α), -1.0 + 6α)
-@test isequal(xf(2), -1.0 + 6 * 2)
-
-
-@variables uu, vv
-extra_eqs = [uu ~ x + 3, vv ~ uu * 4]
-
-xx2 = observed_expression([observed(sys); extra_eqs], vv)
-
-xf2 = observed_function([observed(sys); extra_eqs], vv, coords)
-
-@test isequal(xf2(α), 4 * (2 + 6α))
+p = MTKParameters(sys, [α => 2.0], [0.0])
+@test isequal(xf([0.0, 0], p, 0.0), -1.0 + 6 * 2)
 
 t_min = 0.0
 lon_min, lon_max = -π, π
@@ -89,11 +75,12 @@ bcs = icbc(domain, vars)
     )
 
     @testset "single system" begin
-        sys2, sys2obs = prune_observed(sys)
+        sys_simple = structural_simplify(sys)
+        sys2 = prune_observed(sys, sys_simple, [])
+        sys2 = structural_simplify(sys2)
 
         @test isequal(equations(sys2), eqs[1:1])
         @test issetequal(observed(sys2), eqs[2:2])
-        @test issetequal(sys2obs, eqs[2:4])
 
         prob = ODEProblem(sys2, [], (0.0, 2.0))
         sol = solve(prob, saveat=0.05)
@@ -106,10 +93,9 @@ bcs = icbc(domain, vars)
     @testset "nested system" begin
         @named sysx = ODESystem([D(x) ~ x], t)
         sys_nested = compose(sysx, sys)
-
-        sys2, sys2obs = prune_observed(sys_nested)
-
-        observed(sys2)
+        sys_nested_simple = structural_simplify(sys_nested)
+        sys2 = prune_observed(sys_nested, sys_nested_simple, [])
+        sys2 = structural_simplify(sys2)
 
         @test length(equations(sys2)) == 2
 

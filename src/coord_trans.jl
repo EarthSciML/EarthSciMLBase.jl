@@ -12,22 +12,28 @@ varindex(pvars::AbstractVector, varname::Symbol) = findfirst(nameof.(pvars) .== 
 """
 $(SIGNATURES)
 
-Return partial derivative operator transform factors corresponding 
+Return partial derivative operator transform factors corresponding
 for the given partial-independent variables
-after converting variables named `lon` and `lat` from degrees to x and y meters, 
+after converting variables named `lon` and `lat` from degrees to x and y meters,
 assuming they represent longitude and latitude on a spherical Earth.
 """
 function partialderivatives_δxyδlonlat(pvars::AbstractVector; default_lat=0.0)
-    latindex = varindex(pvars, :lat)
-    lonindex = varindex(pvars, :lon)
-    if !isnothing(latindex)
-        lat = pvars[latindex]
+    latindex = matching_suffix_idx(pvars, :lat)
+    lonindex = matching_suffix_idx(pvars, :lon)
+    if length(latindex) > 1
+        throw(error("Multiple variables with suffix :lat found in pvars: $(pvars[latindex])"))
+    end
+    if length(lonindex) > 1
+        throw(error("Multiple variables with suffix :lon found in pvars: $(pvars[lonindex])"))
+    end
+    if length(latindex) > 0
+        lat = pvars[only(latindex)]
     else
         lat = default_lat
     end
 
     Dict(
-        lonindex => 1.0 / lon2meters(lat),
-        latindex => 1.0 / lat2meters
+        only(lonindex) => 1.0 / lon2meters(lat),
+        only(latindex) => 1.0 / lat2meters
     )
 end

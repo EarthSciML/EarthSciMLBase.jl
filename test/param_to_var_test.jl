@@ -1,5 +1,6 @@
 using Test
-using Main.EarthSciMLBase, ModelingToolkit, DynamicQuantities, Symbolics
+using EarthSciMLBase
+using ModelingToolkit, DynamicQuantities, Symbolics
 using ModelingToolkit: t, D
 
 @parameters α = 1 [unit = u"kg", description = "α description"]
@@ -45,4 +46,10 @@ end
     sys3 = param_to_var(sys, :β, :α)
     @test length(ModelingToolkit.get_continuous_events(sys3)) == 1
     @test length(ModelingToolkit.get_discrete_events(sys3)) == 1
+end
+
+@testset "repeated substitution" begin
+    sys2 = EarthSciMLBase.param_to_var(sys, :β)
+    sys3 = EarthSciMLBase.param_to_var(sys2, :β)
+    @test isequal(sys2, sys3)
 end
