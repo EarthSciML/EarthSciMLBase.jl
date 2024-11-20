@@ -70,7 +70,7 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
     iv = ModelingToolkit.get_iv(a) # independent variable
     aname = String(nameof(a))
     bname = String(nameof(b))
-    connections = Equatio
+    connections = Equation[]
     all_matches = []
     all_beq_matches = []
     for a_eq in a_eqs
