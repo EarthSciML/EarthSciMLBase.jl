@@ -8,6 +8,11 @@ function add_metadata(to, from)
     to = Symbolics.setmetadata(to, ModelingToolkit.VariableUnit, unit)
     desc = ModelingToolkit.getdescription(from)
     to = Symbolics.setmetadata(to, ModelingToolkit.VariableDescription, desc)
+    if ModelingToolkit.hasdefault(from)
+        default = ModelingToolkit.getdefault(from)
+        to = ModelingToolkit.setdefault(to, default)
+    end
+    to
 end
 
 """

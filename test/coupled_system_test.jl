@@ -292,3 +292,50 @@ end
     @test length(sol.u[end]) == 4
     @test all(sol.u[end] .≈ 3)
 end
+
+@testset "Composed System with Events and operator_compose" begin
+    struct CoupleType1 sys end
+    struct CoupleType2 sys end
+    function create_sys(coupletype; name=:test)
+        tp1 = typeof(ParamTest(1))
+        @parameters (p_1::tp1)(..) = ParamTest(1)
+        @parameters p_2(ModelingToolkit.t_nounits) = 1
+        @parameters (p_3::tp1)(..) = ParamTest(1)
+        @parameters p_4(ModelingToolkit.t_nounits) = 1
+        @variables x(ModelingToolkit.t_nounits) = 0
+        @variables x2(ModelingToolkit.t_nounits) = 0
+        @variables x3(ModelingToolkit.t_nounits) = 0
+
+        event1 = [1.0, 2, 3] => (update_affect!, [], [p_1], [], nothing)
+        event2 = [1.0, 2, 3] => [p_2 ~ t]
+        event3 = [1.0, 2, 3] => (update_affect!, [], [p_3], [], nothing)
+        event4 = [1.0, 2, 3] => [p_4 ~ t]
+
+        ODESystem([
+                ModelingToolkit.D_nounits(x) ~ p_1(x),
+                ModelingToolkit.D_nounits(x2) ~ p_2 - x2,
+                x3 ~ p_3(x2) + p_4,
+            ],
+            ModelingToolkit.t_nounits; name=name,
+            discrete_events=[event1, event2, event3, event4],
+            metadata = Dict(:coupletype => coupletype),
+        )
+    end
+    function EarthSciMLBase.couple2(a::CoupleType1, b::CoupleType2)
+        a, b = a.sys, b.sys
+        operator_compose(a, b)
+    end
+
+    a = create_sys(CoupleType1, name=:a)
+    b = create_sys(CoupleType2, name=:b)
+    coupled_sys = couple(a, b)
+    sys = convert(ODESystem, coupled_sys)
+    @test sys.a₊x in keys(ModelingToolkit.get_defaults(sys))
+    @test sys.a₊x2 in keys(ModelingToolkit.get_defaults(sys))
+    @test occursin("a₊b_ddt_xˍt(t)", string(equations(sys)))
+    @test occursin("a₊b_ddt_x2ˍt(t)", string(equations(sys)))
+    prob = ODEProblem(sys, [], (0, 100), [])
+    sol = solve(prob, abstol=1e-8, reltol=1e-8)
+    @test length(sol.u[end]) == 2
+    @test all(sol.u[end] .≈ 3)
+end
