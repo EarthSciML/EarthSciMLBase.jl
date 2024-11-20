@@ -48,6 +48,11 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
     bname = String(nameof(b))
     connections = Equation[]
     for (i, a_eq) ∈ enumerate(a_eqs)
+        if isequal(a_eq.lhs, 0)
+            # If the LHS == 0 (i.e. everything has already been shifted to the RHS),
+            # there's not anything we can do.
+            continue
+        end
         adv = add_scope(a, get_dv(a_eq.lhs, iv), iv) # dependent variable
         if adv ∉ keys(translate) # If adv is not in the translation dictionary, then assume it is the same in both systems.
             bdv, conv = add_scope(b, get_dv(a_eq.lhs, iv), iv), 1
@@ -62,7 +67,9 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
             end
         end
         for (j, b_eq) ∈ enumerate(b_eqs)
-            if isequal(bdv, add_scope(b, get_dv(b_eq.lhs, iv), iv))
+            # If the LHS == 0 (i.e. everything has already been shifted to the RHS),
+            # there's not anything we can do.
+            if !isequal(b_eq.lhs, 0) && isequal(bdv, add_scope(b, get_dv(b_eq.lhs, iv), iv))
                 bdv = add_scope(b, get_dv(b_eq.lhs, iv), iv) # Make sure the units are correct.
                 # The dependent variable of the LHS of this equation matches the dependent
                 # variable of interest,

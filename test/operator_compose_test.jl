@@ -287,3 +287,46 @@ end
     @test length(ModelingToolkit.get_continuous_events(sys3.to)) == 2
     @test length(ModelingToolkit.get_discrete_events(sys3.to)) == 2
 end
+
+# https://github.com/EarthSciML/EarthSciMLBase.jl/issues/76
+@testset "NonlinearSystem" begin
+    struct ChemistryCoupler
+        sys
+    end
+    function Chemistry(; name=:chemistry)
+        @variables k(t_nounits)
+        @parameters a0 = 1
+        sys1 = NonlinearSystem([k ~ a0], [k], [a0]; name=:rate)
+
+        function rate()
+            return sys1.k
+        end
+        rx_sys = @reaction_network rx begin
+            @species(
+                A(t) = 20,
+                B(t) = 0,
+            )
+            rate(), A --> B
+        end
+        rxns = compose(rx_sys, sys1)
+        convert(ODESystem, complete(rxns); combinatoric_ratelaws=false, name=name,
+            metadata=Dict(:coupletype => ChemistryCoupler))
+    end
+    sys1 = Chemistry()
+
+    struct EmisCoupler
+        sys
+    end
+    function Emis()
+        @variables A(t_nounits)
+        @parameters p
+        ODESystem([D_nounits(A) ~ 2p], t_nounits; name=:Emis,
+            metadata=Dict(:coupletype => EmisCoupler))
+    end
+
+    sys2 = Emis()
+
+    result = operator_compose(sys1, sys2)
+    @test occursin("Emis_ddt_Aˍt", string(equations(result.to)))
+    @test occursin("Emis_ddt_Aˍt", string(equations(result.from)))
+end
