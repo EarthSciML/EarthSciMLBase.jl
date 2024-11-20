@@ -71,6 +71,50 @@ end
     @test eqstr == "Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_ddt_yˍt(t)]"
 end
 
+@testset "translate" begin
+    @test EarthSciMLBase.normalize_translate(Dict(:a => :b, :c => :d => 2)) == [
+        (:a => :b, 1),
+        (:c => :d, 2)
+    ]
+    @test EarthSciMLBase.normalize_translate([:a => :b, :a => :c => 2]) == [
+        (:a => :b, 1),
+        (:a => :c, 2)
+    ]
+    @test EarthSciMLBase.get_matching_translate(
+        [(:a => :b, 1), (:b => :b, 1), (:a => :c, 2)], :a) == [(:a => :b, 1), (:a => :c, 2)]
+end
+
+@testset "multiple" begin
+    sys1 = ExampleSys()
+
+    struct ExampleSysXYCoupler
+        sys
+    end
+    function ExampleSysXY(; name=:sysXY)
+        @variables y1(t_nounits)
+        @variables y2(t_nounits)
+        @parameters p
+        ODESystem([D_nounits(y1) ~ p, D_nounits(y2) ~ p], t_nounits; name=name,
+            metadata=Dict(:coupletype => ExampleSysXYCoupler))
+    end
+
+    sys2 = ExampleSysXY()
+
+    function EarthSciMLBase.couple2(s1::ExampleSysCoupler, s2::ExampleSysXYCoupler)
+        s1, s2 = s1.sys, s2.sys
+        operator_compose(s1, s2, [s1.x => s2.y1, s1.x => s2.y2 => 2])
+    end
+
+    combined = couple(sys1, sys2)
+
+    op = convert(ODESystem, combined)
+    eq = equations(op)
+    obs = observed(op)
+    eqstr = replace(string(eq), "Symbolics." => "")
+    @test eqstr == "Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + 2sys1₊sysXY_ddt_y2ˍt(t) + sys1₊sysXY_ddt_y1ˍt(t)]"
+end
+
+
 @testset "Non-ODE" begin
     struct ExampleSysNonODECoupler
         sys
@@ -208,7 +252,6 @@ end
         ODESystem([x ~ p], t; name=name,
             metadata=Dict(:coupletype => U2Coupler))
     end
-
 
     sys1 = U1()
     sys2 = U2()
