@@ -51,11 +51,6 @@ function get_matching_translate(translate, a)
     translate[idx]
 end
 
-# Return the b_eqs that match the bdv.
-function b_eq_matches(bdv, b_eqs)
-
-end
-
 """
 $(SIGNATURES)
 
@@ -75,10 +70,15 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
     iv = ModelingToolkit.get_iv(a) # independent variable
     aname = String(nameof(a))
     bname = String(nameof(b))
-    connections = Equation[]
+    connections = Equatio
     all_matches = []
     all_beq_matches = []
     for a_eq in a_eqs
+        if isequal(a_eq.lhs, 0)
+            # If the LHS == 0 (i.e. everything has already been shifted to the RHS),
+            # there's not anything we can do.
+            continue
+        end
         adv = add_scope(a, get_dv(a_eq.lhs, iv), iv) # dependent variable
         matches = get_matching_translate(translate, adv)
         if length(matches) == 0 # If adv is not in the translation dictionary, then assume it is the same in both systems.
@@ -86,7 +86,9 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
             matches = [(adv => bdv, conv)]
         end
         b_eq_matches = [
-            [isequal(abdv.second, add_scope(b, get_dv(b_eq.lhs, iv), iv)) for b_eq in b_eqs]
+            # If the LHS == 0 (i.e. everything has already been shifted to the RHS),
+            # there's not anything we can do.
+            [!isequal(b_eq.lhs, 0) && isequal(abdv.second, add_scope(b, get_dv(b_eq.lhs, iv), iv)) for b_eq in b_eqs]
             for (abdv, _) in matches
         ]
         push!(all_matches, matches)

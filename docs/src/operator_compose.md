@@ -166,3 +166,10 @@ combined_simplified = structural_simplify(convert(ODESystem, combined))
 ```@example operator_compose
 observed(combined_simplified)
 ```
+
+!warn
+    The `operator_compose` function will not work correctly if any of the equations to be 
+    composed are part of a `NonlinearSystem` rather than an `ODESystem`. The reason for this
+    is because `operator_compose` works by matching the left-hand sides of the equations in
+    the two systems, but `NonlinearSystem`s move all of the terms to the right-hand side of
+    the equation when they are created.
