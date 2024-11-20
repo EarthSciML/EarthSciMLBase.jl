@@ -114,7 +114,6 @@ end
     @test eqstr == "Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + 2sys1₊sysXY_ddt_y2ˍt(t) + sys1₊sysXY_ddt_y1ˍt(t)]"
 end
 
-
 @testset "Non-ODE" begin
     struct ExampleSysNonODECoupler
         sys

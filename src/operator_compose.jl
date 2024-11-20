@@ -77,6 +77,8 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
         if isequal(a_eq.lhs, 0)
             # If the LHS == 0 (i.e. everything has already been shifted to the RHS),
             # there's not anything we can do.
+            push!(all_matches, [])
+            push!(all_beq_matches, [])
             continue
         end
         adv = add_scope(a, get_dv(a_eq.lhs, iv), iv) # dependent variable
