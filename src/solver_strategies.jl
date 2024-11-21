@@ -33,9 +33,9 @@ struct SolverIMEX <: SolverStrategy
 end
 
 function ODEProblem(sys::CoupledSystem, st::SolverIMEX; u0=nothing, p=nothing,
-    name=:model, kwargs...)
+    name=:model, extra_vars=[], kwargs...)
 
-    sys_mtk = convert(ODESystem, sys; name=name)
+    sys_mtk = convert(ODESystem, sys; name=name, extra_vars=extra_vars)
     dom = domain(sys)
 
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
