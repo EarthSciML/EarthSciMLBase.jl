@@ -16,8 +16,8 @@ D = D_nounits
 
 function ExampleSys()
     @variables y(t)
-    @parameters p=2.0
-    ODESystem([D(y) ~ p], t; name=:ExampleSys)
+    @parameters p=2.0 x=1
+    ODESystem([D(y) ~ p], t, [y], [p, x]; name=:ExampleSys)
 end
 
 ExampleSys()
@@ -51,7 +51,8 @@ discretization = MOLFiniteDifference([x=>10], t, approx_order=2)
 # Plot the solution.
 discrete_x = sol[x]
 discrete_t = sol[t]
-soly = sol[sys_mtk.dvs[3]]
+yvar = only(sys_mtk.dvs[[occursin("ExampleSys₊y", string(dv)) for dv in sys_mtk.dvs]])
+soly = sol[yvar]
 anim = @animate for k in 1:length(discrete_t)
     plot(discrete_x, soly[k, 1:end], title="t=\$(discrete_t[k])", ylim=(0,2.5), lab=:none)
 end

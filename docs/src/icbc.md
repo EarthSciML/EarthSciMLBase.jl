@@ -16,11 +16,12 @@ D = D_nounits
 
 function ExampleSys()
     @variables u(t) v(t)
+    @parameters x=1 y=2
     eqs = [
         D(u) ~ √abs(v),
         D(v) ~ √abs(u),
     ]
-    ODESystem(eqs, t; name=:Docs₊Example)
+    ODESystem(eqs, t, [u, v], [x, y]; name=:Docs₊Example)
 end
 
 ExampleSys()

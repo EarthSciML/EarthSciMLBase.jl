@@ -37,10 +37,11 @@ Our second example system is a simple ODE system, with the same two variables.
 struct ExampleSys2Coupler sys end
 function ExampleSys2()
     @variables c₁(t)=5.0 c₂(t)=5.0
-    @parameters p₁=1.0 p₂=0.5
+    @parameters p₁=1.0 p₂=0.5 x=1 y=1
     ODESystem(
         [D(c₁) ~ -p₁, D(c₂) ~ p₂],
-        t; name=:Sys2, metadata=Dict(:coupletype=>ExampleSys2Coupler))
+        t, [c₁, c₂], [p₁, p₂, x, y]; name=:Sys2, 
+        metadata=Dict(:coupletype=>ExampleSys2Coupler))
 end
 
 ExampleSys2()
@@ -75,7 +76,7 @@ At this point we have an ODE system that is composed of two other ODE systems.
 We can inspect its observed variables using the `observed` function.
 
 ```@example ex1
-simplified_sys = structural_simplify(convert(ODESystem, sys))
+simplified_sys = convert(ODESystem, sys)
 ```
 
 ```@example ex1
