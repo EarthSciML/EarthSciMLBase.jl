@@ -107,13 +107,13 @@ function get_needed_vars(original_sys::ODESystem, simplified_sys::ODESystem, ext
         end
     end
     allst = unknowns(original_sys)
-    simpst = unknowns(simplified_sys)
+    simpst = unique(vcat(unknowns(simplified_sys), extra_vars))
     stidx = [only(findall(isequal(s), allst)) for s in simpst]
     if length(stidx) == 0
         return []
     end
     idx = collect(Graphs.DFSIterator(g, stidx))
-    unique(vcat(unknowns(original_sys)[idx], extra_vars))
+    unknowns(original_sys)[idx]
 end
 
 """

@@ -170,12 +170,11 @@ function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, simp
 
     # Compose everything together.
     o = compose(connectors, systems...)
-    if !isnothing(sys.domaininfo)
+    if !isnothing(sys.domaininfo) # Add coordinate transform equations.
         o = extend(o, partialderivative_transform_eqs(o, sys.domaininfo))
     end
     o = ModelingToolkit.flatten(o)
     o_simplified = structural_simplify(o)
-    # Add coordinate transform equations.
     if prune
         extra_vars2 = []
         if !isnothing(sys.domaininfo)
