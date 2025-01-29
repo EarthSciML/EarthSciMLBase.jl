@@ -88,7 +88,7 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, p=nothing, t
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
     tspan = isnothing(tspan) ? get_tspan(dom) : tspan
     start, finish = tspan
-    prob = ODEProblem(sys_mtk, [], (start, start+st.timestep), []; st.stiff_kwargs...)
+    prob = ODEProblem(sys_mtk, [], (start, start+typeof(start)(st.timestep)), []; st.stiff_kwargs...)
     stiff_integrators = [init(remake(prob, u0=zeros(eltype(u0), length(unknowns(sys_mtk))),
         p=deepcopy(p)), st.stiffalg, save_on=false, save_start=false, save_end=false,
         initialize_save=false;
