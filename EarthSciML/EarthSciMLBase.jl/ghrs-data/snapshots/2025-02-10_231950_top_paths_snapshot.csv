@@ -1,0 +1,11 @@
+url_path,views_total,views_unique
+/EarthSciML/EarthSciMLBase.jl,9,3
+/EarthSciML/EarthSciMLBase.jl/commit/a3aeb4c80a1d03affa2159d87e9b01609516b1c3,3,1
+/EarthSciML/EarthSciMLBase.jl/graphs/community,2,1
+/EarthSciML/EarthSciMLBase.jl/actions,1,1
+/EarthSciML/EarthSciMLBase.jl/blob/main/src/mtk_grid_func.jl,1,1
+/EarthSciML/EarthSciMLBase.jl/blob/main/src/solver_strategies.jl,1,1
+/EarthSciML/EarthSciMLBase.jl/blob/main/test/coupled_system_utils_test.jl,1,1
+/EarthSciML/EarthSciMLBase.jl/commits/main,1,1
+/EarthSciML/EarthSciMLBase.jl/graphs/contributors,1,1
+/EarthSciML/EarthSciMLBase.jl/graphs/traffic,1,1
