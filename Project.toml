@@ -1,11 +1,12 @@
 name = "EarthSciMLBase"
 uuid = "e53f1632-a13c-4728-9402-0c66d48804b0"
 authors = ["EarthSciML Authors and Contributors"]
-version = "0.20.5"
+version = "0.20.6"
 
 [deps]
 Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
-BlockBandedMatrices = "ffab5731-97b5-5995-9138-79e8c1846df0"
+ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
+BlockDiagonals = "0a1fb500-61f7-11e9-3c65-f5ef3456f9f0"
 Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 DiffEqCallbacks = "459566f4-90b8-5000-8ac3-15dfb0a30def"
@@ -24,7 +25,8 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [compat]
 Accessors = "0.1"
-BlockBandedMatrices = "0.13"
+ArrayInterface = "7.18.0"
+BlockDiagonals = "0.1.42"
 Catalyst = "14"
 DiffEqCallbacks = "2, 3, 4"
 DifferentialEquations = "7"
@@ -32,6 +34,7 @@ DocStringExtensions = "0.9"
 DomainSets = "0.7"
 DynamicQuantities = "0.13, 1"
 Graphs = "1"
+LinearSolve = "3.1.0"
 MetaGraphsNext = "0.5, 0.6, 0.7"
 MethodOfLines = "0.11"
 ModelingToolkit = "9"
@@ -48,6 +51,7 @@ Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
+LinearSolve = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
 MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
@@ -55,4 +59,4 @@ SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Documenter", "Test", "SafeTestsets", "MethodOfLines", "Dates", "DomainSets", "DifferentialEquations", "OrdinaryDiffEq", "SciMLBase"]
+test = ["Documenter", "Test", "SafeTestsets", "LinearSolve", "MethodOfLines", "Dates", "DomainSets", "DifferentialEquations", "OrdinaryDiffEq", "SciMLBase"]

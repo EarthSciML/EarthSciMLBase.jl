@@ -31,7 +31,7 @@ p = MTKParameters(sys, [])
 
 xf = ModelingToolkit.build_explicit_observed_function(sys, x)
 
-p = MTKParameters(sys, [α => 2.0], [0.0])
+p = MTKParameters(sys, [α => 2.0])
 @test isequal(xf([0.0, 0], p, 0.0), -1.0 + 6 * 2)
 
 t_min = 0.0

@@ -10,7 +10,7 @@ using SciMLBase: DECallback, CallbackSet, ODEProblem, SplitODEProblem, reinit!, 
 using SciMLOperators: cache_operator, NullOperator, FunctionOperator, TensorProductOperator
 using Statistics
 using DiffEqCallbacks
-using LinearAlgebra, BlockBandedMatrices
+using LinearAlgebra, BlockDiagonals, ArrayInterface
 using SymbolicIndexingInterface: setp
 using Accessors
 using Graphs

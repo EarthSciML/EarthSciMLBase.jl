@@ -3,6 +3,8 @@ using Test
 using ModelingToolkit, DomainSets, OrdinaryDiffEq
 using SciMLOperators
 using SciMLBase: DiscreteCallback, ReturnCode
+using LinearSolve
+using BlockDiagonals
 
 struct ExampleOp <: Operator
 end
@@ -150,15 +152,18 @@ EarthSciMLBase.threaded_ode_step!(setp!, u, IIchunks, integrators, 0.0, 1.0)
         @test uu[:] ≈ u[:] rtol = 0.01
     end
 
-    f = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, p; jac=true, tgrad=true)
-    du = zeros(length(ucopy), length(ucopy))
+    f = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, p; sparse=false, tgrad=true)
+    du = BlockDiagonal([zeros(size(ucopy, 1), size(ucopy, 1)) for i in 1:reduce(*, size(ucopy)[2:end])])
     f.jac(du, ucopy[:], p, 0.0)
-    @test sum(du) ≈ 5.825018312792475
+
+    @test sum(sum.(du.blocks)) ≈ 12617.772209024473
 
     @testset "tgrad" begin
-        du .= 0
+        for i in 1:length(du.blocks)
+            du.blocks[i] .= 0
+        end
         f.tgrad(du, ucopy[:], p, 0.0)
-        @test sum(du) ≈ 0.0
+        @test sum(sum.(du.blocks)) ≈ 0.0
     end
 end
 
@@ -216,8 +221,16 @@ end
         sol = solve(prob, Tsit5())
         @test sum(abs.(sol.u[end])) ≈ 3.3333500929324217e7 rtol = 1e-3 # No Splitting error in this one.
 
-        sol = solve(prob, SplitEuler(), dt=0.001)
-        @test sum(abs.(sol.u[end])) ≈ 3.3333500929324217e7 rtol = 1e-3 # No Splitting error in this one.
+        for scimlop in [true, false]
+            for sparse in [true, false]
+                @testset "scimlop=$scimlop sparse=$sparse" begin
+                    st = SolverIMEX(stiff_sparse=sparse, stiff_scimlop=scimlop)
+                    prob = ODEProblem(csys, st)
+                    sol = solve(prob, KenCarp47(linsolve=LUFactorization()), abstol=1e-4, reltol=1e-4)
+                    @test sum(abs.(sol.u[end])) ≈ 3.3333500929324217e7 rtol = 1e-3
+                end
+            end
+        end
     end
 end
 
