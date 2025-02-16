@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>All Together · EarthSciMLBase.jl</title><meta name="title" content="All Together · EarthSciMLBase.jl"/><meta property="og:title" content="All Together · EarthSciMLBase.jl"/><meta property="twitter:title" content="All Together · EarthSciMLBase.jl"/><meta name="description" content="Documentation for EarthSciMLBase.jl."/><meta property="og:description" content="Documentation for EarthSciMLBase.jl."/><meta property="twitter:description" content="Documentation for EarthSciMLBase.jl."/><meta property="og:url" content="https://EarthSciML.github.io/EarthSciMLBase.jl/example_all_together/"/><meta property="twitter:url" content="https://EarthSciML.github.io/EarthSciMLBase.jl/example_all_together/"/><link rel="canonical" href="https://EarthSciML.github.io/EarthSciMLBase.jl/example_all_together/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">EarthSciMLBase.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../composition/">Composition</a></li><li><a class="tocitem" href="../operator_compose/">Operator Composition</a></li><li><a class="tocitem" href="../param_to_var/">Parameter Replacement</a></li><li><a class="tocitem" href="../icbc/">Initial and Boundary Conditions</a></li><li><a class="tocitem" href="../advection/">Advection</a></li><li><a class="tocitem" href="../coord_transforms/">Coordinate Transforms</a></li><li><a class="tocitem" href="../operator/">Operators</a></li><li><span class="tocitem">Examples</span><ul><li class="is-active"><a class="tocitem" href>All Together</a></li></ul></li><li><a class="tocitem" href="../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li class="is-active"><a href>All Together</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>All Together</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/EarthSciML/EarthSciMLBase.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/EarthSciML/EarthSciMLBase.jl/blob/main/docs/src/example_all_together.md#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Example-using-different-components-of-EarthSciMLBase-together"><a class="docs-heading-anchor" href="#Example-using-different-components-of-EarthSciMLBase-together">Example using different components of EarthSciMLBase together</a><a id="Example-using-different-components-of-EarthSciMLBase-together-1"></a><a class="docs-heading-anchor-permalink" href="#Example-using-different-components-of-EarthSciMLBase-together" title="Permalink"></a></h1><p>This example shows how to define and couple different components of EarthSciMLBase together to create a more complex model. First, we create several model components.</p><p>Our first example system is a simple reaction system:</p><pre><code class="language-julia hljs">using EarthSciMLBase
+using ModelingToolkit, Catalyst, DomainSets, MethodOfLines, DifferentialEquations
+using ModelingToolkit: t_nounits, D_nounits
+t = t_nounits
+D = D_nounits
+using Plots
+
+# Create our independent variable `t` and our partially-independent variables `x` and `y`.
+@parameters x y
+
+struct ExampleSys1Coupler sys end
+function ExampleSys1()
+    @species c₁(t)=5.0 c₂(t)=5.0
+    rs = ReactionSystem(
+        [Reaction(2.0, [c₁], [c₂])],
+        t; name=:Sys1, combinatoric_ratelaws=false)
+    convert(ODESystem, complete(rs), metadata=Dict(:coupletype=&gt;ExampleSys1Coupler))
+end
+
+ExampleSys1()</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} \mathtt{c_1}\left( t \right)}{\mathrm{d}t} &amp;=  - 2 \mathtt{c_1}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{c_2}\left( t \right)}{\mathrm{d}t} &amp;= 2 \mathtt{c_1}\left( t \right)
+\end{align}
+ \]</p><p>Our second example system is a simple ODE system, with the same two variables.</p><pre><code class="language-julia hljs">struct ExampleSys2Coupler sys end
+function ExampleSys2()
+    @variables c₁(t)=5.0 c₂(t)=5.0
+    @parameters p₁=1.0 p₂=0.5 x=1 y=1
+    ODESystem(
+        [D(c₁) ~ -p₁, D(c₂) ~ p₂],
+        t, [c₁, c₂], [p₁, p₂, x, y]; name=:Sys2,
+        metadata=Dict(:coupletype=&gt;ExampleSys2Coupler))
+end
+
+ExampleSys2()</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} \mathtt{c_1}\left( t \right)}{\mathrm{d}t} &amp;=  - \mathtt{p{_1}} \\
+\frac{\mathrm{d} \mathtt{c_2}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{p{_2}}
+\end{align}
+ \]</p><p>Now, we specify what should happen when we couple the two systems together. In this case, we want the the derivative of the composed system to  be equal to the sum of the derivatives of the two systems. We can do that using the <a href="../api/#EarthSciMLBase.operator_compose"><code>operator_compose</code></a> function  from this package.</p><pre><code class="language-julia hljs">function EarthSciMLBase.couple2(sys1::ExampleSys1Coupler, sys2::ExampleSys2Coupler)
+    sys1, sys2 = sys1.sys, sys2.sys
+    sys1 = convert(ODESystem, sys1)
+    operator_compose(sys1, sys2)
+end</code></pre><p>Once we specify all of the above, it is simple to create our two individual systems and then couple them together. </p><pre><code class="language-julia hljs">sys1 = ExampleSys1()
+sys2 = ExampleSys2()
+sys = couple(sys1, sys2)
+
+convert(ODESystem, sys)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} \mathtt{Sys1.c_1}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{Sys1.Sys2\_ddt\_c_{1}ˍt}\left( t \right) - 2 \mathtt{Sys1.c_1}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{Sys1.c_2}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{Sys1.Sys2\_ddt\_c_{2}ˍt}\left( t \right) + 2 \mathtt{Sys1.c_1}\left( t \right)
+\end{align}
+ \]</p><p>At this point we have an ODE system that is composed of two other ODE systems. We can inspect its observed variables using the <code>observed</code> function.</p><pre><code class="language-julia hljs">simplified_sys = convert(ODESystem, sys)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} \mathtt{Sys1.c_1}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{Sys1.Sys2\_ddt\_c_{1}ˍt}\left( t \right) - 2 \mathtt{Sys1.c_1}\left( t \right) \\
+\frac{\mathrm{d} \mathtt{Sys1.c_2}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{Sys1.Sys2\_ddt\_c_{2}ˍt}\left( t \right) + 2 \mathtt{Sys1.c_1}\left( t \right)
+\end{align}
+ \]</p><pre><code class="language-julia hljs">observed(simplified_sys)</code></pre><p class="math-container">\[ \begin{align}
+\mathtt{Sys2.Sys2\_ddt\_c_{1}ˍt}\left( t \right) &amp;=  - \mathtt{Sys2.p{_1}} \\
+\mathtt{Sys2.Sys2\_ddt\_c_{2}ˍt}\left( t \right) &amp;= \mathtt{Sys2.p{_2}} \\
+\mathtt{Sys2.c_1}\left( t \right) &amp;= \mathtt{Sys1.c_1}\left( t \right) \\
+\mathtt{Sys2.c_2}\left( t \right) &amp;= \mathtt{Sys1.c_2}\left( t \right) \\
+\mathtt{Sys1.Sys2\_ddt\_c_{1}ˍt}\left( t \right) &amp;= \mathtt{Sys2.Sys2\_ddt\_c_{1}ˍt}\left( t \right) \\
+\mathtt{Sys1.Sys2\_ddt\_c_{2}ˍt}\left( t \right) &amp;= \mathtt{Sys2.Sys2\_ddt\_c_{2}ˍt}\left( t \right)
+\end{align}
+ \]</p><p>We can also run simulations using this system:</p><pre><code class="language-julia hljs">odeprob = ODEProblem(simplified_sys, [], (0.0,10.0), [])
+odesol = solve(odeprob)
+plot(odesol)</code></pre><img src="c0e31f38.svg" alt="Example block output"/><p>Once we&#39;ve confirmed that our model works in a 0D &quot;box model&quot; setting, we can expand it to 1, 2, or 3 dimensions using by adding in initial  and boundary conditions. We will also add in advection using constant-velocity wind fields add the same time.</p><pre><code class="language-julia hljs">x_min = y_min = t_min = 0.0
+x_max = y_max = t_max = 1.0
+domain = DomainInfo(
+    constIC(4.0, t ∈ Interval(t_min, t_max)),
+    periodicBC(x ∈ Interval(x_min, x_max)),
+    zerogradBC(y ∈ Interval(y_min, y_max)),
+)
+
+sys_pde = couple(sys, domain, ConstantWind(t, 1.0, 1.0), Advection())
+
+sys_pde_mtk = convert(PDESystem, sys_pde)</code></pre><p class="math-container">\[ \begin{align}
+\mathtt{{\delta}Sys2.x\_transform}\left( t, x, y \right) &amp;= 1 \\
+\mathtt{{\delta}Sys2.y\_transform}\left( t, x, y \right) &amp;= 1 \\
+\mathtt{Sys1.Sys2\_ddt\_c_{1}ˍt}\left( t, x, y \right) &amp;= \mathtt{Sys2.Sys2\_ddt\_c_{1}ˍt}\left( t, x, y \right) \\
+\mathtt{Sys1.c_1}\left( t, x, y \right) &amp;= \mathtt{Sys2.c_1}\left( t, x, y \right) \\
+\mathtt{Sys1.Sys2\_ddt\_c_{2}ˍt}\left( t, x, y \right) &amp;= \mathtt{Sys2.Sys2\_ddt\_c_{2}ˍt}\left( t, x, y \right) \\
+\mathtt{Sys1.c_2}\left( t, x, y \right) &amp;= \mathtt{Sys2.c_2}\left( t, x, y \right) \\
+\mathtt{MeanWind.v\_x}\left( t, x, y \right) &amp;= \mathtt{ConstantWind.v\_1}\left( t, x, y \right) \\
+\mathtt{MeanWind.v\_y}\left( t, x, y \right) &amp;= \mathtt{ConstantWind.v\_2}\left( t, x, y \right) \\
+\frac{\mathrm{d}}{\mathrm{d}t} \mathtt{Sys1.c_1}\left( t, x, y \right) &amp;=  - 2 \mathtt{Sys1.c_1}\left( t, x, y \right) + \mathtt{Sys1.Sys2\_ddt\_c_{1}ˍt}\left( t, x, y \right) - \frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys1.c_1}\left( t, x, y \right) \mathtt{MeanWind.v\_y}\left( t, x, y \right) - \frac{\mathrm{d}}{\mathrm{d}x} \mathtt{Sys1.c_1}\left( t, x, y \right) \mathtt{MeanWind.v\_x}\left( t, x, y \right) \\
+\frac{\mathrm{d}}{\mathrm{d}t} \mathtt{Sys1.c_2}\left( t, x, y \right) &amp;= 2 \mathtt{Sys1.c_1}\left( t, x, y \right) + \mathtt{Sys1.Sys2\_ddt\_c_{2}ˍt}\left( t, x, y \right) - \mathtt{MeanWind.v\_y}\left( t, x, y \right) \frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys1.c_2}\left( t, x, y \right) - \mathtt{MeanWind.v\_x}\left( t, x, y \right) \frac{\mathrm{d}}{\mathrm{d}x} \mathtt{Sys1.c_2}\left( t, x, y \right) \\
+\mathtt{Sys2.Sys2\_ddt\_c_{1}ˍt}\left( t, x, y \right) &amp;=  - \mathtt{Sys2.p{_1}} \\
+\mathtt{Sys2.Sys2\_ddt\_c_{2}ˍt}\left( t, x, y \right) &amp;= \mathtt{Sys2.p{_2}} \\
+\mathtt{ConstantWind.v\_1}\left( t, x, y \right) &amp;= \mathtt{ConstantWind.c\_v1} \\
+\mathtt{ConstantWind.v\_2}\left( t, x, y \right) &amp;= \mathtt{ConstantWind.c\_v2}
+\end{align}
+ \]</p><p>Now we can inspect this new system that we&#39;ve created:</p><pre><code class="language-julia hljs">sys_pde_mtk.dvs</code></pre><p class="math-container">\[ \begin{equation}
+\left[
+\begin{array}{c}
+\mathtt{{\delta}Sys2.x\_transform}\left( t, x, y \right) \\
+\mathtt{{\delta}Sys2.y\_transform}\left( t, x, y \right) \\
+\mathtt{Sys1.Sys2\_ddt\_c_{1}ˍt}\left( t, x, y \right) \\
+\mathtt{Sys2.Sys2\_ddt\_c_{1}ˍt}\left( t, x, y \right) \\
+\mathtt{Sys1.c_1}\left( t, x, y \right) \\
+\mathtt{Sys2.c_1}\left( t, x, y \right) \\
+\mathtt{Sys1.Sys2\_ddt\_c_{2}ˍt}\left( t, x, y \right) \\
+\mathtt{Sys2.Sys2\_ddt\_c_{2}ˍt}\left( t, x, y \right) \\
+\mathtt{Sys1.c_2}\left( t, x, y \right) \\
+\mathtt{Sys2.c_2}\left( t, x, y \right) \\
+\mathtt{MeanWind.v\_x}\left( t, x, y \right) \\
+\mathtt{ConstantWind.v\_1}\left( t, x, y \right) \\
+\mathtt{MeanWind.v\_y}\left( t, x, y \right) \\
+\mathtt{ConstantWind.v\_2}\left( t, x, y \right) \\
+\end{array}
+\right]
+\end{equation}
+ \]</p><pre><code class="language-julia hljs">sys_pde_mtk.bcs</code></pre><p class="math-container">\[ \begin{align}
+\mathtt{{\delta}Sys2.x\_transform}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{{\delta}Sys2.y\_transform}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{Sys1.Sys2\_ddt\_c_{1}ˍt}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{Sys2.Sys2\_ddt\_c_{1}ˍt}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{Sys1.c_1}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{Sys2.c_1}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{Sys1.Sys2\_ddt\_c_{2}ˍt}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{Sys2.Sys2\_ddt\_c_{2}ˍt}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{Sys1.c_2}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{Sys2.c_2}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{MeanWind.v\_x}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{ConstantWind.v\_1}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{MeanWind.v\_y}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{ConstantWind.v\_2}\left( 0, x, y \right) &amp;= 4 \\
+\mathtt{{\delta}Sys2.x\_transform}\left( t, 0, y \right) &amp;= \mathtt{{\delta}Sys2.x\_transform}\left( t, 1, y \right) \\
+\mathtt{{\delta}Sys2.y\_transform}\left( t, 0, y \right) &amp;= \mathtt{{\delta}Sys2.y\_transform}\left( t, 1, y \right) \\
+\mathtt{Sys1.Sys2\_ddt\_c_{1}ˍt}\left( t, 0, y \right) &amp;= \mathtt{Sys1.Sys2\_ddt\_c_{1}ˍt}\left( t, 1, y \right) \\
+\mathtt{Sys2.Sys2\_ddt\_c_{1}ˍt}\left( t, 0, y \right) &amp;= \mathtt{Sys2.Sys2\_ddt\_c_{1}ˍt}\left( t, 1, y \right) \\
+\mathtt{Sys1.c_1}\left( t, 0, y \right) &amp;= \mathtt{Sys1.c_1}\left( t, 1, y \right) \\
+\mathtt{Sys2.c_1}\left( t, 0, y \right) &amp;= \mathtt{Sys2.c_1}\left( t, 1, y \right) \\
+\mathtt{Sys1.Sys2\_ddt\_c_{2}ˍt}\left( t, 0, y \right) &amp;= \mathtt{Sys1.Sys2\_ddt\_c_{2}ˍt}\left( t, 1, y \right) \\
+\mathtt{Sys2.Sys2\_ddt\_c_{2}ˍt}\left( t, 0, y \right) &amp;= \mathtt{Sys2.Sys2\_ddt\_c_{2}ˍt}\left( t, 1, y \right) \\
+\mathtt{Sys1.c_2}\left( t, 0, y \right) &amp;= \mathtt{Sys1.c_2}\left( t, 1, y \right) \\
+\mathtt{Sys2.c_2}\left( t, 0, y \right) &amp;= \mathtt{Sys2.c_2}\left( t, 1, y \right) \\
+\mathtt{MeanWind.v\_x}\left( t, 0, y \right) &amp;= \mathtt{MeanWind.v\_x}\left( t, 1, y \right) \\
+\mathtt{ConstantWind.v\_1}\left( t, 0, y \right) &amp;= \mathtt{ConstantWind.v\_1}\left( t, 1, y \right) \\
+\mathtt{MeanWind.v\_y}\left( t, 0, y \right) &amp;= \mathtt{MeanWind.v\_y}\left( t, 1, y \right) \\
+\mathtt{ConstantWind.v\_2}\left( t, 0, y \right) &amp;= \mathtt{ConstantWind.v\_2}\left( t, 1, y \right) \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{{\delta}Sys2.x\_transform}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{{\delta}Sys2.x\_transform}\left( t, x, 1 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{{\delta}Sys2.y\_transform}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{{\delta}Sys2.y\_transform}\left( t, x, 1 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys1.Sys2\_ddt\_c_{1}ˍt}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys1.Sys2\_ddt\_c_{1}ˍt}\left( t, x, 1 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys2.Sys2\_ddt\_c_{1}ˍt}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys2.Sys2\_ddt\_c_{1}ˍt}\left( t, x, 1 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys1.c_1}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys1.c_1}\left( t, x, 1 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys2.c_1}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys2.c_1}\left( t, x, 1 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys1.Sys2\_ddt\_c_{2}ˍt}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys1.Sys2\_ddt\_c_{2}ˍt}\left( t, x, 1 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys2.Sys2\_ddt\_c_{2}ˍt}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys2.Sys2\_ddt\_c_{2}ˍt}\left( t, x, 1 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys1.c_2}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys1.c_2}\left( t, x, 1 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys2.c_2}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{Sys2.c_2}\left( t, x, 1 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{MeanWind.v\_x}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{MeanWind.v\_x}\left( t, x, 1 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{ConstantWind.v\_1}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{ConstantWind.v\_1}\left( t, x, 1 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{MeanWind.v\_y}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{MeanWind.v\_y}\left( t, x, 1 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{ConstantWind.v\_2}\left( t, x, 0 \right) &amp;= 0 \\
+\frac{\mathrm{d}}{\mathrm{d}y} \mathtt{ConstantWind.v\_2}\left( t, x, 1 \right) &amp;= 0
+\end{align}
+ \]</p><p>Finally, we can run a simulation using this system:</p><pre><code class="language-julia hljs">discretization = MOLFiniteDifference([x=&gt;10, y=&gt;10], t, approx_order=2)
+@time pdeprob = discretize(sys_pde_mtk, discretization)
+@time pdesol = solve(pdeprob, Tsit5(), saveat=0.1)
+
+# Plot the solution.
+discrete_x, discrete_y, discrete_t = pdesol[x], pdesol[y], pdesol[t]
+@variables Sys1₊c₁(..) Sys1₊c₂(..)
+solc1, solc2 = pdesol[Sys1₊c₁(t, x, y)], pdesol[Sys1₊c₂(t, x, y)]
+anim = @animate for k in 1:length(discrete_t)
+    p1 = heatmap(solc1[k, 1:end-1, 1:end-1], title=&quot;c₁ t=\$(discrete_t[k])&quot;, clim=(0,4.0), lab=:none)
+    p2 = heatmap(solc2[k, 1:end-1, 1:end-1], title=&quot;c₂ t=\$(discrete_t[k])&quot;, clim=(0,7.0), lab=:none)
+    plot(p1, p2, layout=(1,2), size=(800,400))
+end
+gif(anim, fps = 8)</code></pre><img src="c158d100.gif" alt="Example block output"/><p>Because our system is a system of ordinary differential equations rather than partial differential equations, all of the grid cells in the animation above have the same value. Refer to the <a href="../advection/#Advection">advection example</a> for an example of a system of partial differential equations.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../operator/">« Operators</a><a class="docs-footer-nextpage" href="../api/">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.1 on <span class="colophon-date" title="Sunday 16 February 2025 15:19">Sunday 16 February 2025</span>. Using Julia version 1.11.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
