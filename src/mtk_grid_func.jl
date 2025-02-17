@@ -35,7 +35,7 @@ function _mtk_scimlop(sys_mtk, mtkf, setp!, u0, p)
     f = _mtk_grid_func(sys_mtk, mtkf, setp!)
     nrows = length(unknowns(sys_mtk))
     u0mat = reshape(u0, nrows, :)
-    f_op = FunctionOperator(f, u0mat, batch = true, p = p)
+    f_op = FunctionOperator(f, u0mat, batch=true, p=p)
     A = I(length(u0) ÷ nrows)
     t = TensorProductOperator(A, f_op)
     cache_operator(t, u0)
@@ -43,7 +43,7 @@ end
 
 # Return a function to apply the MTK system to each column of u after reshaping to a matrix.
 function mtk_grid_func(sys_mtk::ODESystem, domain::DomainInfo{T}, u0, p;
-        sparse=true, tgrad=true, scimlop=false) where {T}
+    sparse=true, tgrad=true, scimlop=false) where {T}
     setp! = coord_setter(sys_mtk, domain)
 
     mtkf = ODEFunction(sys_mtk, tgrad=tgrad, jac=true, sparse=sparse)
@@ -62,7 +62,7 @@ function mtk_grid_func(sys_mtk::ODESystem, domain::DomainInfo{T}, u0, p;
     kwargs = []
     if tgrad
         tg = mtk_tgrad_grid_func(sys_mtk, mtkf, setp!, ncells)
-        push!(kwargs, :tgrad=>tg)
+        push!(kwargs, :tgrad => tg)
     end
     ODEFunction(f; jac_prototype=jac_prototype, jac=jf, kwargs...)
 end
@@ -96,48 +96,3 @@ function mtk_tgrad_grid_func(sys_mtk, mtkf, setp!, ngrid)
         end
     end
 end
-
-# TODO: Remove below after adding to BlockDiagonals.jl
-struct BlockDiagonalLU{T}
-    blocks::Vector{T}
-end
-
-function LinearAlgebra.issuccess(F::BlockDiagonalLU; kwargs...)
-    for b in F.blocks
-        if !LinearAlgebra.issuccess(b; kwargs...)
-            return false
-        end
-    end
-    return true
-end
-
-function ArrayInterface.lu_instance(A::BlockDiagonal)
-    return BlockDiagonalLU([ArrayInterface.lu_instance(b) for b in blocks(A)])
-end
-
-function LinearAlgebra.lu!(B::BlockDiagonal, args...; kwargs...)
-    BlockDiagonalLU([lu!(blk, args...; kwargs...) for blk in blocks(B)])
-end
-
-function LinearAlgebra.lu(B::BlockDiagonal, args...; kwargs...)
-    BlockDiagonalLU([lu(blk, args...; kwargs...) for blk in blocks(B)])
-end
-
-function LinearAlgebra.ldiv!(x::AbstractVecOrMat, A::BlockDiagonalLU, b::AbstractVecOrMat; kwargs...)
-    row_i = 1
-    @assert size(x) == size(b) "dimensions of x and b must match"
-    @assert mapreduce(a -> size(a, 1), +, A.blocks) == size(b, 1) "number of rows must match"
-    for block in A.blocks
-        nrow = size(block, 1)
-        _x = view(x, row_i:(row_i + nrow - 1), :)
-        _b = view(b, row_i:(row_i + nrow - 1), :)
-        ldiv!(_x, block, _b; kwargs...)
-        row_i += nrow
-    end
-    x
-end
-
-Base.deepcopy_internal(x::BlockDiagonal, dict::IdDict) =
-     BlockDiagonal([copy(block) for block in x.blocks])
-
-Base.copyto!(x::BlockDiagonal, y::BlockDiagonal) = copyto!.(x.blocks, y.blocks)

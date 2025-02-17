@@ -44,6 +44,11 @@ function ODEProblem(sys::CoupledSystem, st::SolverIMEX; u0=nothing, p=nothing,
     f2 = nonstiff_ops(sys, sys_mtk, dom, u0, p)
 
     cb = get_callbacks(sys, sys_mtk, dom)
+    if :callback in keys(kwargs)
+        push!(cb, kwargs[:callback])
+        kwargs = filter((p -> p.first ≠ :callback), kwargs)
+    end
+
     start, finish = get_tspan(dom)
     SplitODEProblem(f1, f2, u0[:], (start, finish), p,
         callback=CallbackSet(cb...); kwargs...)

@@ -4,7 +4,6 @@ using ModelingToolkit, DomainSets, OrdinaryDiffEq
 using SciMLOperators
 using SciMLBase: DiscreteCallback, ReturnCode
 using LinearSolve
-using BlockDiagonals
 
 struct ExampleOp <: Operator
 end
@@ -153,7 +152,7 @@ EarthSciMLBase.threaded_ode_step!(setp!, u, IIchunks, integrators, 0.0, 1.0)
     end
 
     f = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, p; sparse=false, tgrad=true)
-    du = BlockDiagonal([zeros(size(ucopy, 1), size(ucopy, 1)) for i in 1:reduce(*, size(ucopy)[2:end])])
+    du = EarthSciMLBase.BlockDiagonal([zeros(size(ucopy, 1), size(ucopy, 1)) for i in 1:reduce(*, size(ucopy)[2:end])])
     f.jac(du, ucopy[:], p, 0.0)
 
     @test sum(sum.(du.blocks)) ≈ 12617.772209024473

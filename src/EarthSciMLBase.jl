@@ -10,7 +10,7 @@ using SciMLBase: DECallback, CallbackSet, ODEProblem, SplitODEProblem, reinit!, 
 using SciMLOperators: cache_operator, NullOperator, FunctionOperator, TensorProductOperator
 using Statistics
 using DiffEqCallbacks
-using LinearAlgebra, BlockDiagonals, ArrayInterface
+using LinearAlgebra
 using SymbolicIndexingInterface: setp
 using Accessors
 using Graphs
@@ -28,5 +28,6 @@ include("graph.jl")
 include("mtk_grid_func.jl")
 include("solver_strategies.jl")
 include("solver_strategy_strang.jl")
+include("blockdiagonal.jl")
 
 end
