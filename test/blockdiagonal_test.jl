@@ -1,5 +1,4 @@
-using EarthSciMLBase
-using LinearAlgebra
+using EarthSciMLBase: BlockDiagonal
 using Test
 
 @testset "LU" begin
