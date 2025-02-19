@@ -1,57 +1,39 @@
 function _mtk_grid_func(sys_mtk, mtkf, setp!)
     nrows = length(unknowns(sys_mtk))
     function f(du::AbstractVector, u::AbstractVector, p, t) # In-place
-        umat = reshape(u, nrows, :)
-        dumat = reshape(du, nrows, :)
-        @inbounds for j ∈ 1:size(umat, 2)
-            col = view(umat, :, j)
-            ddu = view(dumat, :, j)
-            setp!(p, j)
-            mtkf(ddu, col, p, t)
-        end
-    end
-    function f(du::AbstractMatrix, u::AbstractMatrix, p, t) # In-place
+        u = reshape(u, nrows, :)
+        du = reshape(du, nrows, :)
         @inbounds for j ∈ 1:size(u, 2)
             col = view(u, :, j)
             ddu = view(du, :, j)
             setp!(p, j)
             mtkf(ddu, col, p, t)
         end
+        nothing
     end
     # function f(u, p, t) # Out-of-place (Commented out because not tested.)
-    #     umat = reshape(u, nrows, :)
+    #     u = reshape(u, nrows, :)
     #     function ff(u, p, t, j)
     #         setp!(p, j)
     #         mtkf(u, p, t)
     #     end
-    #     @inbounds @views mapreduce(jcol -> ff(jcol[2], p, t, jcol[1]), hcat, enumerate(eachcol(umat)))
+    #     @inbounds @views mapreduce(jcol -> ff(jcol[2], p, t, jcol[1]), hcat, enumerate(eachcol(u)))
     # end
 
     return f
 end
 
-# Create a SciMLOperator for the MTK system.
-function _mtk_scimlop(sys_mtk, mtkf, setp!, u0, p)
-    f = _mtk_grid_func(sys_mtk, mtkf, setp!)
-    nrows = length(unknowns(sys_mtk))
-    u0mat = reshape(u0, nrows, :)
-    f_op = FunctionOperator(f, u0mat, batch=true, p=p)
-    A = I(length(u0) ÷ nrows)
-    t = TensorProductOperator(A, f_op)
-    cache_operator(t, u0)
-end
-
 # Return a function to apply the MTK system to each column of u after reshaping to a matrix.
 function mtk_grid_func(sys_mtk::ODESystem, domain::DomainInfo{T}, u0, p;
-    sparse=true, tgrad=true, scimlop=false) where {T}
+    sparse=true, tgrad=true) where {T}
     setp! = coord_setter(sys_mtk, domain)
 
     mtkf = ODEFunction(sys_mtk, tgrad=tgrad, jac=true, sparse=sparse)
 
-    f = scimlop ? _mtk_scimlop(sys_mtk, mtkf, setp!, u0[:], p) : _mtk_grid_func(sys_mtk, mtkf, setp!)
+    f = _mtk_grid_func(sys_mtk, mtkf, setp!)
 
     ncells = reduce(*, length.(grid(domain)))
-    nvars = size(u0, 1)
+    nvars = length(unknowns(sys_mtk))
     single_jac_prototype = mtkf.jac_prototype
     if isnothing(single_jac_prototype)
         single_jac_prototype = Matrix{eltype(u0)}(undef, nvars, nvars)
@@ -79,6 +61,7 @@ function mtk_jac_grid_func(sys_mtk, mtkf, setp!)
             setp!(p, r)
             mtkf.jac(blks[r], _u, p, t)
         end
+        nothing
     end
 end
 

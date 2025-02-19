@@ -16,11 +16,11 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
 
     setp! = EarthSciMLBase.coord_setter(mtk_sys, domain)
     obscache = zeros(EarthSciMLBase.dtype(domain), 4)
-    grd = EarthSciMLBase.grid(domain)
+    sz = length.(EarthSciMLBase.grid(domain))
 
     function run(du, u, p, t)
-        u = reshape(u, size(u0)...)
-        du = reshape(du, size(u0)...)
+        u = reshape(u, :, sz...)
+        du = reshape(du, :, sz...)
         II = CartesianIndices(size(u)[2:end])
         for ix ∈ 1:size(u, 1)
             for I in II
@@ -35,7 +35,7 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
         end
         nothing
     end
-    FunctionOperator(run, u0[:], p=p)
+    FunctionOperator(run, u0, p=p)
 end
 
 function EarthSciMLBase.get_needed_vars(::ExampleOp, csys, mtk_sys, domain::DomainInfo)
@@ -135,21 +135,12 @@ EarthSciMLBase.threaded_ode_step!(setp!, u, IIchunks, integrators, 0.0, 1.0)
 
 @testset "mtk_func" begin
     ucopy = copy(u)
-    f = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, p)
+    f = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, p; sparse=true, tgrad=true)
     uu = EarthSciMLBase.init_u(sys_mtk, domain)
     prob = ODEProblem(f, uu[:], (0.0, 1.0), p)
     sol = solve(prob, Tsit5())
     uu = reshape(sol.u[end], size(ucopy)...)
     @test uu[:] ≈ u[:] rtol = 0.01
-
-    @testset "scimlop" begin
-        f = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, p; scimlop=true)
-        uu = EarthSciMLBase.init_u(sys_mtk, domain)
-        prob = ODEProblem(f, uu[:], (0.0, 1.0), p)
-        sol = solve(prob, Tsit5())
-        uu = reshape(sol.u[end], size(ucopy)...)
-        @test uu[:] ≈ u[:] rtol = 0.01
-    end
 
     f = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, p; sparse=false, tgrad=true)
     du = EarthSciMLBase.BlockDiagonal([zeros(size(ucopy, 1), size(ucopy, 1)) for i in 1:reduce(*, size(ucopy)[2:end])])
@@ -220,16 +211,16 @@ end
         sol = solve(prob, Tsit5())
         @test sum(abs.(sol.u[end])) ≈ 3.3333500929324217e7 rtol = 1e-3 # No Splitting error in this one.
 
-        for scimlop in [true, false]
+        #for scimlop in [true, false]
             for sparse in [true, false]
-                @testset "scimlop=$scimlop sparse=$sparse" begin
-                    st = SolverIMEX(stiff_sparse=sparse, stiff_scimlop=scimlop)
+                @testset "sparse=$sparse" begin
+                    st = SolverIMEX(stiff_sparse=sparse)
                     prob = ODEProblem(csys, st)
                     sol = solve(prob, KenCarp47(linsolve=LUFactorization()), abstol=1e-4, reltol=1e-4)
                     @test sum(abs.(sol.u[end])) ≈ 3.3333500929324217e7 rtol = 1e-3
                 end
             end
-        end
+        #end
     end
 end
 

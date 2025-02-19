@@ -55,11 +55,11 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
 
     setp! = EarthSciMLBase.coord_setter(mtk_sys, domain)
     obscache = zeros(EarthSciMLBase.dtype(domain), 4)
-    grd = EarthSciMLBase.grid(domain)
+    sz = length.(EarthSciMLBase.grid(domain))
 
     function run(du, u, p, t)
-        u = reshape(u, size(u0)...)
-        du = reshape(du, size(u0)...)
+        u = reshape(u, :, sz...)
+        du = reshape(du, :, sz...)
         II = CartesianIndices(size(u)[2:end])
         for ix ∈ 1:size(u, 1)
             for I in II
@@ -74,7 +74,7 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
         end
         nothing
     end
-    FunctionOperator(run, u0[:], p=p)
+    FunctionOperator(run, u0, p=p)
 end
 nothing
 ```
