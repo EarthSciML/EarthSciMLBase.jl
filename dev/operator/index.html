@@ -31,11 +31,11 @@ end</code></pre><p>Next, we need to define a method of <code>EarthSciMLBase.get_
 
     setp! = EarthSciMLBase.coord_setter(mtk_sys, domain)
     obscache = zeros(EarthSciMLBase.dtype(domain), 4)
-    grd = EarthSciMLBase.grid(domain)
+    sz = length.(EarthSciMLBase.grid(domain))
 
     function run(du, u, p, t)
-        u = reshape(u, size(u0)...)
-        du = reshape(du, size(u0)...)
+        u = reshape(u, :, sz...)
+        du = reshape(du, :, sz...)
         II = CartesianIndices(size(u)[2:end])
         for ix ∈ 1:size(u, 1)
             for I in II
@@ -50,7 +50,7 @@ end</code></pre><p>Next, we need to define a method of <code>EarthSciMLBase.get_
         end
         nothing
     end
-    FunctionOperator(run, u0[:], p=p)
+    FunctionOperator(run, u0, p=p)
 end
 nothing</code></pre><p>The function above also doesn&#39;t have any physical meaning, but it demonstrates some functionality of the <code>Operator</code> &quot;<code>s</code>&quot;. First, it retrieves a function to get the current value of an observed variable in our ODE system using the <code>obs_functions</code> argement, and it demonstrates how to call the resulting  function to get that value. It also demonstrates how to get coordinate transforms using the <code>coordinate_transform_functions</code> argument. Coordinate transforms are discussed in more detail in the documentation for the <a href="../api/#EarthSciMLBase.DomainInfo"><code>DomainInfo</code></a> type.</p><p>We also need to define a method of <code>EarthSciMLBase.get_needed_vars</code>, which will return which variables are needed by the operator.</p><pre><code class="language-julia hljs">function EarthSciMLBase.get_needed_vars(::ExampleOp, csys, mtk_sys, domain::DomainInfo)
     ts = EarthSciMLBase.partialderivative_transform_vars(mtk_sys, domain)
@@ -83,4 +83,4 @@ sol = solve(prob, Euler(); dt=1.0)</code></pre><p>After the simulation finishes,
         heatmap(u[1, :, :, 1]),
     )
 end
-gif(anim, fps = 15)</code></pre><img src="bc0dd2e4.gif" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../coord_transforms/">« Coordinate Transforms</a><a class="docs-footer-nextpage" href="../example_all_together/">All Together »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.1 on <span class="colophon-date" title="Monday 17 February 2025 03:56">Monday 17 February 2025</span>. Using Julia version 1.11.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+gif(anim, fps = 15)</code></pre><img src="bc0dd2e4.gif" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../coord_transforms/">« Coordinate Transforms</a><a class="docs-footer-nextpage" href="../example_all_together/">All Together »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.1 on <span class="colophon-date" title="Wednesday 19 February 2025 01:40">Wednesday 19 February 2025</span>. Using Julia version 1.11.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
