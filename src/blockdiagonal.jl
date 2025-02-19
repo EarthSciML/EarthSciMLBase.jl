@@ -46,7 +46,7 @@ function Base.getindex(B::BlockDiagonal{T}, i::Integer, j::Integer) where {T}
     B.blocks[b][r, c]
 end
 
-function Base.setindex!(B::BlockDiagonal, v, i::Integer, j::Integer) where {T}
+function Base.setindex!(B::BlockDiagonal, v, i::Integer, j::Integer)
     b = _getblock(B.n, i)
     if b != _getblock(B.n, j) && v != 0 # not in the same block
         throw(BoundsError(B, [i, j]))

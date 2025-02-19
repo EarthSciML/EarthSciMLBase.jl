@@ -3,7 +3,7 @@ function _mtk_grid_func(sys_mtk, mtkf, setp!)
     function f(du::AbstractVector, u::AbstractVector, p, t) # In-place
         u = reshape(u, nrows, :)
         du = reshape(du, nrows, :)
-        @inbounds for j ∈ 1:size(u, 2)
+        for j ∈ 1:size(u, 2)
             col = view(u, :, j)
             ddu = view(du, :, j)
             setp!(p, j)
@@ -26,7 +26,7 @@ end
 
 # Return a function to apply the MTK system to each column of u after reshaping to a matrix.
 function mtk_grid_func(sys_mtk::ODESystem, domain::DomainInfo{T}, u0, p;
-    sparse=true, tgrad=true) where {T}
+    sparse=true, tgrad=true, vjp=true) where {T}
     setp! = coord_setter(sys_mtk, domain)
 
     mtkf = ODEFunction(sys_mtk, tgrad=tgrad, jac=true, sparse=sparse)
@@ -46,6 +46,10 @@ function mtk_grid_func(sys_mtk::ODESystem, domain::DomainInfo{T}, u0, p;
     if tgrad
         tg = mtk_tgrad_grid_func(sys_mtk, mtkf, setp!)
         push!(kwargs, :tgrad => tg)
+    end
+    if vjp
+        vj = mtk_vjp_grid_func(sys_mtk, mtkf, setp!)
+        push!(kwargs, :vjp => vj)
     end
     ODEFunction(f; jac_prototype=jac_prototype, jac=jf, kwargs...)
 end
@@ -91,4 +95,33 @@ function mtk_tgrad_grid_func(sys_mtk, mtkf, setp!)
             mtkf.tgrad(blks[r], _u, p, t)
         end
     end
+end
+
+function mtk_vjp_grid_func(sys_mtk, mtkf, setp!)
+    nvar = length(unknowns(sys_mtk))
+    function vjp(vJ, v, u, p, t)
+        u = reshape(u, nvar, :)
+        J = Matrix{eltype(u)}(undef, nvar, nvar)
+        for r ∈ 1:size(u, 2)
+            _u = view(u, :, r)
+            vJr = view(vJ, (r-1)*nvar+1:r*nvar, :)
+            vr = view(v, (r-1)*nvar+1:r*nvar, :)
+            setp!(p, r)
+            mtkf.jac(J, _u, p, t)
+            mul!(vJr, J', vr)
+        end
+    end
+    function vjp(v, u, p, t)
+        u = reshape(u, nvar, :)
+        vcat([
+            begin
+                _u = view(u, :, r)
+                vr = view(v, (r-1)*nvar+1:r*nvar, :)
+                setp!(p, r)
+                J = mtkf.jac(_u, p, t)
+                J' * vr
+            end for r ∈ 1:size(u, 2)
+        ]...)
+    end
+    return vjp
 end
