@@ -27,8 +27,8 @@ struct SolverIMEX <: SolverStrategy
     end
 end
 
-function ODEProblem(sys::CoupledSystem, st::SolverIMEX; u0=nothing, p=nothing,
-    name=:model, extra_vars=[], kwargs...)
+function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0=nothing, p=nothing,
+    name=:model, extra_vars=[], kwargs...) where {iip}
 
     sys_mtk = convert(ODESystem, sys; name=name, extra_vars=extra_vars)
     dom = domain(sys)
@@ -49,6 +49,7 @@ function ODEProblem(sys::CoupledSystem, st::SolverIMEX; u0=nothing, p=nothing,
     end
 
     start, finish = get_tspan(dom)
-    SplitODEProblem(f1, f2, u0, (start, finish), p,
+    SplitODEProblem{iip}(f1, f2, u0, (start, finish), p,
         callback=CallbackSet(cb...); kwargs...)
 end
+ODEProblem(sys::CoupledSystem, st::SolverIMEX; kwargs...) = ODEProblem{true}(sys, st; kwargs...)

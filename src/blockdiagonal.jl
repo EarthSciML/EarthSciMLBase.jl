@@ -33,8 +33,8 @@ function Base.size(B::AbstractBlockDiagonal)
 end
 Base.size(B::AbstractBlockDiagonal, ::Int) = length(B.blocks) * B.n
 
-_getblock(n, i) = (i-1) ÷ n + 1
-_getr(n, i) = (i-1) % n + 1
+_getblock(n, i) = (i - 1) ÷ n + 1
+_getr(n, i) = (i - 1) % n + 1
 
 function Base.getindex(B::BlockDiagonal{T}, i::Integer, j::Integer) where {T}
     b = _getblock(B.n, i)
@@ -87,6 +87,7 @@ struct BlockDiagonalLU{T} <: AbstractBlockDiagonal{T}
     blocks::Vector{T}
     n::Int
 end
+BlockDiagonalLU{T}(blocks::Vector{T}) where {T} = BlockDiagonalLU{T}(blocks, size(blocks[1], 1))
 
 function LinearAlgebra.issuccess(F::BlockDiagonalLU; kwargs...)
     for b in blocks(F)
@@ -121,4 +122,18 @@ function LinearAlgebra.ldiv!(x::AbstractVecOrMat, A::BlockDiagonalLU, b::Abstrac
         row_i += nrow
     end
     x
+end
+
+function LinearAlgebra.:\(A::BlockDiagonalLU, b::AbstractVecOrMat)
+    @assert size(A, 1) == size(b, 1) "number of rows must match"
+    vcat([
+        begin
+            _b = view(b, ((i-1)*A.n+1):(i*A.n), :)
+            block \ _b
+        end for (i, block) in enumerate(blocks(A))
+    ]...)
+end
+
+function Base.:+(B::BlockDiagonal, M::UniformScaling)
+    return BlockDiagonal([block + M for block in blocks(B)])
 end

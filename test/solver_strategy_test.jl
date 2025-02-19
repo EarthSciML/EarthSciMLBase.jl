@@ -236,16 +236,16 @@ end
         sol = solve(prob, Tsit5())
         @test sum(abs.(sol.u[end])) ≈ 3.3333500929324217e7 rtol = 1e-3 # No Splitting error in this one.
 
-        #for scimlop in [true, false]
-        for sparse in [true, false]
-            @testset "sparse=$sparse" begin
-                st = SolverIMEX(stiff_sparse=sparse)
-                prob = ODEProblem(csys, st)
-                sol = solve(prob, KenCarp47(linsolve=LUFactorization()), abstol=1e-4, reltol=1e-4)
-                @test sum(abs.(sol.u[end])) ≈ 3.3333500929324217e7 rtol = 1e-3
+        for iip in [true, false]
+            for sparse in [true, false]
+                @testset "iip=$iip; sparse=$sparse" begin
+                    st = SolverIMEX(stiff_sparse=sparse)
+                    prob = ODEProblem{iip}(csys, st)
+                    sol = solve(prob, KenCarp47(linsolve=LUFactorization()), abstol=1e-4, reltol=1e-4)
+                    @test sum(abs.(sol.u[end])) ≈ 3.3333500929324217e7 rtol = 1e-3
+                end
             end
         end
-        #end
     end
 end
 
