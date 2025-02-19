@@ -11,14 +11,15 @@ function _mtk_grid_func(sys_mtk, mtkf, setp!)
         end
         nothing
     end
-    # function f(u, p, t) # Out-of-place (Commented out because not tested.)
-    #     u = reshape(u, nrows, :)
-    #     function ff(u, p, t, j)
-    #         setp!(p, j)
-    #         mtkf(u, p, t)
-    #     end
-    #     @inbounds @views mapreduce(jcol -> ff(jcol[2], p, t, jcol[1]), hcat, enumerate(eachcol(u)))
-    # end
+    function f(u, p, t) # Out-of-place
+        u = reshape(u, nrows, :)
+        function ff(u, p, t, j)
+            setp!(p, j)
+            mtkf(u, p, t)
+        end
+        du = @views mapreduce(jcol -> ff(jcol[2], p, t, jcol[1]), hcat, enumerate(eachcol(u)))
+        reshape(du, :)
+    end
 
     return f
 end
@@ -43,7 +44,7 @@ function mtk_grid_func(sys_mtk::ODESystem, domain::DomainInfo{T}, u0, p;
 
     kwargs = []
     if tgrad
-        tg = mtk_tgrad_grid_func(sys_mtk, mtkf, setp!, ncells)
+        tg = mtk_tgrad_grid_func(sys_mtk, mtkf, setp!)
         push!(kwargs, :tgrad => tg)
     end
     ODEFunction(f; jac_prototype=jac_prototype, jac=jf, kwargs...)
@@ -63,14 +64,26 @@ function mtk_jac_grid_func(sys_mtk, mtkf, setp!)
         end
         nothing
     end
+    function jac(u, p, t) # Out-of-place
+        u = reshape(u, nvar, :)
+        BlockDiagonal([
+            begin
+                _u = view(u, :, r)
+                setp!(p, r)
+                mtkf.jac(_u, p, t)
+            end for r ∈ 1:size(u, 2)
+        ])
+    end
 end
 
 # Create a function to calculate the gridded time gradient.
 # ngrid is the number of grid cells.
-function mtk_tgrad_grid_func(sys_mtk, mtkf, setp!, ngrid)
+function mtk_tgrad_grid_func(sys_mtk, mtkf, setp!)
     nvar = length(unknowns(sys_mtk))
-    function jac(out, u, p, t) # In-place
+    function tgrad(out, u, p, t) # In-place
         u = reshape(u, nvar, :)
+        # FIXME(CT): I believe the tgrad output should be a vector and not a clone of the Jacobian.
+        # This may be a bug in the DifferentialEquations.jl interface.
         blks = blocks(out)
         for r ∈ 1:size(u, 2)
             _u = view(u, :, r)
