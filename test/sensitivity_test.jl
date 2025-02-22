@@ -8,27 +8,24 @@ using Test
 struct ExampleOp <: Operator
 end
 
-function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, domain::DomainInfo, u0, p)
-    α, trans1, trans2, trans3 = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
+function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args, domain::DomainInfo, u0, p)
+    α, x, y, z = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
 
-    obs_f = ModelingToolkit.build_explicit_observed_function(mtk_sys,
-        [α, trans1, trans2, trans3], checkbounds=false, return_inplace=false)
+    obs_f = EarthSciMLBase.build_coord_observed_function(mtk_sys, coord_args, [α, x, y, z], false)
 
-    setp! = EarthSciMLBase.coord_setter(mtk_sys, domain)
-    obscache = zeros(EarthSciMLBase.dtype(domain), 4)
     sz = length.(EarthSciMLBase.grid(domain))
+    II = CartesianIndices(tuple(size(domain)...))
+    coords1, coords2, coords3 = EarthSciMLBase.grid(domain)
 
     function run(du, u, p, t) # In-place
         u = reshape(u, :, sz...)
         du = reshape(du, :, sz...)
-        II = CartesianIndices(size(u)[2:end])
         for ix ∈ 1:size(u, 1)
             for I in II
                 # Demonstrate coordinate transforms and observed values
-                setp!(p, I)
-                t1, t2, t3, fv = obs_f(view(u, :, I), p, t)
+                x, y, z, fv = obs_f(view(u, :, I), p, t, coords1[I[1]], coords2[I[2]], coords3[I[3]])
                 # Set derivative value.
-                du[ix, I] = (t1 + t2 + t3) * fv
+                du[ix, I] = (x + y + z) * fv
             end
         end
         nothing
@@ -36,21 +33,19 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
     function run(u, p, t) # Out-of-place
         u = reshape(u, :, sz...)
         II = CartesianIndices(size(u)[2:end])
-        du = vcat([
+        du = [
             begin
-                setp!(p, I)
-                t1, t2, t3, fv = obs_f(view(u, :, I), p, t)
-                (t1 + t2 + t3) * fv
+                x, y, z, fv = obs_f(view(u, :, I), p, t, coords1[I[1]], coords2[I[2]], coords3[I[3]])
+                (x + y + z) * fv
             end for ix ∈ 1:size(u, 1), I in II
-        ]...)
+        ]
         reshape(du, :)
     end
     FunctionOperator(run, reshape(u0, :), p=p)
 end
 
 function EarthSciMLBase.get_needed_vars(::ExampleOp, csys, mtk_sys, domain::DomainInfo)
-    ts = EarthSciMLBase.partialderivative_transform_vars(mtk_sys, domain)
-    return [mtk_sys.sys₊windspeed, ts...]
+    return [mtk_sys.sys₊windspeed, mtk_sys.sys₊x, mtk_sys.sys₊y, mtk_sys.sys₊z]
 end
 
 t_min = 0.0
@@ -61,7 +56,7 @@ t_max = 11.5
 @parameters y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0 β = 1.0
 @constants p = 1.0
 @variables(
-    u(t) = 1.0, v(t) = 1.0, x(t) = 1.0, y(t) = 1.0, windspeed(t)
+    u(t) = 1.0, v(t) = 1.0, x(t) = 1.0, y(t) = 1.0, z(t) = 1.0, windspeed(t)
 )
 Dt = Differential(t)
 
@@ -78,6 +73,9 @@ domain = DomainInfo(
 eqs = [Dt(u) ~ -α * √abs(v) + lon + β,
     Dt(v) ~ -α * √abs(u) + lat + lev * 1e-14,
     windspeed ~ lat + lon + lev,
+    x ~ 1.0 / EarthSciMLBase.lon2meters(lat),
+    y ~ 1.0 / EarthSciMLBase.lat2meters,
+    z ~ 1.0 / lev,
 ]
 sys = ODESystem(eqs, t, name=:sys)
 

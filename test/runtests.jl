@@ -12,6 +12,7 @@ using Test, SafeTestsets
     @safetestset "Coupled System Utils" begin include("coupled_system_utils_test.jl") end
     @safetestset "Solver Strategies" begin include("solver_strategy_test.jl") end
     @safetestset "Integrated Test" begin include("integrated_test.jl") end
+    @safetestset "MTK Grid Function" begin include("mtk_grid_func_test.jl") end
     @safetestset "BlockDiagonal" begin include("blockdiagonal_test.jl") end
     @safetestset "Sensitivity" begin include("sensitivity_test.jl") end
     @safetestset "Docs" begin

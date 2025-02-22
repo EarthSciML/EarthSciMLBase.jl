@@ -27,20 +27,21 @@ struct SolverIMEX <: SolverStrategy
     end
 end
 
-function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0=nothing, p=nothing,
+function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0=nothing,
     name=:model, extra_vars=[], kwargs...) where {iip}
 
     sys_mtk = convert(ODESystem, sys; name=name, extra_vars=extra_vars)
     dom = domain(sys)
 
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
-    p = isnothing(p) ? default_params(sys_mtk) : p
     u0 = reshape(u0, :) # DiffEq state must be a vector.
 
-    f1 = mtk_grid_func(sys_mtk, dom, u0, p;
+    f1, sys_mtk, coord_args = mtk_grid_func(sys_mtk, dom, u0, iip;
         sparse=st.stiff_sparse, tgrad=st.stiff_tgrad)
 
-    f2 = nonstiff_ops(sys, sys_mtk, dom, u0, p)
+    p = MTKParameters(sys_mtk, defaults(sys_mtk))
+
+    f2 = nonstiff_ops(sys, sys_mtk, coord_args, dom, u0, p)
 
     cb = get_callbacks(sys, sys_mtk, dom)
     if :callback in keys(kwargs)
