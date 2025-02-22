@@ -224,9 +224,9 @@ end
 
 # Combine the non-stiff operators into a single operator.
 # This works because SciMLOperators can be added together.
-function nonstiff_ops(sys::CoupledSystem, sys_mtk, domain, u0, p)
+function nonstiff_ops(sys::CoupledSystem, sys_mtk, coord_args, domain, u0, p)
     nonstiff_op = length(sys.ops) > 0 ?
-                  sum([get_scimlop(op, sys, sys_mtk, domain, u0, p) for op ∈ sys.ops]) :
+                  sum([get_scimlop(op, sys, sys_mtk, coord_args, domain, u0, p) for op ∈ sys.ops]) :
                   NullOperator(length(u0))
     nonstiff_op = cache_operator(nonstiff_op, u0)
 end

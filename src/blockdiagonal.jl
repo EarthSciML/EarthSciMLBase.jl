@@ -103,35 +103,44 @@ function ArrayInterface.lu_instance(B::AbstractBlockDiagonal)
 end
 
 function LinearAlgebra.lu!(B::AbstractBlockDiagonal, args...; kwargs...)
-    BlockDiagonalLU([lu!(blk, args...; kwargs...) for blk in blocks(B)], B.n)
+    o = BlockDiagonalLU(Vector{typeof(ArrayInterface.lu_instance(blocks(B)[1]))}(undef, length(blocks(B))), B.n)
+    Threads.@threads for i in eachindex(blocks(B))
+        o.blocks[i] = lu!(blocks(B)[i], args...; kwargs...)
+    end
+    o
 end
 
 function LinearAlgebra.lu(B::AbstractBlockDiagonal, args...; kwargs...)
-    BlockDiagonalLU([lu(blk, args...; kwargs...) for blk in blocks(B)], B.n)
+    o = BlockDiagonalLU(Vector{typeof(ArrayInterface.lu_instance(blocks(B)[1]))}(undef, length(blocks(B))), B.n)
+    Threads.@threads for i in eachindex(blocks(B))
+        o.blocks[i] = lu(blocks(B)[i], args...; kwargs...)
+    end
+    o
 end
 
 function LinearAlgebra.ldiv!(x::AbstractVecOrMat, A::BlockDiagonalLU, b::AbstractVecOrMat; kwargs...)
-    row_i = 1
     @assert size(x) == size(b) "dimensions of x and b must match"
-    @assert mapreduce(a -> size(a, 1), +, blocks(A)) == size(b, 1) "number of rows must match"
-    for block in blocks(A)
-        nrow = size(block, 1)
-        _x = view(x, row_i:(row_i+nrow-1), :)
-        _b = view(b, row_i:(row_i+nrow-1), :)
+    @assert size(A, 1) == size(b, 1) "number of rows must match"
+    Threads.@threads for i in eachindex(blocks(A))
+        block = blocks(A)[i]
+        rng = ((i-1)*A.n+1):(i*A.n)
+        _x = view(x, rng, :)
+        _b = view(b, rng, :)
         ldiv!(_x, block, _b; kwargs...)
-        row_i += nrow
     end
     x
 end
 
-function LinearAlgebra.:\(A::BlockDiagonalLU, b::AbstractVecOrMat)
+function LinearAlgebra.:\(A::BlockDiagonalLU, b::T) where {T<:AbstractVector}
     @assert size(A, 1) == size(b, 1) "number of rows must match"
-    vcat([
-        begin
-            _b = view(b, ((i-1)*A.n+1):(i*A.n), :)
-            block \ _b
-        end for (i, block) in enumerate(blocks(A))
-    ]...)
+    o = Vector{T}(undef, length(blocks(A)))
+    Threads.@threads for i in eachindex(blocks(A))
+        block = blocks(A)[i]
+        rng = ((i-1)*A.n+1):(i*A.n)
+        _b = view(b, rng)
+        o[i] = block \ _b
+    end
+    vcat(o...)
 end
 
 function Base.:+(B::BlockDiagonal, M::UniformScaling)

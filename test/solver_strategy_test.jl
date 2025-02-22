@@ -8,25 +8,25 @@ using LinearSolve
 struct ExampleOp <: Operator
 end
 
-function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, domain::DomainInfo, u0, p)
+function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args, domain::DomainInfo, u0, p)
     α, trans1, trans2, trans3 = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
 
-    obs_f! = ModelingToolkit.build_explicit_observed_function(mtk_sys,
-        [α, trans1, trans2, trans3], checkbounds=false, return_inplace=true)[2]
+    obs_f! = EarthSciMLBase.build_coord_observed_function(mtk_sys, coord_args,
+        [α, trans1, trans2, trans3], true)
 
-    setp! = EarthSciMLBase.coord_setter(mtk_sys, domain)
+    II = CartesianIndices(tuple(size(domain)...))
+    c1, c2, c3 = EarthSciMLBase.grid(domain)
     obscache = zeros(EarthSciMLBase.dtype(domain), 4)
     sz = length.(EarthSciMLBase.grid(domain))
 
     function run(du, u, p, t) # In-place
         u = reshape(u, :, sz...)
         du = reshape(du, :, sz...)
-        II = CartesianIndices(size(u)[2:end])
+        II = CartesianIndices(sz)
         for ix ∈ 1:size(u, 1)
             for I in II
                 # Demonstrate coordinate transforms and observed values
-                setp!(p, I)
-                obs_f!(obscache, view(u, :, I), p, t)
+                obs_f!(obscache, view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
                 t1, t2, t3, fv = obscache
                 # Set derivative value.
                 du[ix, I] = (t1 + t2 + t3) * fv
@@ -39,8 +39,7 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
         II = CartesianIndices(size(u)[2:end])
         du = vcat([
             begin
-                setp!(p, I)
-                obs_f!(obscache, view(u, :, I), p, t)
+                obs_f!(obscache, view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
                 t1, t2, t3, fv = obscache
                 (t1 + t2 + t3) * fv
             end for ix ∈ 1:size(u, 1), I in II
@@ -51,8 +50,7 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
 end
 
 function EarthSciMLBase.get_needed_vars(::ExampleOp, csys, mtk_sys, domain::DomainInfo)
-    ts = EarthSciMLBase.partialderivative_transform_vars(mtk_sys, domain)
-    return [mtk_sys.sys₊windspeed, ts...]
+    return [mtk_sys.sys₊windspeed, mtk_sys.sys₊x, mtk_sys.sys₊y, mtk_sys.sys₊z]
 end
 
 t_min = 0.0
@@ -63,7 +61,7 @@ t_max = 11.5
 @parameters y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0
 @constants p = 1.0
 @variables(
-    u(t) = 1.0, v(t) = 1.0, x(t) = 1.0, y(t) = 1.0, windspeed(t)
+    u(t) = 1.0, v(t) = 1.0, x(t), y(t), z(t), windspeed(t)
 )
 Dt = Differential(t)
 
@@ -80,6 +78,9 @@ domain = DomainInfo(
 eqs = [Dt(u) ~ -α * √abs(v) + lon,
     Dt(v) ~ -α * √abs(u) + lat + lev * 1e-14,
     windspeed ~ lat + lon + lev,
+    x ~ 1.0 / EarthSciMLBase.lon2meters(lat),
+    y ~ 1.0 / EarthSciMLBase.lat2meters,
+    z ~ 1.0 / lev,
 ]
 sys = ODESystem(eqs, t, name=:sys)
 
@@ -94,24 +95,26 @@ sys_mtk = convert(ODESystem, csys)
     Symbol("δsys₊lat_transform(t)"),
     Symbol("δsys₊lev_transform(t)")]
 
-obs_f = ModelingToolkit.build_explicit_observed_function(sys_mtk,
-    EarthSciMLBase.get_needed_vars(op, csys, sys_mtk, domain))
-p = EarthSciMLBase.default_params(sys_mtk)
+sys_coords, coord_args = EarthSciMLBase._prepare_coord_sys(sys_mtk, domain)
+obs_f = EarthSciMLBase.build_coord_observed_function(sys_coords, coord_args,
+    EarthSciMLBase.get_needed_vars(op, csys, sys_mtk, domain), false)
 
-obs_vals = obs_f([0.0, 0], p, 0.0)
+p = EarthSciMLBase.default_params(sys_coords)
+
+obs_vals = obs_f([0.0, 0], p, 0.0, 0.0, 0.0, 1.0)
+@test obs_vals[1] ≈ 1.0
 @test 1 / (obs_vals[2] * 180 / π) ≈ 111319.44444444445
 @test 1 / (obs_vals[3] * 180 / π) ≈ 111320.00000000001
 @test obs_vals[4] == 1.0
 
-p2 = MTKParameters(sys_mtk, [sys_mtk.sys₊lon => 1.0, sys_mtk.sys₊lat => 3.0, sys_mtk.sys₊lev => 2.0], [0.0, 0.0])
-obs_vals = obs_f([0.0, 0], p2, 0.0)
+obs_vals = obs_f([0.0, 0], p, 0.0, 1.0, 3.0, 2.0)
 @test obs_vals[1] == 6.0
 
-u = EarthSciMLBase.init_u(sys_mtk, domain)
-scimlop = EarthSciMLBase.nonstiff_ops(csys, sys_mtk, domain, reshape(u, :), p)
+u = EarthSciMLBase.init_u(sys_coords, domain)
+scimlop = EarthSciMLBase.nonstiff_ops(csys, sys_coords, coord_args, domain, reshape(u, :), p)
 du = similar(u)
 du .= 0
-@views scimlop(du[:], u[:], p, 0.0)
+@views scimlop(reshape(du, :), reshape(u, :), p, 0.0)
 
 @test sum(abs.(du)) ≈ 26094.193871228505
 
@@ -129,6 +132,7 @@ sol1 = solve(prob, Tsit5(); abstol=1e-12, reltol=1e-12)
 @test sol1.u[end] ≈ [-27.15156429366082, -26.264264199779465]
 
 st = SolverStrangThreads(Tsit5(), 1.0)
+p = EarthSciMLBase.default_params(sys_mtk)
 
 IIchunks, integrators = let
     II = CartesianIndices(size(u)[2:4])
@@ -150,9 +154,10 @@ EarthSciMLBase.threaded_ode_step!(setp!, u, IIchunks, integrators, 0.0, 1.0)
 
 @testset "mtk_func" begin
     ucopy = copy(u)
-    f = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, p; sparse=true, tgrad=true)
-    uu = EarthSciMLBase.init_u(sys_mtk, domain)
-    prob = ODEProblem(f, uu[:], (0.0, 1.0), p)
+    fiip, sys_coords, coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, true; sparse=true, tgrad=true)
+    p = EarthSciMLBase.default_params(sys_coords)
+    uu = EarthSciMLBase.init_u(sys_coords, domain)
+    prob = ODEProblem(fiip, uu[:], (0.0, 1.0), p)
     sol = solve(prob, Tsit5())
     uu = reshape(sol.u[end], size(ucopy)...)
     @test uu[:] ≈ u[:] rtol = 0.01
@@ -160,20 +165,24 @@ EarthSciMLBase.threaded_ode_step!(setp!, u, IIchunks, integrators, 0.0, 1.0)
     @testset "In-place vs. out of place" begin
         du1 = reshape(similar(ucopy), :)
         prob.f(du1, reshape(ucopy, :), p, 0.0)
-        du2 = prob.f(reshape(ucopy, :), p, 0.0)
+        foop, sys_coords, coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, false; sparse=true, tgrad=true)
+        p = EarthSciMLBase.default_params(sys_coords)
+        du2 = foop(reshape(ucopy, :), p, 0.0)
         @test du1 ≈ du2
     end
 
-    f = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, p; sparse=false, tgrad=true)
+    f, _, _ = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, true; sparse=false, tgrad=true)
     du = EarthSciMLBase.BlockDiagonal([zeros(size(ucopy, 1), size(ucopy, 1)) for i in 1:reduce(*, size(ucopy)[2:end])])
     f.jac(du, ucopy[:], p, 0.0)
-
     @test sum(sum.(du.blocks)) ≈ 12617.772209024473
 
+    f, _, _ = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, false; sparse=false, tgrad=true)
     du2 = f.jac(reshape(ucopy, :), p, 0.0)
     @test all(du.blocks .≈ du2.blocks)
 
+
     @testset "tgrad" begin
+        f, _, _ = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, true; sparse=false, tgrad=true)
         for i in 1:length(du.blocks)
             du.blocks[i] .= 0
         end

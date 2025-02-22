@@ -153,7 +153,7 @@ end
 function var2symbol(var)
     if var isa Symbolics.CallWithMetadata
         var = var.f
-    elseif iscall(var)
+    elseif SymbolicUtils.iscall(var)
         var = operation(var)
     end
     Symbolics.tosymbol(var; escape=false)

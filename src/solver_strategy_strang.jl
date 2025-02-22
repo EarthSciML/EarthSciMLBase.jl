@@ -61,6 +61,8 @@ Additional kwargs for ODEProblem constructor:
 - p: parameters; if "nothing", default values will be used.
 
 $(FIELDS)
+
+WARNING: Is is not possible to change the parameters using this strategy..
 """
 struct SolverStrangSerial <: SolverStrang
     "Stiff solver algorithm to use (see https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/)"
@@ -75,14 +77,14 @@ end
 nthreads(st::SolverStrangThreads) = st.threads
 nthreads(st::SolverStrangSerial) = 1
 
-function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, p=nothing, tspan=nothing,
+function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, tspan=nothing,
         name=:model, extra_vars=[], kwargs...)
 
     sys_mtk = convert(ODESystem, s; name=name, extra_vars=extra_vars)
 
     dom = domain(s)
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
-    p = isnothing(p) ? default_params(sys_mtk) : p
+    stiff_p = default_params(sys_mtk)
 
     II = CartesianIndices(tuple(size(dom)...))
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
@@ -90,11 +92,13 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, p=nothing, t
     start, finish = tspan
     prob = ODEProblem(sys_mtk, [], (start, start+typeof(start)(st.timestep)), []; st.stiff_kwargs...)
     stiff_integrators = [init(remake(prob, u0=zeros(eltype(u0), length(unknowns(sys_mtk))),
-        p=deepcopy(p)), st.stiffalg, save_on=false, save_start=false, save_end=false,
+        p=deepcopy(stiff_p)), st.stiffalg, save_on=false, save_start=false, save_end=false,
         initialize_save=false;
         st.stiff_kwargs...) for _ in 1:length(IIchunks)]
 
-    nonstiff_op = nonstiff_ops(s, sys_mtk, dom, u0, p)
+    coord_sys, coord_args = _prepare_coord_sys(sys_mtk, dom)
+    nonstiff_p = default_params(coord_sys)
+    nonstiff_op = nonstiff_ops(s, sys_mtk, coord_args, dom, u0, nonstiff_p)
 
     setp! = coord_setter(sys_mtk, dom)
 
@@ -102,7 +106,7 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, p=nothing, t
         stiff_callback(setp!, u0, st, IIchunks, stiff_integrators),
         get_callbacks(s, sys_mtk, dom)...,
     )
-    ODEProblem(nonstiff_op, view(u0, :), (start, finish), p; callback=cb,
+    ODEProblem(nonstiff_op, view(u0, :), (start, finish), nonstiff_p; callback=cb,
         dt=st.timestep, kwargs...)
 end
 
