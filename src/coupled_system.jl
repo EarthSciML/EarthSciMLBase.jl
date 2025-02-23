@@ -83,7 +83,7 @@ function couple(systems...)::CoupledSystem
             push!(o.callbacks, sys)
         elseif (sys isa Tuple) || (sys isa AbstractVector)
             o = couple(o, sys...)
-        elseif hasmethod(init_callback, (typeof(sys), CoupledSystem, Any, DomainInfo))
+        elseif hasmethod(init_callback, (typeof(sys), CoupledSystem, Any, Any, DomainInfo))
             push!(o.init_callbacks, sys)
         elseif hasmethod(couple2, (CoupledSystem, typeof(sys)))
             o = couple2(o, sys)
@@ -238,7 +238,7 @@ end
 """
 Types that implement an:
 
-`init_callback(x, sys::CoupledSystem, sys_mtk, domain::DomainInfo)::DECallback`
+`init_callback(x, sys::CoupledSystem, sys_mtk, coord_args, domain::DomainInfo)::DECallback`
 
 method can also be coupled into a `CoupledSystem`.
 The `init_callback` function will be run before the simulator is run
@@ -246,8 +246,8 @@ to get the callback.
 """
 init_callback() = error("Not implemented")
 
-function get_callbacks(sys::CoupledSystem, sys_mtk, domain::DomainInfo)
-    extra_cb = [init_callback(c, sys, sys_mtk, domain::DomainInfo) for c ∈ sys.init_callbacks]
+function get_callbacks(sys::CoupledSystem, sys_mtk, coord_args, domain::DomainInfo)
+    extra_cb = [init_callback(c, sys, sys_mtk, coord_args, domain::DomainInfo) for c ∈ sys.init_callbacks]
     [sys.callbacks; extra_cb]
 end
 

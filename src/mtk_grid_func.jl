@@ -1,16 +1,35 @@
-function _add_coord_args(ex, coord_args)
-    ex = MacroTools.postwalk(x -> @capture(x, function (args__)
-            body_
-        end) ?
-                                  :(function ($(args...), $(coord_args...))
+# Move coordinate variables from the parameter list of a function to the argument list.
+# This is useful for creating functions that take coordinates as arguments.
+function rewrite_coord_func(x, coord_args)
+    if @capture(x, function (args__)
+        body_
+    end)
+        return :(function ($(args...), $(coord_args...))
             $body
-        end) : x, ex)
-
-    ex = string(ex)
-    for ca in coord_args
-        ex = replace(ex, "$ca = NaN" => "")
+        end)
+    elseif @capture(x, a_ = b_)
+        if (a in coord_args) && (b == 1)
+            return nothing
+        end
     end
-    Meta.parse(ex)
+    return x
+end
+
+function _add_coord_args(ex, coord_args)
+    ex = MacroTools.postwalk(x -> rewrite_coord_func(x, coord_args), ex)
+end
+
+function gen_coord_func(sys, expr, coord_args; eval_expression=false, eval_module=@__MODULE__)
+    fexpr = ModelingToolkit.generate_custom_function(sys, expr, expression=Val{true})
+    if fexpr isa Tuple
+        fexpr = EarthSciMLBase._add_coord_args.(fexpr, (coord_args,))
+        f = ModelingToolkit.eval_or_rgf.(fexpr; eval_expression, eval_module)
+        f = ModelingToolkit.GeneratedFunctionWrapper{(2, 6, true)}(f[1], f[2])
+    else
+        fexpr = EarthSciMLBase._add_coord_args(fexpr, coord_args)
+        f = ModelingToolkit.eval_or_rgf(fexpr; eval_expression, eval_module)
+    end
+    return f
 end
 
 function _get_coord_args(sys, domain)
@@ -22,10 +41,11 @@ end
 
 function _prepare_coord_sys(sys, domain)
     coords, coord_args = _get_coord_args(sys, domain)
-    coord_arg_consts = [only(@constants $(ca) = NaN) for ca in coord_args]
+    coord_arg_consts = [only(@constants $(ca) = 1) for ca in coord_args]
+    coord_arg_consts = add_metadata.(coord_arg_consts, coords; exclude_default=true)
     sys_coord = substitute(sys, Dict(coords .=> coord_arg_consts))
     @named obs = ODESystem(substitute(ModelingToolkit.observed(sys),
-        Dict(coords .=> coord_arg_consts)),
+            Dict(coords .=> coord_arg_consts)),
         ModelingToolkit.get_iv(sys_coord))
     sys_coord = copy_with_change(sys_coord, eqs=[equations(sys_coord); equations(obs)],
         unknowns=unique([unknowns(sys_coord); unknowns(obs)]),
@@ -34,34 +54,31 @@ function _prepare_coord_sys(sys, domain)
 end
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
-RuntimeGeneratedFunctions.init(ModelingToolkit)
 
-# Build a function that takes the coordinates as arguments.
-function _build_mtk_coord_arg_function(sys, coord_args, gen_f, iip; kwargs...)
-    f_expr = gen_f(sys; kwargs...)
-    idx = iip ? 2 : 1
-    ex = _add_coord_args(f_expr[idx], coord_args)
-    f = @RuntimeGeneratedFunction(ModelingToolkit, ex)
-    return f
+function build_coord_ode_function(sys_coord, coord_args; kwargs...)
+    exprs = [eq.rhs for eq in equations(sys_coord)]
+    gen_coord_func(sys_coord, exprs, coord_args; kwargs...)
+end
+
+function build_coord_jac_function(sys_coord, coord_args; sparse=false, kwargs...)
+    jac_expr = ModelingToolkit.calculate_jacobian(sys_coord, sparse=sparse; kwargs...)
+    gen_coord_func(sys_coord, jac_expr, coord_args; kwargs...)
+end
+
+function build_coord_tgrad_function(sys_coord, coord_args; kwargs...)
+    tgrad_expr = ModelingToolkit.calculate_tgrad(sys_coord; kwargs...)
+    gen_coord_func(sys_coord, tgrad_expr, coord_args; kwargs...)
 end
 
 """
 Create a function to return the observed function for a system with coordinates.
 For more information see the documentation for `ModelingToolkit.build_explicit_observed_function`.
 """
-function build_coord_observed_function(sys_coord, coord_args, vars, iip; kwargs...)
-    idx = iip ? 2 : 1
-    ex = ModelingToolkit.build_explicit_observed_function(sys_coord, vars; return_inplace=true, kwargs...)[idx]
-    ex = RuntimeGeneratedFunctions.get_expression(ex)
-
-    ex = MacroTools.postwalk(x -> @capture(ex, (args__,) -> body_) ? :(($(args...), $(coord_args...)) -> $body) : x, ex)
-
-    ex = string(ex)
-    for ca in coord_args
-        ex = replace(ex, "$ca = NaN" => "")
-    end
-    ex = Meta.parse(ex)
-    @RuntimeGeneratedFunction(ModelingToolkit, ex)
+function build_coord_observed_function(sys_coord, coord_args, vars; kwargs...)
+    o = ModelingToolkit.observed(sys_coord)
+    idxs = [findfirst((x) -> Symbol(x.lhs) == Symbol(v), o) for v in vars]
+    exprs = [o[i].rhs for i in idxs]
+    gen_coord_func(sys_coord, exprs, coord_args; kwargs...)
 end
 
 function _mtk_grid_func(sys_mtk, mtkf, domain)
@@ -90,28 +107,30 @@ function _mtk_grid_func(sys_mtk, mtkf, domain)
 end
 
 # Return a function to apply the MTK system to each column of u after reshaping to a matrix.
-function mtk_grid_func(sys_mtk::ODESystem, domain::DomainInfo{T}, u0, iip;
+function mtk_grid_func(sys_mtk::ODESystem, domain::DomainInfo{T}, u0;
     sparse=false, tgrad=false, vjp=true) where {T}
 
     sys_mtk, coord_args = _prepare_coord_sys(sys_mtk, domain)
 
-    mtkf_coord = _build_mtk_coord_arg_function(sys_mtk, coord_args, ModelingToolkit.generate_function, iip)
-    jac_coord = _build_mtk_coord_arg_function(sys_mtk, coord_args, ModelingToolkit.generate_jacobian, iip; sparse=sparse)
+    mtkf_coord = build_coord_ode_function(sys_mtk, coord_args)
+    jac_coord = build_coord_jac_function(sys_mtk, coord_args; sparse=sparse)
 
     f = _mtk_grid_func(sys_mtk, mtkf_coord, domain)
 
     ncells = reduce(*, length.(grid(domain)))
     nvars = length(unknowns(sys_mtk))
-    single_jac_prototype = ODEFunction(sys_mtk, tgrad=tgrad, jac=true, sparse=sparse).jac_prototype
-    if isnothing(single_jac_prototype)
+
+    if !sparse
         single_jac_prototype = Matrix{eltype(u0)}(undef, nvars, nvars)
+    else
+        single_jac_prototype = ODEFunction(sys_mtk, tgrad=tgrad, jac=true, sparse=sparse).jac_prototype
     end
     jac_prototype = BlockDiagonal([similar(single_jac_prototype) for _ in 1:ncells])
     jf = mtk_jac_grid_func(sys_mtk, jac_coord, domain)
 
     kwargs = []
     if tgrad
-        tgf = _build_mtk_coord_arg_function(sys_mtk, coord_args, ModelingToolkit.generate_tgrad, iip)
+        tgf = build_coord_tgrad_function(sys_mtk, coord_args)
         tg = mtk_tgrad_grid_func(sys_mtk, tgf, domain)
         push!(kwargs, :tgrad => tg)
     end
