@@ -11,8 +11,8 @@ end
 function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args, domain::DomainInfo, u0, p)
     α, trans1, trans2, trans3 = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
 
-    obs_f! = EarthSciMLBase.build_coord_observed_function(mtk_sys, coord_args,
-        [α, trans1, trans2, trans3], true)
+    obs_f = EarthSciMLBase.build_coord_observed_function(mtk_sys, coord_args,
+        [α, trans1, trans2, trans3])
 
     II = CartesianIndices(tuple(size(domain)...))
     c1, c2, c3 = EarthSciMLBase.grid(domain)
@@ -22,11 +22,11 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
     function run(du, u, p, t) # In-place
         u = reshape(u, :, sz...)
         du = reshape(du, :, sz...)
-        II = CartesianIndices(sz)
+        II = CartesianIndices(tuple(sz...))
         for ix ∈ 1:size(u, 1)
             for I in II
                 # Demonstrate coordinate transforms and observed values
-                obs_f!(obscache, view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
+                obs_f(obscache, view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
                 t1, t2, t3, fv = obscache
                 # Set derivative value.
                 du[ix, I] = (t1 + t2 + t3) * fv
@@ -39,8 +39,7 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
         II = CartesianIndices(size(u)[2:end])
         du = vcat([
             begin
-                obs_f!(obscache, view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
-                t1, t2, t3, fv = obscache
+                t1, t2, t3, fv = obs_f(view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
                 (t1 + t2 + t3) * fv
             end for ix ∈ 1:size(u, 1), I in II
         ]...)
@@ -97,7 +96,7 @@ sys_mtk = convert(ODESystem, csys)
 
 sys_coords, coord_args = EarthSciMLBase._prepare_coord_sys(sys_mtk, domain)
 obs_f = EarthSciMLBase.build_coord_observed_function(sys_coords, coord_args,
-    EarthSciMLBase.get_needed_vars(op, csys, sys_mtk, domain), false)
+    EarthSciMLBase.get_needed_vars(op, csys, sys_mtk, domain))
 
 p = EarthSciMLBase.default_params(sys_coords)
 
@@ -116,7 +115,7 @@ du = similar(u)
 du .= 0
 @views scimlop(reshape(du, :), reshape(u, :), p, 0.0)
 
-@test sum(abs.(du)) ≈ 26094.193871228505
+@test sum(abs.(du)) ≈ 14542.756845747295
 
 du2 = scimlop(reshape(u, :), p, 0.0)
 @test du2 ≈ reshape(du, :)
@@ -154,10 +153,10 @@ EarthSciMLBase.threaded_ode_step!(setp!, u, IIchunks, integrators, 0.0, 1.0)
 
 @testset "mtk_func" begin
     ucopy = copy(u)
-    fiip, sys_coords, coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, true; sparse=true, tgrad=true)
+    f, sys_coords, coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy; sparse=true, tgrad=true)
     p = EarthSciMLBase.default_params(sys_coords)
     uu = EarthSciMLBase.init_u(sys_coords, domain)
-    prob = ODEProblem(fiip, uu[:], (0.0, 1.0), p)
+    prob = ODEProblem(f, uu[:], (0.0, 1.0), p)
     sol = solve(prob, Tsit5())
     uu = reshape(sol.u[end], size(ucopy)...)
     @test uu[:] ≈ u[:] rtol = 0.01
@@ -165,24 +164,31 @@ EarthSciMLBase.threaded_ode_step!(setp!, u, IIchunks, integrators, 0.0, 1.0)
     @testset "In-place vs. out of place" begin
         du1 = reshape(similar(ucopy), :)
         prob.f(du1, reshape(ucopy, :), p, 0.0)
-        foop, sys_coords, coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, false; sparse=true, tgrad=true)
-        p = EarthSciMLBase.default_params(sys_coords)
-        du2 = foop(reshape(ucopy, :), p, 0.0)
+        du2 = f(reshape(ucopy, :), p, 0.0)
         @test du1 ≈ du2
     end
 
-    f, _, _ = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, true; sparse=false, tgrad=true)
-    du = EarthSciMLBase.BlockDiagonal([zeros(size(ucopy, 1), size(ucopy, 1)) for i in 1:reduce(*, size(ucopy)[2:end])])
+    @testset "jac sparse" begin
+    du = similar(f.jac_prototype)
     f.jac(du, ucopy[:], p, 0.0)
     @test sum(sum.(du.blocks)) ≈ 12617.772209024473
 
-    f, _, _ = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, false; sparse=false, tgrad=true)
     du2 = f.jac(reshape(ucopy, :), p, 0.0)
     @test all(du.blocks .≈ du2.blocks)
+    end
 
+    f, = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy; sparse=false, tgrad=true)
+    @testset "jac dense" begin
+        du = similar(f.jac_prototype)
+        f.jac(du, ucopy[:], p, 0.0)
+        @test sum(sum.(du.blocks)) ≈ 12617.772209024473
+
+        du2 = f.jac(reshape(ucopy, :), p, 0.0)
+        @test all(du.blocks .≈ du2.blocks)
+    end
 
     @testset "tgrad" begin
-        f, _, _ = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy, true; sparse=false, tgrad=true)
+        du = similar(f.jac_prototype)
         for i in 1:length(du.blocks)
             du.blocks[i] .= 0
         end
@@ -194,7 +200,7 @@ end
 prob = ODEProblem(csys, st)
 sol = solve(prob, Euler(); dt=1.0, abstol=1e-12, reltol=1e-12)
 
-@test sum(abs.(sol.u[end])) ≈ 3.77224671877136e7 rtol = 1e-3
+@test sum(abs.(sol.u[end])) ≈ 3.820642384890682e7 rtol = 1e-3
 
 @testset "Float32" begin
     domain = DomainInfo(
@@ -207,7 +213,7 @@ sol = solve(prob, Euler(); dt=1.0, abstol=1e-12, reltol=1e-12)
     prob = ODEProblem(csys, st)
     sol = solve(prob, Euler(); dt=1.0)
 
-    @test sum(abs.(sol.u[end])) ≈ 3.77224671877136e7
+    @test sum(abs.(sol.u[end])) ≈ 3.820642384890682e7
 end
 
 @testset "No operator" begin
@@ -229,21 +235,21 @@ end
         st = SolverStrangThreads(Tsit5(), 1.0)
         prob = ODEProblem(csys, st)
         sol = solve(prob, Euler(); dt=1.0, abstol=1e-12, reltol=1e-12)
-        @test sum(abs.(sol.u[end])) ≈ 3.77224671877136e7 rtol = 1e-3
+        @test sum(abs.(sol.u[end])) ≈ 3.820642384890682e7 rtol = 1e-3
     end
 
     @testset "Strang Serial" begin
         st = SolverStrangSerial(Tsit5(), 1.0)
         prob = ODEProblem(csys, st)
         sol = solve(prob, Euler(); dt=1.0, abstol=1e-12, reltol=1e-12)
-        @test sum(abs.(sol.u[end])) ≈ 3.77224671877136e7 rtol = 1e-3
+        @test sum(abs.(sol.u[end])) ≈ 3.820642384890682e7 rtol = 1e-3
     end
 
     @testset "IMEX" begin
         st = SolverIMEX()
         prob = ODEProblem(csys, st)
         sol = solve(prob, Tsit5())
-        @test sum(abs.(sol.u[end])) ≈ 3.3333500929324217e7 rtol = 1e-3 # No Splitting error in this one.
+        @test sum(abs.(sol.u[end])) ≈ 3.444627331604664e7 rtol = 1e-3 # No Splitting error in this one.
 
         for iip in [true, false]
             for sparse in [true, false]
@@ -251,7 +257,7 @@ end
                     st = SolverIMEX(stiff_sparse=sparse)
                     prob = ODEProblem{iip}(csys, st)
                     sol = solve(prob, KenCarp47(linsolve=LUFactorization()), abstol=1e-4, reltol=1e-4)
-                    @test sum(abs.(sol.u[end])) ≈ 3.3333500929324217e7 rtol = 1e-3
+                    @test sum(abs.(sol.u[end])) ≈ 3.444627331604664e7 rtol = 1e-3
                 end
             end
         end
@@ -261,7 +267,7 @@ end
 mutable struct cbt
     runcount::Int
 end
-function EarthSciMLBase.init_callback(c::cbt, sys, sys_mtk, dom)
+function EarthSciMLBase.init_callback(c::cbt, sys, sys_mtk, coord_args, dom)
     DiscreteCallback((u, t, integrator) -> true,
         (_) -> c.runcount += 1,
     )

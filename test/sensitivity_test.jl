@@ -11,7 +11,7 @@ end
 function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args, domain::DomainInfo, u0, p)
     α, x, y, z = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
 
-    obs_f = EarthSciMLBase.build_coord_observed_function(mtk_sys, coord_args, [α, x, y, z], false)
+    obs_f = EarthSciMLBase.build_coord_observed_function(mtk_sys, coord_args, [α, x, y, z])
 
     sz = length.(EarthSciMLBase.grid(domain))
     II = CartesianIndices(tuple(size(domain)...))
@@ -88,17 +88,16 @@ st = SolverIMEX(stiff_sparse=false)
 prob = ODEProblem{false}(csys, st)
 
 function loss(p)
-    new_params = remake_buffer(model_sys, prob.p, Dict(
-        model_sys.sys₊α .=> p[1], model_sys.sys₊β .=> p[2]))
+    new_params = remake_buffer(model_sys, prob.p, [model_sys.sys₊α, model_sys.sys₊β], p)
     newprob = remake(prob, p=new_params)
     sol = solve(newprob, KenCarp47(linsolve=LUFactorization()))
     sum(abs.(sol))
 end
 
 g = ForwardDiff.gradient(loss, [10.0, 1.0])
-@test g ≈ [134064.58606757477, -2410.9599794591354]
+@test g ≈ [0.0, 19841.335378973763]
 
-@test_broken g = Zygote.gradient(loss, [10.0, 1.0])
+@test_broken Zygote.gradient(loss, [10.0, 1.0])
 
 prob = ODEProblem{true}(csys, st)
 @test_broken ForwardDiff.gradient(loss, [10.0, 1.0])

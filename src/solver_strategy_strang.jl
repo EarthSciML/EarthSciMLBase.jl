@@ -98,13 +98,13 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, tspan=nothin
 
     coord_sys, coord_args = _prepare_coord_sys(sys_mtk, dom)
     nonstiff_p = default_params(coord_sys)
-    nonstiff_op = nonstiff_ops(s, sys_mtk, coord_args, dom, u0, nonstiff_p)
+    nonstiff_op = nonstiff_ops(s, coord_sys, coord_args, dom, u0, nonstiff_p)
 
     setp! = coord_setter(sys_mtk, dom)
 
     cb = CallbackSet(
         stiff_callback(setp!, u0, st, IIchunks, stiff_integrators),
-        get_callbacks(s, sys_mtk, dom)...,
+        get_callbacks(s, coord_sys, coord_args, dom)...,
     )
     ODEProblem(nonstiff_op, view(u0, :), (start, finish), nonstiff_p; callback=cb,
         dt=st.timestep, kwargs...)
