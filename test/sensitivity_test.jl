@@ -84,6 +84,7 @@ op = ExampleOp()
 
 csys = EarthSciMLBase.couple(sys, op, domain)
 model_sys = convert(ODESystem, csys)
+model_sys, = EarthSciMLBase._prepare_coord_sys(model_sys, domain)
 
 st = SolverIMEX(stiff_sparse=false)
 prob = ODEProblem{false}(csys, st)

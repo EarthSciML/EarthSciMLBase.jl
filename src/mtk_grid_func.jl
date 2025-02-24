@@ -70,7 +70,7 @@ function _prepare_coord_sys(sys, domain)
         ModelingToolkit.get_iv(sys_coord))
     sys_coord = copy_with_change(sys_coord, eqs=[equations(sys_coord); equations(obs)],
         unknowns=unique([unknowns(sys_coord); unknowns(obs)]),
-        parameters=unique([parameters(sys_coord); parameters(obs)]))
+        parameters=parameters(sys))
     return structural_simplify(sys_coord), coord_args
 end
 
