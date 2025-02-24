@@ -83,7 +83,8 @@ function couple(systems...)::CoupledSystem
             push!(o.callbacks, sys)
         elseif (sys isa Tuple) || (sys isa AbstractVector)
             o = couple(o, sys...)
-        elseif hasmethod(init_callback, (typeof(sys), CoupledSystem, Any, Any, DomainInfo))
+        elseif hasmethod(init_callback, (typeof(sys), CoupledSystem, Any, Any, DomainInfo,
+                MapAlgorithm))
             push!(o.init_callbacks, sys)
         elseif hasmethod(couple2, (CoupledSystem, typeof(sys)))
             o = couple2(o, sys)
@@ -224,9 +225,9 @@ end
 
 # Combine the non-stiff operators into a single operator.
 # This works because SciMLOperators can be added together.
-function nonstiff_ops(sys::CoupledSystem, sys_mtk, coord_args, domain, u0, p)
+function nonstiff_ops(sys::CoupledSystem, sys_mtk, coord_args, domain, u0, p, alg)
     nonstiff_op = length(sys.ops) > 0 ?
-                  sum([get_scimlop(op, sys, sys_mtk, coord_args, domain, u0, p) for op ∈ sys.ops]) :
+                  sum([get_scimlop(op, sys, sys_mtk, coord_args, domain, u0, p, alg) for op ∈ sys.ops]) :
                   NullOperator(length(u0))
     nonstiff_op = cache_operator(nonstiff_op, u0)
 end
@@ -238,7 +239,8 @@ end
 """
 Types that implement an:
 
-`init_callback(x, sys::CoupledSystem, sys_mtk, coord_args, domain::DomainInfo)::DECallback`
+`init_callback(x, sys::CoupledSystem, sys_mtk, coord_args, domain::DomainInfo,
+    alg::MapAlgorithm)::DECallback`
 
 method can also be coupled into a `CoupledSystem`.
 The `init_callback` function will be run before the simulator is run
@@ -246,8 +248,9 @@ to get the callback.
 """
 init_callback() = error("Not implemented")
 
-function get_callbacks(sys::CoupledSystem, sys_mtk, coord_args, domain::DomainInfo)
-    extra_cb = [init_callback(c, sys, sys_mtk, coord_args, domain::DomainInfo) for c ∈ sys.init_callbacks]
+function get_callbacks(sys::CoupledSystem, sys_mtk, coord_args, domain::DomainInfo, alg)
+    extra_cb = [init_callback(c, sys, sys_mtk, coord_args, domain::DomainInfo, alg)
+                for c ∈ sys.init_callbacks]
     [sys.callbacks; extra_cb]
 end
 

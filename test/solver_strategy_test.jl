@@ -8,7 +8,8 @@ using LinearSolve
 struct ExampleOp <: Operator
 end
 
-function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args, domain::DomainInfo, u0, p)
+function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args,
+    domain::DomainInfo, u0, p, alg::MapAlgorithm)
     α, trans1, trans2, trans3 = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
 
     obs_f = EarthSciMLBase.build_coord_observed_function(mtk_sys, coord_args,
@@ -110,7 +111,8 @@ obs_vals = obs_f([0.0, 0], p, 0.0, 1.0, 3.0, 2.0)
 @test obs_vals[1] == 6.0
 
 u = EarthSciMLBase.init_u(sys_coords, domain)
-scimlop = EarthSciMLBase.nonstiff_ops(csys, sys_coords, coord_args, domain, reshape(u, :), p)
+scimlop = EarthSciMLBase.nonstiff_ops(csys, sys_coords, coord_args, domain, reshape(u, :),
+    p, MapBroadcast())
 du = similar(u)
 du .= 0
 @views scimlop(reshape(du, :), reshape(u, :), p, 0.0)
@@ -154,6 +156,8 @@ EarthSciMLBase.threaded_ode_step!(setp!, u, IIchunks, integrators, 0.0, 1.0)
 @testset "mtk_func" begin
     ucopy = copy(u)
     f, sys_coords, coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy; sparse=true, tgrad=true)
+    fthreads, = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy,
+        MapThreads(); sparse=false, tgrad=false)
     p = EarthSciMLBase.default_params(sys_coords)
     uu = EarthSciMLBase.init_u(sys_coords, domain)
     prob = ODEProblem(f, uu[:], (0.0, 1.0), p)
@@ -165,16 +169,17 @@ EarthSciMLBase.threaded_ode_step!(setp!, u, IIchunks, integrators, 0.0, 1.0)
         du1 = reshape(similar(ucopy), :)
         prob.f(du1, reshape(ucopy, :), p, 0.0)
         du2 = f(reshape(ucopy, :), p, 0.0)
-        @test du1 ≈ du2
+        du3 = fthreads(reshape(ucopy, :), p, 0.0)
+        @test du1 ≈ du2 ≈ du3
     end
 
     @testset "jac sparse" begin
-    du = similar(f.jac_prototype)
-    f.jac(du, ucopy[:], p, 0.0)
-    @test sum(sum.(du.blocks)) ≈ 12617.772209024473
+        du = similar(f.jac_prototype)
+        f.jac(du, ucopy[:], p, 0.0)
+        @test sum(sum.(du.blocks)) ≈ 12617.772209024473
 
-    du2 = f.jac(reshape(ucopy, :), p, 0.0)
-    @test all(du.blocks .≈ du2.blocks)
+        du2 = f.jac(reshape(ucopy, :), p, 0.0)
+        @test all(du.blocks .≈ du2.blocks)
     end
 
     f, = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy; sparse=false, tgrad=true)
@@ -184,6 +189,15 @@ EarthSciMLBase.threaded_ode_step!(setp!, u, IIchunks, integrators, 0.0, 1.0)
         @test sum(sum.(du.blocks)) ≈ 12617.772209024473
 
         du2 = f.jac(reshape(ucopy, :), p, 0.0)
+        @test all(du.blocks .≈ du2.blocks)
+    end
+
+    @testset "jac MapThreads" begin
+        du = similar(fthreads.jac_prototype)
+        fthreads.jac(du, ucopy[:], p, 0.0)
+        @test sum(sum.(du.blocks)) ≈ 12617.772209024473
+
+        du2 = fthreads.jac(reshape(ucopy, :), p, 0.0)
         @test all(du.blocks .≈ du2.blocks)
     end
 
@@ -251,13 +265,15 @@ end
         sol = solve(prob, Tsit5())
         @test sum(abs.(sol.u[end])) ≈ 3.444627331604664e7 rtol = 1e-3 # No Splitting error in this one.
 
-        for iip in [true, false]
-            for sparse in [true, false]
-                @testset "iip=$iip; sparse=$sparse" begin
-                    st = SolverIMEX(stiff_sparse=sparse)
-                    prob = ODEProblem{iip}(csys, st)
-                    sol = solve(prob, KenCarp47(linsolve=LUFactorization()), abstol=1e-4, reltol=1e-4)
-                    @test sum(abs.(sol.u[end])) ≈ 3.444627331604664e7 rtol = 1e-3
+        for alg in [MapBroadcast(), MapThreads()]
+            for iip in [true, false]
+                for sparse in [true, false]
+                    @testset "alg=$alg; iip=$iip; sparse=$sparse" begin
+                        st = SolverIMEX(alg; stiff_sparse=sparse)
+                        prob = ODEProblem{iip}(csys, st)
+                        sol = solve(prob, KenCarp47(linsolve=LUFactorization()), abstol=1e-4, reltol=1e-4)
+                        @test sum(abs.(sol.u[end])) ≈ 3.444627331604664e7 rtol = 1e-3
+                    end
                 end
             end
         end
@@ -267,7 +283,7 @@ end
 mutable struct cbt
     runcount::Int
 end
-function EarthSciMLBase.init_callback(c::cbt, sys, sys_mtk, coord_args, dom)
+function EarthSciMLBase.init_callback(c::cbt, sys, sys_mtk, coord_args, dom, alg)
     DiscreteCallback((u, t, integrator) -> true,
         (_) -> c.runcount += 1,
     )

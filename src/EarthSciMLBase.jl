@@ -14,7 +14,7 @@ using LinearAlgebra
 using SymbolicIndexingInterface: setp
 using Accessors
 using Graphs
-using MacroTools, RuntimeGeneratedFunctions
+using MacroTools, RuntimeGeneratedFunctions, ThreadsX
 
 include("add_dims.jl")
 include("domaininfo.jl")

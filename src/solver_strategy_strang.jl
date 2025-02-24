@@ -37,12 +37,13 @@ struct SolverStrangThreads <: SolverStrang
     timestep::AbstractFloat
     "Keyword arguments for the stiff ODEProblem constructor and solver."
     stiff_kwargs::Any
+    "Algoritm for performing gridded computations."
+    alg::MapAlgorithm
 
-
-    SolverStrangThreads(nthreads, stiffalg, timestep; stiff_kwargs...) = new(nthreads,
-        stiffalg, timestep, stiff_kwargs)
-    SolverStrangThreads(stiffalg, timestep; stiff_kwargs...) = new(Threads.nthreads(),
-        stiffalg, timestep, stiff_kwargs)
+    SolverStrangThreads(nthreads, stiffalg, timestep; alg=MapBroadcast(), stiff_kwargs...) =
+        new(nthreads, stiffalg, timestep, stiff_kwargs, alg)
+    SolverStrangThreads(stiffalg, timestep; alg=MapBroadcast(), stiff_kwargs...) =
+        new(Threads.nthreads(), stiffalg, timestep, stiff_kwargs, alg)
 end
 
 """
@@ -71,14 +72,17 @@ struct SolverStrangSerial <: SolverStrang
     timestep::AbstractFloat
     "Keyword arguments for the stiff ODEProblem constructor and solver."
     stiff_kwargs::Any
-    SolverStrangSerial(stiffalg, timestep; stiff_kwargs...) = new(stiffalg, timestep, stiff_kwargs)
+    "Algoritm for performing gridded computations."
+    alg::MapAlgorithm
+    SolverStrangSerial(stiffalg, timestep, alg::MapAlgorithm=MapBroadcast(); stiff_kwargs...) =
+        new(stiffalg, timestep, stiff_kwargs, alg)
 end
 
 nthreads(st::SolverStrangThreads) = st.threads
 nthreads(st::SolverStrangSerial) = 1
 
 function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, tspan=nothing,
-        name=:model, extra_vars=[], kwargs...)
+    name=:model, extra_vars=[], kwargs...)
 
     sys_mtk = convert(ODESystem, s; name=name, extra_vars=extra_vars)
 
@@ -90,28 +94,28 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, tspan=nothin
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
     tspan = isnothing(tspan) ? get_tspan(dom) : tspan
     start, finish = tspan
-    prob = ODEProblem(sys_mtk, [], (start, start+typeof(start)(st.timestep)), []; st.stiff_kwargs...)
+    prob = ODEProblem(sys_mtk, [], (start, start + typeof(start)(st.timestep)), []; st.stiff_kwargs...)
     stiff_integrators = [init(remake(prob, u0=zeros(eltype(u0), length(unknowns(sys_mtk))),
-        p=deepcopy(stiff_p)), st.stiffalg, save_on=false, save_start=false, save_end=false,
+            p=deepcopy(stiff_p)), st.stiffalg, save_on=false, save_start=false, save_end=false,
         initialize_save=false;
         st.stiff_kwargs...) for _ in 1:length(IIchunks)]
 
     coord_sys, coord_args = _prepare_coord_sys(sys_mtk, dom)
     nonstiff_p = default_params(coord_sys)
-    nonstiff_op = nonstiff_ops(s, coord_sys, coord_args, dom, u0, nonstiff_p)
+    nonstiff_op = nonstiff_ops(s, coord_sys, coord_args, dom, u0, nonstiff_p, st.alg)
 
     setp! = coord_setter(sys_mtk, dom)
 
     cb = CallbackSet(
         stiff_callback(setp!, u0, st, IIchunks, stiff_integrators),
-        get_callbacks(s, coord_sys, coord_args, dom)...,
+        get_callbacks(s, coord_sys, coord_args, dom, st.alg)...,
     )
     ODEProblem(nonstiff_op, view(u0, :), (start, finish), nonstiff_p; callback=cb,
         dt=st.timestep, kwargs...)
 end
 
 "A callback to periodically run the stiff solver."
-function stiff_callback(setp!, u0::AbstractArray{T}, st::SolverStrang, IIchunks, integrators) where T
+function stiff_callback(setp!, u0::AbstractArray{T}, st::SolverStrang, IIchunks, integrators) where {T}
     sz = size(u0)
     function affect!(integrator)
         u = reshape(integrator.u, sz...)

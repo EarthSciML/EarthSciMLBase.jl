@@ -1,3 +1,24 @@
+export MapAlgorithm, MapBroadcast, MapThreads, map_closure_to_range
+
+"""
+A type to specify the algorithm used for performing a computation
+across a range of grid cells.
+"""
+abstract type MapAlgorithm end
+
+"""
+Perform computations by broadcasting.
+"""
+struct MapBroadcast <: MapAlgorithm end
+"""
+Perform computations in parallel using multi-threading.
+"""
+struct MapThreads <: MapAlgorithm end
+
+map_closure_to_range(f, range) = ThreadsX.map(f, range)
+map_closure_to_range(f, range, ::MapBroadcast) = f.(range)
+map_closure_to_range(f, range, ::MapThreads) = ThreadsX.map(f, range)
+
 # Move coordinate variables from the parameter list of a function to the argument list.
 # This is useful for creating functions that take coordinates as arguments.
 function rewrite_coord_func(x, coord_args)
@@ -81,41 +102,39 @@ function build_coord_observed_function(sys_coord, coord_args, vars; kwargs...)
     gen_coord_func(sys_coord, exprs, coord_args; kwargs...)
 end
 
-function _mtk_grid_func(sys_mtk, mtkf, domain)
+function _mtk_grid_func(sys_mtk, mtkf, domain, alg::MA) where {MA<:MapAlgorithm}
     nrows = length(unknowns(sys_mtk))
     II = CartesianIndices(tuple(size(domain)...))
     c1, c2, c3 = grid(domain)
     function f(du::AbstractVector, u::AbstractVector, p, t) # In-place
         u = reshape(u, nrows, :)
         du = reshape(du, nrows, :)
-        for j ∈ 1:size(u, 2)
-            col = view(u, :, j)
-            ddu = view(du, :, j)
-            mtkf(ddu, col, p, t, c1[II[j][1]], c2[II[j][2]], c3[II[j][3]])
-        end
+        f(j) = mtkf(view(du, :, j), view(u, :, j), p, t,
+            c1[II[j][1]], c2[II[j][2]], c3[II[j][3]])
+        map_closure_to_range(f, 1:size(u, 2), alg)
         nothing
     end
     function f(u, p, t) # Out-of-place
         u = reshape(u, nrows, :)
-        function ff(u, p, t, j)
-            mtkf(u, p, t, c1[II[j][1]], c2[II[j][2]], c3[II[j][3]])
-        end
-        du = @views mapreduce(jcol -> ff(jcol[2], p, t, jcol[1]), hcat, enumerate(eachcol(u)))
-        reshape(du, :)
+        du = Vector{Vector{eltype(u)}}(undef, size(u, 2))
+        f(j) = du[j] = mtkf(view(u, :, j), p, t,
+            c1[II[j][1]], c2[II[j][2]], c3[II[j][3]])
+        map_closure_to_range(f, 1:size(u, 2), alg)
+        reshape(hcat(du...), :)
     end
     return f
 end
 
 # Return a function to apply the MTK system to each column of u after reshaping to a matrix.
-function mtk_grid_func(sys_mtk::ODESystem, domain::DomainInfo{T}, u0;
-    sparse=false, tgrad=false, vjp=true) where {T}
+function mtk_grid_func(sys_mtk::ODESystem, domain::DomainInfo{T}, u0, alg::MA=MapBroadcast();
+    sparse=false, tgrad=false, vjp=true) where {T,MA<:MapAlgorithm}
 
     sys_mtk, coord_args = _prepare_coord_sys(sys_mtk, domain)
 
     mtkf_coord = build_coord_ode_function(sys_mtk, coord_args)
     jac_coord = build_coord_jac_function(sys_mtk, coord_args; sparse=sparse)
 
-    f = _mtk_grid_func(sys_mtk, mtkf_coord, domain)
+    f = _mtk_grid_func(sys_mtk, mtkf_coord, domain, alg)
 
     ncells = reduce(*, length.(grid(domain)))
     nvars = length(unknowns(sys_mtk))
@@ -125,17 +144,17 @@ function mtk_grid_func(sys_mtk::ODESystem, domain::DomainInfo{T}, u0;
     else
         single_jac_prototype = ODEFunction(sys_mtk, tgrad=tgrad, jac=true, sparse=sparse).jac_prototype
     end
-    jac_prototype = BlockDiagonal([similar(single_jac_prototype) for _ in 1:ncells])
-    jf = mtk_jac_grid_func(sys_mtk, jac_coord, domain)
+    jac_prototype = BlockDiagonal([similar(single_jac_prototype) for _ in 1:ncells], alg)
+    jf = mtk_jac_grid_func(sys_mtk, jac_coord, domain, alg)
 
     kwargs = []
     if tgrad
         tgf = build_coord_tgrad_function(sys_mtk, coord_args)
-        tg = mtk_tgrad_grid_func(sys_mtk, tgf, domain)
+        tg = mtk_tgrad_grid_func(sys_mtk, tgf, domain, alg)
         push!(kwargs, :tgrad => tg)
     end
     if vjp
-        vj = mtk_vjp_grid_func(sys_mtk, jac_coord, domain)
+        vj = mtk_vjp_grid_func(sys_mtk, jac_coord, domain, alg)
         push!(kwargs, :vjp => vj)
     end
     ODEFunction(f; jac_prototype=jac_prototype, jac=jf, kwargs...), sys_mtk, coord_args
@@ -143,7 +162,7 @@ end
 
 # Create a function to calculate the gridded Jacobian.
 # ngrid is the number of grid cells.
-function mtk_jac_grid_func(sys_mtk, jacf, domain)
+function mtk_jac_grid_func(sys_mtk, jacf, domain, alg=MapBroadcast())
     nvar = length(unknowns(sys_mtk))
     II = CartesianIndices(tuple(size(domain)...))
     c1, c2, c3 = grid(domain)
@@ -158,18 +177,20 @@ function mtk_jac_grid_func(sys_mtk, jacf, domain)
     end
     function jac(u, p, t) # Out-of-place
         u = reshape(u, nvar, :)
-        BlockDiagonal([
-            begin
-                _u = view(u, :, r)
-                jacf(_u, p, t, c1[II[r][1]], c2[II[r][2]], c3[II[r][3]])
-            end for r ∈ 1:size(u, 2)
-        ])
+        calcJ(r) = jacf(view(u, :, r), p, t, c1[II[r][1]], c2[II[r][2]], c3[II[r][3]])
+        j1 = calcJ(1) # Do first block to get type and size
+        o = BlockDiagonal(Vector{typeof(j1)}(undef, size(u, 2)), size(j1, 1), alg)
+        blocks(o)[1] = j1
+        Threads.@threads for r ∈ 2:size(u, 2) # Now do the rest
+            blocks(o)[r] = calcJ(r)
+        end
+        o
     end
 end
 
 # Create a function to calculate the gridded time gradient.
 # ngrid is the number of grid cells.
-function mtk_tgrad_grid_func(sys_mtk, tgradf, domain)
+function mtk_tgrad_grid_func(sys_mtk, tgradf, domain, alg=MapBroadcast())
     nvar = length(unknowns(sys_mtk))
     II = CartesianIndices(tuple(size(domain)...))
     c1, c2, c3 = grid(domain)
@@ -185,7 +206,7 @@ function mtk_tgrad_grid_func(sys_mtk, tgradf, domain)
     end
 end
 
-function mtk_vjp_grid_func(sys_mtk, mtkf, domain)
+function mtk_vjp_grid_func(sys_mtk, mtkf, domain, alg=MapBroadcast())
     nvar = length(unknowns(sys_mtk))
     II = CartesianIndices(tuple(size(domain)...))
     c1, c2, c3 = grid(domain)
