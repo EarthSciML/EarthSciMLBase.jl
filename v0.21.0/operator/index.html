@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Operators · EarthSciMLBase.jl</title><meta name="title" content="Operators · EarthSciMLBase.jl"/><meta property="og:title" content="Operators · EarthSciMLBase.jl"/><meta property="twitter:title" content="Operators · EarthSciMLBase.jl"/><meta name="description" content="Documentation for EarthSciMLBase.jl."/><meta property="og:description" content="Documentation for EarthSciMLBase.jl."/><meta property="twitter:description" content="Documentation for EarthSciMLBase.jl."/><meta property="og:url" content="https://EarthSciML.github.io/EarthSciMLBase.jl/operator/"/><meta property="twitter:url" content="https://EarthSciML.github.io/EarthSciMLBase.jl/operator/"/><link rel="canonical" href="https://EarthSciML.github.io/EarthSciMLBase.jl/operator/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">EarthSciMLBase.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../composition/">Composition</a></li><li><a class="tocitem" href="../operator_compose/">Operator Composition</a></li><li><a class="tocitem" href="../param_to_var/">Parameter Replacement</a></li><li><a class="tocitem" href="../icbc/">Initial and Boundary Conditions</a></li><li><a class="tocitem" href="../advection/">Advection</a></li><li><a class="tocitem" href="../coord_transforms/">Coordinate Transforms</a></li><li class="is-active"><a class="tocitem" href>Operators</a><ul class="internal"><li><a class="tocitem" href="#ODE-System"><span>ODE System</span></a></li><li><a class="tocitem" href="#Operator"><span>Operator</span></a></li><li><a class="tocitem" href="#Domain"><span>Domain</span></a></li><li><a class="tocitem" href="#Coupling-and-Running-the-Simulation"><span>Coupling and Running the Simulation</span></a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><a class="tocitem" href="../example_all_together/">All Together</a></li></ul></li><li><a class="tocitem" href="../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Operators</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Operators</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/EarthSciML/EarthSciMLBase.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/EarthSciML/EarthSciMLBase.jl/blob/main/docs/src/operator.md#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Operators-for-Large-scale-3D-simulations"><a class="docs-heading-anchor" href="#Operators-for-Large-scale-3D-simulations">Operators for Large-scale 3D simulations</a><a id="Operators-for-Large-scale-3D-simulations-1"></a><a class="docs-heading-anchor-permalink" href="#Operators-for-Large-scale-3D-simulations" title="Permalink"></a></h1><p>In this documentation so far, we have talked about creating systems of ordinary differential equations in ModelingToolkit and then converting them to systems of partial differential equations to perform 1-, 2-, or 3-dimensional simulations. However, currently this does not work for large scale simulations.</p><p>While this ModelingToolkit functionality is being built, we have a different solution based on the <a href="#Operator"><code>Operator</code></a> type in this package. Using this system, we still define systems of ODEs to define behavior in a single grid cell, and we also have <a href="#Operator"><code>Operator</code></a> processes that define behavior between grid cells.</p><h2 id="ODE-System"><a class="docs-heading-anchor" href="#ODE-System">ODE System</a><a id="ODE-System-1"></a><a class="docs-heading-anchor-permalink" href="#ODE-System" title="Permalink"></a></h2><p>As an example, let&#39;s first define a system of ODEs:</p><pre><code class="language-julia hljs">using EarthSciMLBase
+using ModelingToolkit, DifferentialEquations
+using SciMLOperators, Plots
+using DomainSets
+using ModelingToolkit: t_nounits, D_nounits
+t = t_nounits
+D = D_nounits
+
+@parameters y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0
+@constants p = 1.0
+@variables(
+    u(t) = 1.0, v(t) = 1.0, x(t), y(t), z(t), windspeed(t)
+)
+Dt = Differential(t)
+
+eqs = [Dt(u) ~ -α * √abs(v) + lon,
+    Dt(v) ~ -α * √abs(u) + lat + lev * 1e-14,
+    windspeed ~ lat + lon + lev,
+    x ~ 1.0 / EarthSciMLBase.lon2meters(lat),
+    y ~ 1.0 / EarthSciMLBase.lat2meters,
+    z ~ 1.0 / lev,
+]
+sys = ODESystem(eqs, t; name=:sys)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} u\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{lon} - \sqrt{\left|v\left( t \right)\right|} \alpha \\
+\frac{\mathrm{d} v\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{lat} + 1 \cdot 10^{-14} \mathtt{lev} - \sqrt{\left|u\left( t \right)\right|} \alpha \\
+\mathtt{windspeed}\left( t \right) &amp;= \mathtt{lat} + \mathtt{lev} + \mathtt{lon} \\
+x\left( t \right) &amp;= \frac{1}{\mathtt{lon2m} \cos\left( \mathtt{lat} \right)} \\
+y\left( t \right) &amp;= \frac{1}{\mathtt{lat2meters}} \\
+z\left( t \right) &amp;= \frac{1}{\mathtt{lev}}
+\end{align}
+ \]</p><p>The equations above don&#39;t really have any physical meaning, but they include two state variables, some parameters, and a constant.  There is also a variable <code>windspeed</code> which is &quot;observed&quot; based on the parameters, rather than being a state variable, which will be important later.</p><h2 id="Operator"><a class="docs-heading-anchor" href="#Operator">Operator</a><a id="Operator-1"></a><a class="docs-heading-anchor-permalink" href="#Operator" title="Permalink"></a></h2><p>Next, we define an operator. To do so, first we create a new type that is a subtype of <a href="#Operator"><code>Operator</code></a>:</p><pre><code class="language-julia hljs">struct ExampleOp &lt;: Operator
+end</code></pre><p>Next, we need to define a method of <code>EarthSciMLBase.get_scimlop</code> for our operator. This method will be called to get a <a href="https://docs.sciml.ai/SciMLOperators/stable/interface/"><code>SciMLOperators.AbstractSciMLOperator</code></a> that will be used conjunction with the ModelingToolkit system above to integrate the simulation forward in time.</p><pre><code class="language-julia hljs">function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args,
+    domain::DomainInfo, u0, p, alg::MapAlgorithm)
+    α, trans1, trans2, trans3 = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
+
+    obs_f = EarthSciMLBase.build_coord_observed_function(mtk_sys, coord_args,
+        [α, trans1, trans2, trans3])
+
+    II = CartesianIndices(tuple(size(domain)...))
+    c1, c2, c3 = EarthSciMLBase.grid(domain)
+    obscache = zeros(EarthSciMLBase.dtype(domain), 4)
+    sz = length.(EarthSciMLBase.grid(domain))
+
+    function run(du, u, p, t) # In-place
+        u = reshape(u, :, sz...)
+        du = reshape(du, :, sz...)
+        II = CartesianIndices(tuple(sz...))
+        for ix ∈ 1:size(u, 1)
+            for I in II
+                # Demonstrate coordinate transforms and observed values
+                obs_f(obscache, view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
+                t1, t2, t3, fv = obscache
+                # Set derivative value.
+                du[ix, I] = (t1 + t2 + t3) * fv
+            end
+        end
+        nothing
+    end
+    function run(u, p, t) # Out-of-place
+        u = reshape(u, :, sz...)
+        II = CartesianIndices(size(u)[2:end])
+        du = vcat([
+            begin
+                t1, t2, t3, fv = obs_f(view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
+                (t1 + t2 + t3) * fv
+            end for ix ∈ 1:size(u, 1), I in II
+        ]...)
+        reshape(du, :)
+    end
+    FunctionOperator(run, reshape(u0, :), p=p)
+end
+nothing</code></pre><p>The function above also doesn&#39;t have any physical meaning, but it demonstrates some functionality of the <code>Operator</code> &quot;<code>s</code>&quot;. First, it retrieves a function to get the current value of an observed variable in our ODE system using the <code>obs_functions</code> argement, and it demonstrates how to call the resulting  function to get that value. It also demonstrates how to get coordinate transforms using the <code>coordinate_transform_functions</code> argument. Coordinate transforms are discussed in more detail in the documentation for the <a href="../api/#EarthSciMLBase.DomainInfo"><code>DomainInfo</code></a> type.</p><p>We also need to define a method of <code>EarthSciMLBase.get_needed_vars</code>, which will return which variables are needed by the operator.</p><pre><code class="language-julia hljs">function EarthSciMLBase.get_needed_vars(::ExampleOp, csys, mtk_sys, domain::DomainInfo)
+    return [mtk_sys.sys₊windspeed, mtk_sys.sys₊x, mtk_sys.sys₊y, mtk_sys.sys₊z]
+end
+nothing</code></pre><h2 id="Domain"><a class="docs-heading-anchor" href="#Domain">Domain</a><a id="Domain-1"></a><a class="docs-heading-anchor-permalink" href="#Domain" title="Permalink"></a></h2><p>Once we have an ODE system and an operator, the final component we need is a domain to run the simulation on. Defining a domain is covered in more depth in the documentation for the <a href="../api/#EarthSciMLBase.DomainInfo"><code>DomainInfo</code></a> type, but for now we&#39;ll just define a simple domain:</p><pre><code class="language-julia hljs">t_min = 0.0
+lon_min, lon_max = -π, π
+lat_min, lat_max = -0.45π, 0.45π
+t_max = 11.5
+
+indepdomain = t ∈ Interval(t_min, t_max)
+
+partialdomains = [lon ∈ Interval(lon_min, lon_max),
+    lat ∈ Interval(lat_min, lat_max),
+    lev ∈ Interval(1, 3)]
+
+domain = DomainInfo(
+    partialderivatives_δxyδlonlat,
+    constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
+    grid_spacing = [0.1π, 0.1π, 1])</code></pre><p>Note that our domain includes a coordinate transform to convert from degrees latitude and longitude to meters. Our domain specification also includes grid spacing the the <code>lon</code>, <code>lat</code>, and <code>lev</code> coordinates, which we set as 0.1π, 0.1π, and 1, respectively.</p><div class="admonition is-warning"><header class="admonition-header">Warning</header><div class="admonition-body"><p>Initial and boundary conditions are not fully implemented for this case, so regardless of the conditions you specify, the initial conditions will be the default values of the variables in the ODE system, and the boundary conditions will be zero.</p></div></div><h2 id="Coupling-and-Running-the-Simulation"><a class="docs-heading-anchor" href="#Coupling-and-Running-the-Simulation">Coupling and Running the Simulation</a><a id="Coupling-and-Running-the-Simulation-1"></a><a class="docs-heading-anchor-permalink" href="#Coupling-and-Running-the-Simulation" title="Permalink"></a></h2><p>Next, initialize our operator, giving the the <code>windspeed</code> observed variable, and we can couple our ODESystem, Operator, and Domain together into a single model:</p><pre><code class="language-julia hljs">op = ExampleOp()
+
+csys = couple(sys, op, domain)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">CoupledSystem containing 1 system(s), 1 operator(s), and 0 callback(s).</code></pre><p>Finally, we can choose a <a href="../api/#EarthSciMLBase.SolverStrategy"><code>EarthSciMLBase.SolverStrategy</code></a> and run the simulation. We choose the <a href="../api/#EarthSciMLBase.SolverStrangThreads"><code>SolverStrangThreads</code></a> strategy, which needs us to  specify an ODE solver from the <a href="https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/">options available in DifferentialEquations.jl</a> for both the MTK system. We choose the <code>Tsit5</code> solver. Then we create an <a href="https://docs.sciml.ai/DiffEqDocs/stable/types/ode_types/">ODEProblem</a> which can be used to run the simulation. Finally, we solve the problem using the <a href="https://docs.sciml.ai/DiffEqDocs/stable/basics/common_solver_opts/#CommonSolve.solve-Tuple%7BSciMLBase.AbstractDEProblem,%20Vararg%7BAny%7D%7D">solve</a> function.  At this point we need to choose a solver for the Operator part of the system, and we choose the <code>Euler</code> solver. We also choose a splitting time step of 1.0 seconds, which we pass both to our <code>SolverStrangThreads</code> strategy and to the <code>solve</code> function.</p><pre><code class="language-julia hljs">dt = 1.0 # Splitting time step
+st = SolverStrangThreads(Tsit5(), 1.0)
+
+prob = ODEProblem(csys, st)
+sol = solve(prob, Euler(); dt=1.0)</code></pre><p>After the simulation finishes, we can plot the result:</p><pre><code class="language-julia hljs">anim = @animate for i ∈ 1:length(sol.u)
+    u = reshape(sol.u[i], :, size(domain)...)
+    plot(
+        heatmap(u[1, :, :, 1]),
+        heatmap(u[1, :, :, 1]),
+    )
+end
+gif(anim, fps = 15)</code></pre><img src="bc0dd2e4.gif" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../coord_transforms/">« Coordinate Transforms</a><a class="docs-footer-nextpage" href="../example_all_together/">All Together »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.8.1 on <span class="colophon-date" title="Monday 24 February 2025 05:39">Monday 24 February 2025</span>. Using Julia version 1.11.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
