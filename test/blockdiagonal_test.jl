@@ -32,6 +32,16 @@ end
     end
 end
 
+@testset "backslash" begin
+    @testset "Vector" begin
+        x = BlockDiagonal([rand(3, 3), rand(3, 3)])
+        y = rand(6)
+        z1 = lu(x) \ y
+        z2 = lu(Matrix(x)) \ y
+        @test z1 ≈ z2
+    end
+end
+
 @testset "Indexing" begin
     x = BlockDiagonal([reshape(1:9, 3, 3), reshape(10:18, 3, 3)])
 
@@ -48,4 +58,11 @@ end
         x[4:6, 4:6] .= reshape(10:18, 3, 3)
         @test all(x.blocks .≈ [reshape(1:9, 3, 3), reshape(10:18, 3, 3)])
     end
+end
+
+@testset "plus" begin
+    x = BlockDiagonal([zeros(3, 3), zeros(3, 3)])
+    y = x + UniformScaling(1.0)
+    @test y isa BlockDiagonal
+    @test y ≈ I(6)
 end

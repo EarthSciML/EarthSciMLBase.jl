@@ -8,7 +8,8 @@ using Test
 struct ExampleOp <: Operator
 end
 
-function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args, domain::DomainInfo, u0, p)
+function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args,
+        domain::DomainInfo, u0, p, alg::MapAlgorithm)
     α, x, y, z = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
 
     obs_f = EarthSciMLBase.build_coord_observed_function(mtk_sys, coord_args, [α, x, y, z])
