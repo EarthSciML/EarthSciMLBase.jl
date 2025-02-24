@@ -19,15 +19,19 @@ using ModelingToolkit: t_nounits, D_nounits
 t = t_nounits
 D = D_nounits
 
-@parameters y lon = 0.0 lat = 0.0 lev = 1.0 α = 10.0
+@parameters y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0
 @constants p = 1.0
 @variables(
-    u(t) = 1.0, v(t) = 1.0, x(t) = 1.0, y(t) = 1.0, windspeed(t) = 1.0
+    u(t) = 1.0, v(t) = 1.0, x(t), y(t), z(t), windspeed(t)
 )
+Dt = Differential(t)
 
-eqs = [D(u) ~ -α * √abs(v) + lon,
-    D(v) ~ -α * √abs(u) + lat + 1e-14 * lev,
+eqs = [Dt(u) ~ -α * √abs(v) + lon,
+    Dt(v) ~ -α * √abs(u) + lat + lev * 1e-14,
     windspeed ~ lat + lon + lev,
+    x ~ 1.0 / EarthSciMLBase.lon2meters(lat),
+    y ~ 1.0 / EarthSciMLBase.lat2meters,
+    z ~ 1.0 / lev,
 ]
 sys = ODESystem(eqs, t; name=:sys)
 ```
@@ -47,26 +51,26 @@ end
 Next, we need to define a method of `EarthSciMLBase.get_scimlop` for our operator. This method will be called to get a [`SciMLOperators.AbstractSciMLOperator`](https://docs.sciml.ai/SciMLOperators/stable/interface/) that will be used conjunction with the ModelingToolkit system above to integrate the simulation forward in time.
 
 ```@example sim
-function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, domain::DomainInfo, u0, p)
+function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args,
+    domain::DomainInfo, u0, p, alg::MapAlgorithm)
     α, trans1, trans2, trans3 = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
 
-    obs_f! = ModelingToolkit.build_explicit_observed_function(mtk_sys,
-        [α, trans1, trans2, trans3], checkbounds=false, return_inplace=true)[2]
+    obs_f = EarthSciMLBase.build_coord_observed_function(mtk_sys, coord_args,
+        [α, trans1, trans2, trans3])
 
-    setp! = EarthSciMLBase.coord_setter(mtk_sys, domain)
+    II = CartesianIndices(tuple(size(domain)...))
+    c1, c2, c3 = EarthSciMLBase.grid(domain)
     obscache = zeros(EarthSciMLBase.dtype(domain), 4)
     sz = length.(EarthSciMLBase.grid(domain))
 
-    function run(du, u, p, t)
+    function run(du, u, p, t) # In-place
         u = reshape(u, :, sz...)
         du = reshape(du, :, sz...)
-        II = CartesianIndices(size(u)[2:end])
+        II = CartesianIndices(tuple(sz...))
         for ix ∈ 1:size(u, 1)
             for I in II
                 # Demonstrate coordinate transforms and observed values
-                uu = view(u, :, I)
-                setp!(p, I)
-                obs_f!(obscache, u, p, t)
+                obs_f(obscache, view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
                 t1, t2, t3, fv = obscache
                 # Set derivative value.
                 du[ix, I] = (t1 + t2 + t3) * fv
@@ -74,7 +78,18 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
         end
         nothing
     end
-    FunctionOperator(run, u0, p=p)
+    function run(u, p, t) # Out-of-place
+        u = reshape(u, :, sz...)
+        II = CartesianIndices(size(u)[2:end])
+        du = vcat([
+            begin
+                t1, t2, t3, fv = obs_f(view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
+                (t1 + t2 + t3) * fv
+            end for ix ∈ 1:size(u, 1), I in II
+        ]...)
+        reshape(du, :)
+    end
+    FunctionOperator(run, reshape(u0, :), p=p)
 end
 nothing
 ```
@@ -89,8 +104,7 @@ We also need to define a method of `EarthSciMLBase.get_needed_vars`, which will 
 
 ```@example sim
 function EarthSciMLBase.get_needed_vars(::ExampleOp, csys, mtk_sys, domain::DomainInfo)
-    ts = EarthSciMLBase.partialderivative_transform_vars(mtk_sys, domain)
-    return [mtk_sys.sys₊windspeed, ts...]
+    return [mtk_sys.sys₊windspeed, mtk_sys.sys₊x, mtk_sys.sys₊y, mtk_sys.sys₊z]
 end
 nothing
 ```
