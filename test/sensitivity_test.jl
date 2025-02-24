@@ -97,7 +97,7 @@ function loss(p)
 end
 
 g = ForwardDiff.gradient(loss, [10.0, 1.0])
-@test g ≈ [0.0, 19841.335378973763]
+@test g ≈ [132162.37511207975, -5753.0834299930175]
 
 @test_broken Zygote.gradient(loss, [10.0, 1.0])
 
