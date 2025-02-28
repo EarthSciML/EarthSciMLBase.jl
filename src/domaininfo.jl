@@ -51,7 +51,7 @@ struct DomainInfo{T}
     "The time offset for the domain."
     time_offset::T
 
-    function DomainInfo(pdfs, gs, icbc, sr, to::T) where T
+    function DomainInfo(pdfs, gs, icbc, sr, to::T) where {T}
         new{T}(pdfs, gs, icbc, sr, to)
     end
     function DomainInfo(icbc::ICBCcomponent...; dtype=Float64, grid_spacing=nothing,
@@ -120,8 +120,10 @@ struct DomainInfo{T}
     end
 end
 
-Base.size(d::DomainInfo) = (length(g) for g ∈ grid(d))
+Base.size(d::DomainInfo) = tuple((length(g) for g ∈ grid(d))...)
+Base.size(d::DomainInfo, staggering::NTuple{3, Bool}) = tuple((length(g) for g ∈ grid(d, staggering))...)
 Base.size(d::DomainInfo, i) = length(grid(d)[i])
+Base.size(d::DomainInfo, staggering::NTuple{3, Bool}, i) = length(grid(d, staggering)[i])
 
 """
 $(SIGNATURES)
@@ -137,13 +139,32 @@ $(SIGNATURES)
 Return the ranges representing the discretization of the partial independent
 variables for this domain, based on the discretization intervals given in `Δs`.
 """
-function grid(d::DomainInfo{T}) where T
+function grid(d::DomainInfo{T}) where {T}
     if !((d.grid_spacing isa Base.AbstractVecOrTuple) &&
-        (length(pvars(d)) == length(d.grid_spacing)))
+         (length(pvars(d)) == length(d.grid_spacing)))
         throw(ArgumentError("The number of partial independent variables ($(length(pvars(d)))) must equal the number of grid spacings provided ($(d.grid_spacing))."))
     end
     endpts = endpoints(d)
     [s:d:e for ((s, e), d) in zip(endpts, d.grid_spacing)]
+end
+function grid(d::DomainInfo{T}, staggering) where {T}
+    if !((d.grid_spacing isa Base.AbstractVecOrTuple) &&
+         (length(pvars(d)) == length(d.grid_spacing)))
+        throw(ArgumentError("The number of partial independent variables ($(length(pvars(d)))) must equal the number of grid spacings provided ($(d.grid_spacing))."))
+    end
+    endpts = endpoints(d)
+    @assert length(staggering) == length(endpts) "The number of staggering values $(length(staggering)) must match the number of partial independent variables $(length(endpts))."
+    @assert all(isa.(staggering, (Bool,))) "Staggering must be a vector of booleans."
+    g_nostagger = [s:d:e for ((s, e), d) in zip(endpts, d.grid_spacing)]
+    endpts = [staggering[i] ? (e[1] - d.grid_spacing[i] / 2, e[2] + d.grid_spacing[i] / 2) : e
+              for (i, e) in enumerate(endpts)]
+    g = [s:d:e for ((s, e), d) in zip(endpts, d.grid_spacing)]
+    for (i, g) in enumerate(g)
+        if staggering[i]
+            @assert length(g) == length(g_nostagger[i]) + 1 "Staggering was not applied correctly. (Probably a rounding error.)"
+        end
+    end
+    g
 end
 
 """
@@ -152,7 +173,7 @@ $(SIGNATURES)
 Return the endpoints of the partial independent
 variables for this domain.
 """
-function endpoints(d::DomainInfo{T}) where T
+function endpoints(d::DomainInfo{T}) where {T}
     i = 1
     rngs = []
     for icbc ∈ d.icbc
@@ -274,7 +295,7 @@ function partialderivative_transform_vars(mtk_sys, di::DomainInfo)
     vs = []
     for (i, x) in enumerate(xs)
         n = Symbol("δ$(x)_transform")
-        v = only(@variables $n(iv) [unit=ModelingToolkit.get_unit(ts[i]),
+        v = only(@variables $n(iv) [unit = ModelingToolkit.get_unit(ts[i]),
             description = "Transform factor for $(x)"])
         push!(vs, v)
     end

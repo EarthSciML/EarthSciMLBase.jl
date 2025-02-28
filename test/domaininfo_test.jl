@@ -219,6 +219,7 @@ end
 
     @test Symbol.(pvars(di)) == [:x, :y]
     @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0]
+    @test grid(di, (true, false)) == [-0.05:0.1:1.05, 0.0:0.1:2.0]
     @test get_tspan(di) == (1.7040672e9, 1.704078e9)
     @test length(di.partial_derivative_funcs) == 0
 end
