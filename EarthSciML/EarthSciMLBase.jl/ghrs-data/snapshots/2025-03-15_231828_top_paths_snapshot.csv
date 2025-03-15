@@ -1,0 +1,7 @@
+url_path,views_total,views_unique
+/EarthSciML/EarthSciMLBase.jl,8,4
+/EarthSciML/EarthSciMLBase.jl/blob/main/src/blockdiagonal.jl,2,1
+/EarthSciML/EarthSciMLBase.jl/tree/main/src,2,1
+/EarthSciML/EarthSciMLBase.jl/blob/b38c3f0083fda1512be25046db6fbfb6d377bf82/src/domaininfo.jl,1,1
+/EarthSciML/EarthSciMLBase.jl/blob/b38c3f0083fda1512be25046db6fbfb6d377bf82/src/param_to_var.jl,1,1
+/EarthSciML/EarthSciMLBase.jl/blob/main/src/coupled_system.jl,1,1
