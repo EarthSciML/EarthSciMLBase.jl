@@ -3,8 +3,8 @@
 The `Advection` function adds advection to a system of equations. This is useful for modeling the transport of a substance by a fluid.
 Advection is implemented with the [`Advection`](@ref) type.
 
-> [!WARNING]
-> Fully symbolic partial differential equations like those shown here don't currently work on domains that have a large number of grid cells. See [here](https://docs.sciml.ai/MethodOfLines/stable/performance/) for additional information.
+!warning
+Fully symbolic partial differential equations like those shown here don't currently work on domains that have a large number of grid cells. See [here](https://docs.sciml.ai/MethodOfLines/stable/performance/) for additional information.
 
 To demonstrate how this can work, we will start with a simple system of equations:
 
