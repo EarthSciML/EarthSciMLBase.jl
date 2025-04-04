@@ -5,20 +5,22 @@ add_dims(equation, vars, dims)
 ```
 
 Add the given dimensions to each variable in `vars` in the given expression
-or equation. 
+or equation.
 Each variable in `vars` must be unidimensional, i.e.
 defined like `@variables u(t)` rather than `@variables u(..)`.
 
 # Example:
+
 ```jldoctest
 using EarthSciMLBase, ModelingToolkit
 
 @parameters x y k t
 @variables u(t) q(t)
-exp = 2u + 3k*q + 1
+exp = 2u + 3k * q + 1
 EarthSciMLBase.add_dims(exp, [u, q], [x, y, t])
 
 # output
+
 1 + 2u(x, y, t) + 3k*q(x, y, t)
 ```
 """

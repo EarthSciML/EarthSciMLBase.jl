@@ -19,13 +19,15 @@ using Plots
 # Create our independent variable `t` and our partially-independent variables `x` and `y`.
 @parameters x y
 
-struct ExampleSys1Coupler sys end
+struct ExampleSys1Coupler
+    sys
+end
 function ExampleSys1()
     @species c₁(t)=5.0 c₂(t)=5.0
     rs = ReactionSystem(
         [Reaction(2.0, [c₁], [c₂])],
-        t; name=:Sys1, combinatoric_ratelaws=false)
-    convert(ODESystem, complete(rs), metadata=Dict(:coupletype=>ExampleSys1Coupler))
+        t; name = :Sys1, combinatoric_ratelaws = false)
+    convert(ODESystem, complete(rs), metadata = Dict(:coupletype => ExampleSys1Coupler))
 end
 
 ExampleSys1()
@@ -34,23 +36,25 @@ ExampleSys1()
 Our second example system is a simple ODE system, with the same two variables.
 
 ```@example ex1
-struct ExampleSys2Coupler sys end
+struct ExampleSys2Coupler
+    sys
+end
 function ExampleSys2()
     @variables c₁(t)=5.0 c₂(t)=5.0
     @parameters p₁=1.0 p₂=0.5 x=1 y=1
     ODESystem(
         [D(c₁) ~ -p₁, D(c₂) ~ p₂],
-        t, [c₁, c₂], [p₁, p₂, x, y]; name=:Sys2, 
-        metadata=Dict(:coupletype=>ExampleSys2Coupler))
+        t, [c₁, c₂], [p₁, p₂, x, y]; name = :Sys2,
+        metadata = Dict(:coupletype => ExampleSys2Coupler))
 end
 
 ExampleSys2()
 ```
 
 Now, we specify what should happen when we couple the two systems together.
-In this case, we want the the derivative of the composed system to 
+In this case, we want the the derivative of the composed system to
 be equal to the sum of the derivatives of the two systems.
-We can do that using the [`operator_compose`](@ref) function 
+We can do that using the [`operator_compose`](@ref) function
 from this package.
 
 ```@example ex1
@@ -62,7 +66,7 @@ end
 nothing # hide
 ```
 
-Once we specify all of the above, it is simple to create our two individual systems and then couple them together. 
+Once we specify all of the above, it is simple to create our two individual systems and then couple them together.
 
 ```@example ex1
 sys1 = ExampleSys1()
@@ -86,13 +90,13 @@ observed(simplified_sys)
 We can also run simulations using this system:
 
 ```@example ex1
-odeprob = ODEProblem(simplified_sys, [], (0.0,10.0), [])
+odeprob = ODEProblem(simplified_sys, [], (0.0, 10.0), [])
 odesol = solve(odeprob)
 plot(odesol)
 ```
 
 Once we've confirmed that our model works in a 0D "box model" setting,
-we can expand it to 1, 2, or 3 dimensions using by adding in initial 
+we can expand it to 1, 2, or 3 dimensions using by adding in initial
 and boundary conditions.
 We will also add in advection using constant-velocity wind fields
 add the same time.
@@ -103,7 +107,7 @@ x_max = y_max = t_max = 1.0
 domain = DomainInfo(
     constIC(4.0, t ∈ Interval(t_min, t_max)),
     periodicBC(x ∈ Interval(x_min, x_max)),
-    zerogradBC(y ∈ Interval(y_min, y_max)),
+    zerogradBC(y ∈ Interval(y_min, y_max))
 )
 
 sys_pde = couple(sys, domain, ConstantWind(t, 1.0, 1.0), Advection())
@@ -124,18 +128,20 @@ sys_pde_mtk.bcs
 Finally, we can run a simulation using this system:
 
 ```@example ex1
-discretization = MOLFiniteDifference([x=>10, y=>10], t, approx_order=2)
+discretization = MOLFiniteDifference([x => 10, y => 10], t, approx_order = 2)
 @time pdeprob = discretize(sys_pde_mtk, discretization)
-@time pdesol = solve(pdeprob, Tsit5(), saveat=0.1)
+@time pdesol = solve(pdeprob, Tsit5(), saveat = 0.1)
 
 # Plot the solution.
 discrete_x, discrete_y, discrete_t = pdesol[x], pdesol[y], pdesol[t]
 @variables Sys1₊c₁(..) Sys1₊c₂(..)
 solc1, solc2 = pdesol[Sys1₊c₁(t, x, y)], pdesol[Sys1₊c₂(t, x, y)]
 anim = @animate for k in 1:length(discrete_t)
-    p1 = heatmap(solc1[k, 1:end-1, 1:end-1], title="c₁ t=\$(discrete_t[k])", clim=(0,4.0), lab=:none)
-    p2 = heatmap(solc2[k, 1:end-1, 1:end-1], title="c₂ t=\$(discrete_t[k])", clim=(0,7.0), lab=:none)
-    plot(p1, p2, layout=(1,2), size=(800,400))
+    p1 = heatmap(solc1[k, 1:(end - 1), 1:(end - 1)],
+        title = "c₁ t=\$(discrete_t[k])", clim = (0, 4.0), lab = :none)
+    p2 = heatmap(solc2[k, 1:(end - 1), 1:(end - 1)],
+        title = "c₂ t=\$(discrete_t[k])", clim = (0, 7.0), lab = :none)
+    plot(p1, p2, layout = (1, 2), size = (800, 400))
 end
 gif(anim, fps = 8)
 ```

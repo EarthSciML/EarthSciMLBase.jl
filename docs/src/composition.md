@@ -10,14 +10,16 @@ using ModelingToolkit, Catalyst, EarthSciMLBase
 using ModelingToolkit: t_nounits
 t = t_nounits
 
-struct PhotolysisCoupler sys end
-function Photolysis(; name=:Photolysis)
+struct PhotolysisCoupler
+    sys
+end
+function Photolysis(; name = :Photolysis)
     @variables j_NO2(t)
     eqs = [
-        j_NO2 ~ max(sin(t/86400),0)
+        j_NO2 ~ max(sin(t / 86400), 0)
     ]
-    ODESystem(eqs, t, [j_NO2], [], name=name,
-        metadata=Dict(:coupletype=>PhotolysisCoupler))
+    ODESystem(eqs, t, [j_NO2], [], name = name,
+        metadata = Dict(:coupletype => PhotolysisCoupler))
 end
 
 Photolysis()
@@ -27,33 +29,41 @@ You can see that the system defined above is mostly a standard ModelingToolkit O
 except for two things:
 
 The first unique part is that we define a `PhotolysisCoupler` type:
+
 ```julia
-struct PhotolysisCoupler sys end
+struct PhotolysisCoupler
+    sys
+end
 ```
+
 It is important that this type is a struct, and that the struct has a single field named `sys`.
-When defining your own coupled systems, you can just copy the line of code above but change the 
+When defining your own coupled systems, you can just copy the line of code above but change the
 name of the type (i.e., change it to something besides `PhotolysisCoupler`).
 
 The second unique part is that we define some metadata for our ODESystem to tell it what coupling
 type to use:
+
 ```julia
-metadata=Dict(:coupletype=>PhotolysisCoupler)
+metadata = Dict(:coupletype => PhotolysisCoupler)
 ```
+
 Again, when making your own components, just copy the code above but change `PhotolysisCoupler` to something else.
 
 Let's follow the same process for some additional components:
 
 ```@example composition
-struct ChemistryCoupler sys end
-function Chemistry(; name=:Chemistry)
+struct ChemistryCoupler
+    sys
+end
+function Chemistry(; name = :Chemistry)
     @parameters jNO2
     @species NO2(t)
     rxs = [
         Reaction(jNO2, [NO2], [], [1], [])
     ]
-    rsys = ReactionSystem(rxs, t, [NO2], [jNO2]; 
-        combinatoric_ratelaws=false, name=name)
-    convert(ODESystem, complete(rsys), metadata=Dict(:coupletype=>ChemistryCoupler))
+    rsys = ReactionSystem(rxs, t, [NO2], [jNO2];
+        combinatoric_ratelaws = false, name = name)
+    convert(ODESystem, complete(rsys), metadata = Dict(:coupletype => ChemistryCoupler))
 end
 
 Chemistry()
@@ -63,13 +73,15 @@ For our chemistry component above, because it's is originally a ReactionSystem i
 ODESystem, we convert it to an ODESystem before adding the metadata.
 
 ```@example composition
-struct EmissionsCoupler sys end
-function Emissions(; name=:Emissions)
+struct EmissionsCoupler
+    sys
+end
+function Emissions(; name = :Emissions)
     @parameters emis = 1
     @variables NO2(t)
     eqs = [NO2 ~ emis]
-    ODESystem(eqs, t; name=name,
-        metadata=Dict(:coupletype=>EmissionsCoupler))
+    ODESystem(eqs, t; name = name,
+        metadata = Dict(:coupletype => EmissionsCoupler))
 end
 
 Emissions()
@@ -80,7 +92,7 @@ We can do this by defining a coupling function (as a method of [`EarthSciMLBase.
 Each coupling function should have the signature `EarthSciMLBase.couple2(a::ACoupler, b::BCoupler)::ConnectorSystem`, and should assume that the two `ODESystem`s are inside their respective couplers in the `sys` field.
 It should make any edits to the components as needed and return a [`ConnectorSystem`](@ref) which defines the relationship between the two components.
 
-The code below defines a method for coupling the `Chemistry` and `Photolysis` components. 
+The code below defines a method for coupling the `Chemistry` and `Photolysis` components.
 First, it uses the [`param_to_var`](@ref param_to_var) function to convert the photolysis rate parameter `jNO2` from the `Chemistry` component to a variable, then it creates a new `Chemistry` component with the updated photolysis rate, and finally, it creates a [`ConnectorSystem`](@ref ConnectorSystem) object that sets the `j_NO2` variable from the `Photolysis` component equal to the `jNO2` variable from the `Chemistry` component.
 The next effect is that the photolysis rate in the `Chemistry` component is now controlled by the `Photolysis` component.
 
@@ -92,6 +104,7 @@ function EarthSciMLBase.couple2(c::ChemistryCoupler, p::PhotolysisCoupler)
 end
 nothing # hide
 ```
+
 Next, we define a method for coupling the `Chemistry` and `Emissions` components.
 To do this we use the [`operator_compose`](@ref operator_compose) function to add the `NO2` species from the `Emissions` component to the time derivative of `NO2` in the `Chemistry` component.
 
@@ -120,8 +133,10 @@ using CairoMakie, GraphMakie
 
 g = graph(model)
 
-f, ax, p = graphplot(g; ilabels=labels(g))
-hidedecorations!(ax); hidespines!(ax); ax.aspect = DataAspect()
+f, ax, p = graphplot(g; ilabels = labels(g))
+hidedecorations!(ax);
+hidespines!(ax);
+ax.aspect = DataAspect();
 
 f
 ```

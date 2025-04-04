@@ -99,7 +99,9 @@ function couple(systems...)::CoupledSystem
     o
 end
 
-"Return the coupling type associated with the given system."
+"""
+Return the coupling type associated with the given system.
+"""
 function get_coupletype(sys::ModelingToolkit.AbstractSystem)
     md = ModelingToolkit.get_metadata(sys)
     if (!isa(md, Dict)) || (:coupletype ∉ keys(md))
@@ -244,8 +246,7 @@ end
 """
 Types that implement an:
 
-`init_callback(x, sys::CoupledSystem, sys_mtk, coord_args, domain::DomainInfo,
-    alg::MapAlgorithm)::DECallback`
+`init_callback(x, sys::CoupledSystem, sys_mtk, coord_args, domain::DomainInfo, alg::MapAlgorithm)::DECallback`
 
 method can also be coupled into a `CoupledSystem`.
 The `init_callback` function will be run before the simulator is run

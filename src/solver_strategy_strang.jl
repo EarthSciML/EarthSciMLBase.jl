@@ -5,10 +5,11 @@ A simulator strategy based on Strang splitting.
 Choose either `SimulatorStrangThreads` or `SimulatorStrangSerial` to run the simulation.
 
 kwargs for ODEProblem constructor:
-- u0: initial condtions; if "nothing", default values will be used.
-- p: parameters; if "nothing", default values will be used.
-- nonstiff_params: parameters for the non-stiff ODE system.
-- name: name of the system.
+
+  - u0: initial condtions; if "nothing", default values will be used.
+  - p: parameters; if "nothing", default values will be used.
+  - nonstiff_params: parameters for the non-stiff ODE system.
+  - name: name of the system.
 """
 abstract type SolverStrang <: SolverStrategy end
 
@@ -125,7 +126,9 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = no
         dt = st.timestep, kwargs...)
 end
 
-"A callback to periodically run the stiff solver."
+"""
+A callback to periodically run the stiff solver.
+"""
 function stiff_callback(
         setp!, u0::AbstractArray{T}, st::SolverStrang, IIchunks, integrators) where {T}
     sz = size(u0)
@@ -142,7 +145,9 @@ function stiff_callback(
     )
 end
 
-"Take a step using the ODE solver."
+"""
+Take a step using the ODE solver.
+"""
 function ode_step!(
         setp!, ::SolverStrangThreads, u, IIchunks, integrators, time, step_length)
     threaded_ode_step!(setp!, u, IIchunks, integrators, time, step_length)
@@ -151,7 +156,9 @@ function ode_step!(setp!, ::SolverStrangSerial, u, IIchunks, integrators, time, 
     single_ode_step!(setp!, u, IIchunks[1], integrators[1], time, step_length)
 end
 
-"Take a step using the ODE solver."
+"""
+Take a step using the ODE solver.
+"""
 function threaded_ode_step!(setp!, u, IIchunks, integrators, time, step_length)
     tasks = map(1:length(IIchunks)) do ithread
         Threads.@spawn single_ode_step!(
@@ -162,7 +169,9 @@ function threaded_ode_step!(setp!, u, IIchunks, integrators, time, step_length)
     nothing
 end
 
-"Take a step using the ODE solver with the given IIchunk (grid cell interator) and integrator."
+"""
+Take a step using the ODE solver with the given IIchunk (grid cell interator) and integrator.
+"""
 function single_ode_step!(setp!, u, IIchunk, integrator, time, step_length)
     for ii in IIchunk
         uii = @view u[:, ii]

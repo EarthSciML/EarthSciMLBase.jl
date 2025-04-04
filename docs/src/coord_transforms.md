@@ -31,7 +31,7 @@ domain = DomainInfo(
     constIC(0.0, t ∈ Interval(0.0f0, 3600.0f0)),
     periodicBC(lat ∈ Interval(deg2rad(-90.0f0), deg2rad(90.0f0))),
     periodicBC(lon ∈ Interval(deg2rad(-180.0f0), deg2rad(180.0f0))),
-    zerogradBC(lev ∈ Interval(1.0f0, 10.0f0)),
+    zerogradBC(lev ∈ Interval(1.0f0, 10.0f0))
 );
 ```
 
@@ -45,7 +45,7 @@ domain = DomainInfo(
 )
 ```
 
-After we include the coordinate transforms in our domain, in general everything should be handled automatically. 
+After we include the coordinate transforms in our domain, in general everything should be handled automatically.
 The coordinate transforms may also be automatically added when different model components are coupled together, so you may not need to worry about them at all in many cases.
 However, if you would like to use the transformed partial derivatives, for example to create a new PDE equation system, you can get them using the [`EarthSciMLBase.partialderivatives`](@ref) function:
 
@@ -59,7 +59,7 @@ Then we can calculate the symbolic partial derivative of a variable by just call
 ```@example trans
 @variables u(t)
 
-[δs[i](u) for i ∈ eachindex(δs)]
+[δs[i](u) for i in eachindex(δs)]
 ```
 
 You can see an example of how this is implemented in the source code for the [`Advection`](@ref) model component.

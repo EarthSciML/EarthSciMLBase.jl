@@ -19,13 +19,14 @@ function ExampleSys()
     @parameters x=1 y=2
     eqs = [
         D(u) ~ √abs(v),
-        D(v) ~ √abs(u),
+        D(v) ~ √abs(u)
     ]
-    ODESystem(eqs, t, [u, v], [x, y]; name=:Docs₊Example)
+    ODESystem(eqs, t, [u, v], [x, y]; name = :Docs₊Example)
 end
 
 ExampleSys()
 ```
+
 Next, we specify our initial and boundary conditions using the [`DomainInfo`](@ref) type.
 We initialize [`DomainInfo`](@ref) with sets of initial and boundary conditions.
 In the example below, we set constant initial conditions using [`constIC`](@ref) and constant boundary conditions using [`constBC`](@ref).
@@ -41,8 +42,8 @@ icbc = DomainInfo(
     constIC(4.0, t ∈ Interval(t_min, t_max)),
     constBC(16.0,
         x ∈ Interval(x_min, x_max),
-        y ∈ Interval(y_min, y_max),
-    ),
+        y ∈ Interval(y_min, y_max)
+    )
 )
 nothing # hide
 ```

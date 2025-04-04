@@ -248,7 +248,9 @@ function remove_extra_defaults(original_sys, simplified_sys)
         parameters = parameters(original_sys))
 end
 
-"Initialize the state variables."
+"""
+Initialize the state variables.
+"""
 function init_u(mtk_sys::ODESystem, d::DomainInfo)
     vars = unknowns(mtk_sys)
     dflts = ModelingToolkit.get_defaults(mtk_sys)

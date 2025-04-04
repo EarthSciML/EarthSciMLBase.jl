@@ -19,11 +19,9 @@ using ModelingToolkit: t_nounits, D_nounits
 t = t_nounits
 D = D_nounits
 
-@parameters y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0
+@parameters y lon=0.0 lat=0.0 lev=1.0 t α=10.0
 @constants p = 1.0
-@variables(
-    u(t) = 1.0, v(t) = 1.0, x(t), y(t), z(t), windspeed(t)
-)
+@variables(u(t)=1.0, v(t)=1.0, x(t), y(t), z(t), windspeed(t))
 Dt = Differential(t)
 
 eqs = [Dt(u) ~ -α * √abs(v) + lon,
@@ -31,12 +29,12 @@ eqs = [Dt(u) ~ -α * √abs(v) + lon,
     windspeed ~ lat + lon + lev,
     x ~ 1.0 / EarthSciMLBase.lon2meters(lat),
     y ~ 1.0 / EarthSciMLBase.lat2meters,
-    z ~ 1.0 / lev,
+    z ~ 1.0 / lev
 ]
-sys = ODESystem(eqs, t; name=:sys)
+sys = ODESystem(eqs, t; name = :sys)
 ```
 
-The equations above don't really have any physical meaning, but they include two state variables, some parameters, and a constant. 
+The equations above don't really have any physical meaning, but they include two state variables, some parameters, and a constant.
 There is also a variable `windspeed` which is "observed" based on the parameters, rather than being a state variable, which will be important later.
 
 ## Operator
@@ -51,8 +49,9 @@ end
 Next, we need to define a method of `EarthSciMLBase.get_scimlop` for our operator. This method will be called to get a [`SciMLOperators.AbstractSciMLOperator`](https://docs.sciml.ai/SciMLOperators/stable/interface/) that will be used conjunction with the ModelingToolkit system above to integrate the simulation forward in time.
 
 ```@example sim
-function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args,
-    domain::DomainInfo, u0, p, alg::MapAlgorithm)
+function EarthSciMLBase.get_scimlop(
+        op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args,
+        domain::DomainInfo, u0, p, alg::MapAlgorithm)
     α, trans1, trans2, trans3 = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
 
     obs_f = EarthSciMLBase.build_coord_observed_function(mtk_sys, coord_args,
@@ -67,7 +66,7 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
         u = reshape(u, :, sz...)
         du = reshape(du, :, sz...)
         II = CartesianIndices(tuple(sz...))
-        for ix ∈ 1:size(u, 1)
+        for ix in 1:size(u, 1)
             for I in II
                 # Demonstrate coordinate transforms and observed values
                 obs_f(obscache, view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
@@ -81,21 +80,21 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
     function run(u, p, t) # Out-of-place
         u = reshape(u, :, sz...)
         II = CartesianIndices(size(u)[2:end])
-        du = vcat([
-            begin
-                t1, t2, t3, fv = obs_f(view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
-                (t1 + t2 + t3) * fv
-            end for ix ∈ 1:size(u, 1), I in II
-        ]...)
+        du = vcat([begin
+                       t1, t2, t3, fv = obs_f(view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
+                       (t1 + t2 + t3) * fv
+                   end
+                   for ix in 1:size(u, 1), I in II]...)
         reshape(du, :)
     end
-    FunctionOperator(run, reshape(u0, :), p=p)
+    FunctionOperator(run, reshape(u0, :), p = p)
 end
 nothing
 ```
+
 The function above also doesn't have any physical meaning, but it demonstrates some functionality of the `Operator` "`s`".
 First, it retrieves a function to get the current value of an observed variable in our
-ODE system using the `obs_functions` argement, and it demonstrates how to call the resulting 
+ODE system using the `obs_functions` argement, and it demonstrates how to call the resulting
 function to get that value.
 It also demonstrates how to get coordinate transforms using the `coordinate_transform_functions` argument.
 Coordinate transforms are discussed in more detail in the documentation for the [`DomainInfo`](@ref) type.
@@ -138,6 +137,7 @@ Our domain specification also includes grid spacing the the `lon`, `lat`, and `l
 coordinates, which we set as 0.1π, 0.1π, and 1, respectively.
 
 !!! warning
+    
     Initial and boundary conditions are not fully implemented for this case, so regardless
     of the conditions you specify, the initial conditions will be the default values
     of the variables in the ODE system, and the boundary conditions will be zero.
@@ -153,11 +153,11 @@ csys = couple(sys, op, domain)
 ```
 
 Finally, we can choose a [`EarthSciMLBase.SolverStrategy`](@ref) and run the simulation.
-We choose the [`SolverStrangThreads`](@ref) strategy, which needs us to 
+We choose the [`SolverStrangThreads`](@ref) strategy, which needs us to
 specify an ODE solver from the [options available in DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/) for both the MTK system.
 We choose the `Tsit5` solver.
 Then we create an [ODEProblem](https://docs.sciml.ai/DiffEqDocs/stable/types/ode_types/) which can be used to run the simulation.
-Finally, we solve the problem using the [solve](https://docs.sciml.ai/DiffEqDocs/stable/basics/common_solver_opts/#CommonSolve.solve-Tuple%7BSciMLBase.AbstractDEProblem,%20Vararg%7BAny%7D%7D) function. 
+Finally, we solve the problem using the [solve](https://docs.sciml.ai/DiffEqDocs/stable/basics/common_solver_opts/#CommonSolve.solve-Tuple%7BSciMLBase.AbstractDEProblem,%20Vararg%7BAny%7D%7D) function.
 At this point we need to choose a solver for the Operator part of the system, and we choose the `Euler` solver.
 We also choose a splitting time step of 1.0 seconds, which we pass both to our `SolverStrangThreads` strategy and to the `solve` function.
 
@@ -166,18 +166,18 @@ dt = 1.0 # Splitting time step
 st = SolverStrangThreads(Tsit5(), 1.0)
 
 prob = ODEProblem(csys, st)
-sol = solve(prob, Euler(); dt=1.0)
+sol = solve(prob, Euler(); dt = 1.0)
 nothing #hide
 ```
 
 After the simulation finishes, we can plot the result:
 
 ```@example sim
-anim = @animate for i ∈ 1:length(sol.u)
+anim = @animate for i in 1:length(sol.u)
     u = reshape(sol.u[i], :, size(domain)...)
     plot(
         heatmap(u[1, :, :, 1]),
-        heatmap(u[1, :, :, 1]),
+        heatmap(u[1, :, :, 1])
     )
 end
 gif(anim, fps = 15)
