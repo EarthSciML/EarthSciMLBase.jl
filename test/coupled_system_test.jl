@@ -8,18 +8,18 @@ using OrdinaryDiffEq
 
 @testset "Composed System" begin
     struct SEqnCoupler
-        sys
+        sys::Any
     end
     function SEqn()
         @variables S(t), I(t), R(t)
         N = S + I + R
         @parameters β [unit = u"s^-1"]
         @named seqn = ODESystem([D(S) ~ -β * S * I / N], t,
-            metadata=Dict(:coupletype => SEqnCoupler))
+            metadata = Dict(:coupletype => SEqnCoupler))
     end
 
     struct IEqnCoupler
-        sys
+        sys::Any
     end
     function IEqn()
         @variables S(t), I(t), R(t)
@@ -27,17 +27,17 @@ using OrdinaryDiffEq
         @parameters β [unit = u"s^-1"]
         @parameters γ [unit = u"s^-1"]
         @named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I], t,
-            metadata=Dict(:coupletype => IEqnCoupler))
+            metadata = Dict(:coupletype => IEqnCoupler))
     end
 
     struct REqnCoupler
-        sys
+        sys::Any
     end
     function REqn()
         @variables I(t), R(t)
         @parameters γ [unit = u"s^-1"]
         @named reqn = ODESystem([D(R) ~ γ * I], t,
-            metadata=Dict(:coupletype => REqnCoupler))
+            metadata = Dict(:coupletype => REqnCoupler))
     end
 
     function EarthSciMLBase.couple2(s::SEqnCoupler, i::IEqnCoupler)
@@ -68,7 +68,8 @@ using OrdinaryDiffEq
     want_eqs = [
         D(reqn.R) ~ reqn.γ * reqn.I,
         D(seqn.S) ~ (-seqn.β * seqn.I * seqn.S) / (seqn.I + seqn.R + seqn.S),
-        D(ieqn.I) ~ (ieqn.β * ieqn.I * ieqn.S) / (ieqn.I + ieqn.R + ieqn.S) - ieqn.γ * ieqn.I,
+        D(ieqn.I) ~ (ieqn.β * ieqn.I * ieqn.S) / (ieqn.I + ieqn.R + ieqn.S) -
+                    ieqn.γ * ieqn.I
     ]
 
     have_eqs = equations(sirfinal)
@@ -97,29 +98,29 @@ end
 
 @testset "Composed System Permutations" begin
     struct ACoupler
-        sys
+        sys::Any
     end
     function A()
-        @parameters j_unit = 1 [unit = u"s^-1"]
-        @variables j_NO2(t) = 0.0149 [unit = u"s^-1"]
+        @parameters j_unit=1 [unit = u"s^-1"]
+        @variables j_NO2(t)=0.0149 [unit = u"s^-1"]
         eqs = [
             j_NO2 ~ j_unit
         ]
-        ODESystem(eqs, t, [j_NO2], [j_unit]; name=:a,
-            metadata=Dict(:coupletype => ACoupler))
+        ODESystem(eqs, t, [j_NO2], [j_unit]; name = :a,
+            metadata = Dict(:coupletype => ACoupler))
     end
 
     struct BCoupler
-        sys
+        sys::Any
     end
     function B()
-        @parameters jNO2 = 0.0149 [unit = u"s^-1"]
+        @parameters jNO2=0.0149 [unit = u"s^-1"]
         @species NO2(t) = 10.0
         rxs = [
             Reaction(jNO2, [NO2], [], [1], [])
         ]
-        rs = complete(ReactionSystem(rxs, t; combinatoric_ratelaws=false, name=:b))
-        convert(ODESystem, rs; metadata=Dict(:coupletype => BCoupler))
+        rs = complete(ReactionSystem(rxs, t; combinatoric_ratelaws = false, name = :b))
+        convert(ODESystem, rs; metadata = Dict(:coupletype => BCoupler))
     end
 
     function EarthSciMLBase.couple2(b::BCoupler, a::ACoupler)
@@ -129,13 +130,14 @@ end
     end
 
     struct CCoupler
-        sys
+        sys::Any
     end
     function C()
-        @parameters emis = 1 [unit = u"s^-1"]
-        @variables NO2(t) = 0.00014 [unit = u"s^-1"]
+        @parameters emis=1 [unit = u"s^-1"]
+        @variables NO2(t)=0.00014 [unit = u"s^-1"]
         eqs = [NO2 ~ emis]
-        ODESystem(eqs, t, [NO2], [emis]; name=:c, metadata=Dict(:coupletype => CCoupler))
+        ODESystem(
+            eqs, t, [NO2], [emis]; name = :c, metadata = Dict(:coupletype => CCoupler))
     end
 
     function EarthSciMLBase.couple2(b::BCoupler, c::CCoupler)
@@ -146,15 +148,13 @@ end
         ))
     end
 
-    models = [
-        couple(A(), B(), C())
-        couple(C(), B(), A())
-        couple(B(), A(), C())
-        couple(C(), A(), B())
-        couple(A(), C(), B())
-        couple(B(), C(), A())
-    ]
-    for (i, model) ∈ enumerate(models)
+    models = [couple(A(), B(), C())
+              couple(C(), B(), A())
+              couple(B(), A(), C())
+              couple(C(), A(), B())
+              couple(A(), C(), B())
+              couple(B(), C(), A())]
+    for (i, model) in enumerate(models)
         @testset "permutation $i" begin
             m = convert(ODESystem, model)
             eqstr = string(equations(m))
@@ -181,7 +181,7 @@ end
 end
 
 mutable struct ParamTest
-    y
+    y::Any
 end
 (t::ParamTest)(x) = t.y - x
 
@@ -205,18 +205,19 @@ end
     event3 = [1.0, 2, 3] => (update_affect!, [], [p_3], [], nothing)
     event4 = [1.0, 2, 3] => [p_4 ~ t]
 
-    sys = ODESystem([
+    sys = ODESystem(
+        [
             ModelingToolkit.D_nounits(x) ~ p_1(x),
             ModelingToolkit.D_nounits(x2) ~ p_2 - x2,
-            x3 ~ p_3(x2) + p_4,
+            x3 ~ p_3(x2) + p_4
         ],
-        ModelingToolkit.t_nounits; name=:test,
-        discrete_events=[event1, event2, event3, event4],
+        ModelingToolkit.t_nounits; name = :test,
+        discrete_events = [event1, event2, event3, event4]
     )
     sys = EarthSciMLBase.remove_extra_defaults(sys, structural_simplify(sys))
 
     prob = ODEProblem(structural_simplify(sys), [], (0, 100), [])
-    sol = solve(prob, abstol=1e-8, reltol=1e-8)
+    sol = solve(prob, abstol = 1e-8, reltol = 1e-8)
     @test sol[x][end] ≈ 3
     @test sol[x2][end] ≈ 3
 
@@ -239,8 +240,10 @@ end
     @testset "filter events" begin
         kept_events = EarthSciMLBase.filter_discrete_events(structural_simplify(sys), [])
         @test length(kept_events) == 2
-        @test EarthSciMLBase.var2symbol(only(EarthSciMLBase.get_affected_vars(kept_events[1]))) == :p_1
-        @test EarthSciMLBase.var2symbol(only(EarthSciMLBase.get_affected_vars(kept_events[2]))) == :p_2
+        @test EarthSciMLBase.var2symbol(only(EarthSciMLBase.get_affected_vars(kept_events[1]))) ==
+              :p_1
+        @test EarthSciMLBase.var2symbol(only(EarthSciMLBase.get_affected_vars(kept_events[2]))) ==
+              :p_2
     end
 
     @testset "prune observed" begin
@@ -251,13 +254,13 @@ end
 
     sys2 = EarthSciMLBase.prune_observed(sys, structural_simplify(sys), [])
     prob = ODEProblem(structural_simplify(sys2), [], (0, 100), [])
-    sol = solve(prob, abstol=1e-8, reltol=1e-8)
+    sol = solve(prob, abstol = 1e-8, reltol = 1e-8)
     @test sol[x][end] ≈ 3
     @test sol[x2][end] ≈ 3
 end
 
 @testset "Composed System with Events" begin
-    function create_sys(; name=:test)
+    function create_sys(; name = :test)
         tp1 = typeof(ParamTest(1))
         @parameters (p_1::tp1)(..) = ParamTest(1)
         @parameters p_2(ModelingToolkit.t_nounits) = 1
@@ -272,31 +275,38 @@ end
         event3 = [1.0, 2, 3] => (update_affect!, [], [p_3], [], nothing)
         event4 = [1.0, 2, 3] => [p_4 ~ t]
 
-        ODESystem([
+        ODESystem(
+            [
                 ModelingToolkit.D_nounits(x) ~ p_1(x),
                 ModelingToolkit.D_nounits(x2) ~ p_2 - x2,
-                x3 ~ p_3(x2) + p_4,
+                x3 ~ p_3(x2) + p_4
             ],
-            ModelingToolkit.t_nounits; name=name,
-            discrete_events=[event1, event2, event3, event4],
+            ModelingToolkit.t_nounits; name = name,
+            discrete_events = [event1, event2, event3, event4]
         )
     end
 
-    sys_composed = compose(ODESystem(Equation[], ModelingToolkit.t_nounits; name=:coupled),
-        create_sys(name=:a), create_sys(name=:b))
+    sys_composed = compose(
+        ODESystem(Equation[], ModelingToolkit.t_nounits; name = :coupled),
+        create_sys(name = :a), create_sys(name = :b))
     sys_flattened = ModelingToolkit.flatten(sys_composed)
-    sysc2 = EarthSciMLBase.remove_extra_defaults(sys_flattened, structural_simplify(sys_flattened))
+    sysc2 = EarthSciMLBase.remove_extra_defaults(
+        sys_flattened, structural_simplify(sys_flattened))
     sysc3 = EarthSciMLBase.prune_observed(sysc2, structural_simplify(sysc2), [])
     prob = ODEProblem(structural_simplify(sysc3), [], (0, 100), [])
-    sol = solve(prob, abstol=1e-8, reltol=1e-8)
+    sol = solve(prob, abstol = 1e-8, reltol = 1e-8)
     @test length(sol.u[end]) == 4
     @test all(sol.u[end] .≈ 3)
 end
 
 @testset "Composed System with Events and operator_compose" begin
-    struct CoupleType1 sys end
-    struct CoupleType2 sys end
-    function create_sys(coupletype; name=:test)
+    struct CoupleType1
+        sys::Any
+    end
+    struct CoupleType2
+        sys::Any
+    end
+    function create_sys(coupletype; name = :test)
         tp1 = typeof(ParamTest(1))
         @parameters (p_1::tp1)(..) = ParamTest(1)
         @parameters p_2(ModelingToolkit.t_nounits) = 1
@@ -311,14 +321,15 @@ end
         event3 = [1.0, 2, 3] => (update_affect!, [], [p_3], [], nothing)
         event4 = [1.0, 2, 3] => [p_4 ~ t]
 
-        ODESystem([
+        ODESystem(
+            [
                 ModelingToolkit.D_nounits(x) ~ p_1(x),
                 ModelingToolkit.D_nounits(x2) ~ p_2 - x2,
-                x3 ~ p_3(x2) + p_4,
+                x3 ~ p_3(x2) + p_4
             ],
-            ModelingToolkit.t_nounits; name=name,
-            discrete_events=[event1, event2, event3, event4],
-            metadata = Dict(:coupletype => coupletype),
+            ModelingToolkit.t_nounits; name = name,
+            discrete_events = [event1, event2, event3, event4],
+            metadata = Dict(:coupletype => coupletype)
         )
     end
     function EarthSciMLBase.couple2(a::CoupleType1, b::CoupleType2)
@@ -326,8 +337,8 @@ end
         operator_compose(a, b)
     end
 
-    a = create_sys(CoupleType1, name=:a)
-    b = create_sys(CoupleType2, name=:b)
+    a = create_sys(CoupleType1, name = :a)
+    b = create_sys(CoupleType2, name = :b)
     coupled_sys = couple(a, b)
     sys = convert(ODESystem, coupled_sys)
     @test sys.a₊x in keys(ModelingToolkit.get_defaults(sys))
@@ -335,7 +346,7 @@ end
     @test occursin("a₊b_ddt_xˍt(t)", string(equations(sys)))
     @test occursin("a₊b_ddt_x2ˍt(t)", string(equations(sys)))
     prob = ODEProblem(sys, [], (0, 100), [])
-    sol = solve(prob, abstol=1e-8, reltol=1e-8)
+    sol = solve(prob, abstol = 1e-8, reltol = 1e-8)
     @test length(sol.u[end]) == 2
     @test all(sol.u[end] .≈ 3)
 end

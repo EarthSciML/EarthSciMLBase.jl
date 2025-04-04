@@ -3,7 +3,7 @@ export param_to_var
 """
 Add the units and description in the variable `from` to the variable `to`.
 """
-function add_metadata(to, from; exclude_default=false)
+function add_metadata(to, from; exclude_default = false)
     unit = ModelingToolkit.get_unit(from)
     to = Symbolics.setmetadata(to, ModelingToolkit.VariableUnit, unit)
     desc = ModelingToolkit.getdescription(from)
@@ -30,8 +30,8 @@ determines the loss rate) with a temperature value that varies in time.
 function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
     params = parameters(sys)
     replace = Dict()
-    for p ∈ ps
-        if p in ModelingToolkit.tosymbol.(unknowns(sys), escape=false) # Skip if it is already a variable.
+    for p in ps
+        if p in ModelingToolkit.tosymbol.(unknowns(sys), escape = false) # Skip if it is already a variable.
             continue
         end
         iparam = findfirst(isequal(p), Symbol.(params))
@@ -49,8 +49,8 @@ function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
     end
     newsys = SymbolicUtils.substitute(sys, replace)
     copy_with_change(newsys;
-        metadata=ModelingToolkit.get_metadata(sys),
-        discrete_events=ModelingToolkit.get_discrete_events(sys),
-        continuous_events=ModelingToolkit.get_continuous_events(sys),
+        metadata = ModelingToolkit.get_metadata(sys),
+        discrete_events = ModelingToolkit.get_discrete_events(sys),
+        continuous_events = ModelingToolkit.get_continuous_events(sys)
     )
 end

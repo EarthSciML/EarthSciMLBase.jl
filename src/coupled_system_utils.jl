@@ -5,7 +5,7 @@ Return the time step length common to all of the given `timesteps`.
 Throw an error if not all timesteps are the same length.
 """
 function steplength(timesteps)
-    Δs = [timesteps[i] - timesteps[i-1] for i ∈ 2:length(timesteps)]
+    Δs = [timesteps[i] - timesteps[i - 1] for i in 2:length(timesteps)]
     @assert all(Δs[1] .≈ Δs) "Not all time steps are the same."
     return Δs[1]
 end
@@ -19,7 +19,7 @@ substituting in the constants observed values of other variables.
 """
 function observed_expression(eqs, x)
     expr = nothing
-    for eq ∈ eqs
+    for eq in eqs
         if isequal(eq.lhs, x)
             expr = eq.rhs
         end
@@ -28,14 +28,14 @@ function observed_expression(eqs, x)
         return nothing
     end
     expr = ModelingToolkit.subs_constants(expr)
-    for v ∈ Symbolics.get_variables(expr)
+    for v in Symbolics.get_variables(expr)
         v_expr = observed_expression(eqs, v)
         if !isnothing(v_expr)
             expr = Symbolics.substitute(expr, v => v_expr)
         end
     end
     # Do it again to catch extra variables TODO(CT): Theoretically this could recurse forever; when to stop?
-    for v ∈ Symbolics.get_variables(expr)
+    for v in Symbolics.get_variables(expr)
         v_expr = observed_expression(eqs, v)
         if !isnothing(v_expr)
             expr = Symbolics.replace(expr, v => v_expr)
@@ -60,7 +60,7 @@ function observed_function(eqs, x, coords)
         return (x...) -> 0.0
     end
     coordvars = []
-    for c ∈ coords
+    for c in coords
         i = findfirst(v -> split(String(Symbol(v)), "₊")[end] == String(Symbol(c)), vars)
         if isnothing(i)
             push!(coordvars, c)
@@ -68,7 +68,7 @@ function observed_function(eqs, x, coords)
             push!(coordvars, vars[i])
         end
     end
-    return Symbolics.build_function(expr, coordvars...; expression=Val{false})
+    return Symbolics.build_function(expr, coordvars...; expression = Val{false})
 end
 
 """
@@ -76,11 +76,11 @@ $(SIGNATURES)
 
 Return the time points during which integration should be stopped to run the operators.
 """
-function timesteps(tsteps::AbstractVector{T}...)::Vector{T} where {T<:AbstractFloat}
+function timesteps(tsteps::AbstractVector{T}...)::Vector{T} where {T <: AbstractFloat}
     allt = sort(union(vcat(tsteps...)))
     allt2 = [allt[1]]
-    for i ∈ 2:length(allt) # Remove nearly duplicate times.
-        if allt[i] ≉ allt[i-1]
+    for i in 2:length(allt) # Remove nearly duplicate times.
+        if allt[i] ≉ allt[i - 1]
             push!(allt2, allt[i])
         end
     end
@@ -95,10 +95,11 @@ simplified system depend on. This should be done before running `structural_simp
 on the system.
 `extra_vars` is a list of additional variables that need to be kept.
 """
-function get_needed_vars(original_sys::ODESystem, simplified_sys::ODESystem, extra_vars=[])
+function get_needed_vars(
+        original_sys::ODESystem, simplified_sys::ODESystem, extra_vars = [])
     varvardeps = ModelingToolkit.varvar_dependencies(
         ModelingToolkit.asgraph(original_sys),
-        ModelingToolkit.variable_dependencies(original_sys),
+        ModelingToolkit.variable_dependencies(original_sys)
     )
     g = SimpleDiGraph(length(unknowns(original_sys)))
     for (i, es) in enumerate(varvardeps.badjlist)
@@ -122,17 +123,17 @@ $(SIGNATURES)
 Create a copy of an ODESystem with the given changes.
 """
 function copy_with_change(sys::ODESystem;
-    eqs=equations(sys),
-    name=nameof(sys),
-    unknowns=unknowns(sys),
-    parameters=parameters(sys),
-    metadata=ModelingToolkit.get_metadata(sys),
-    continuous_events=ModelingToolkit.get_continuous_events(sys),
-    discrete_events=ModelingToolkit.get_discrete_events(sys),
+        eqs = equations(sys),
+        name = nameof(sys),
+        unknowns = unknowns(sys),
+        parameters = parameters(sys),
+        metadata = ModelingToolkit.get_metadata(sys),
+        continuous_events = ModelingToolkit.get_continuous_events(sys),
+        discrete_events = ModelingToolkit.get_discrete_events(sys)
 )
     ODESystem(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
-        name=name, metadata=metadata,
-        continuous_events=continuous_events, discrete_events=discrete_events)
+        name = name, metadata = metadata,
+        continuous_events = continuous_events, discrete_events = discrete_events)
 end
 
 # Get variables effected by this event.
@@ -156,7 +157,7 @@ function var2symbol(var)
     elseif SymbolicUtils.iscall(var)
         var = operation(var)
     end
-    Symbolics.tosymbol(var; escape=false)
+    Symbolics.tosymbol(var; escape = false)
 end
 
 function var_in_eqs(var, eqs)
@@ -190,7 +191,7 @@ function prune_observed(original_sys::ODESystem, simplified_sys, extra_vars)
     needed_vars = var2symbol.(get_needed_vars(original_sys, simplified_sys, extra_vars))
     deleteindex = []
     obs = observed(simplified_sys)
-    for (i, eq) ∈ enumerate(obs)
+    for (i, eq) in enumerate(obs)
         lhsvars = var2symbol.(Symbolics.get_variables(eq.lhs))
         # Only keep equations where all variables on the LHS are in at least one
         # equation describing the system state.
@@ -202,9 +203,9 @@ function prune_observed(original_sys::ODESystem, simplified_sys, extra_vars)
     discrete_events = filter_discrete_events(simplified_sys, obs)
     new_eqs = [equations(simplified_sys); obs]
     sys2 = copy_with_change(simplified_sys;
-        eqs=new_eqs,
-        unknowns=get_unknowns(new_eqs),
-        discrete_events=discrete_events,
+        eqs = new_eqs,
+        unknowns = get_unknowns(new_eqs),
+        discrete_events = discrete_events
     )
     return sys2
 end
@@ -228,8 +229,10 @@ function remove_extra_defaults(original_sys, simplified_sys)
     unk = var2symbol.(unknowns(simplified_sys))
 
     # Check if v is not in the unknowns and has a default.
-    checkextra(v) = !(var2symbol(v) in unk) &&
-                    (Symbolics.VariableDefaultValue in keys(v.metadata))
+    function checkextra(v)
+        !(var2symbol(v) in unk) &&
+            (Symbolics.VariableDefaultValue in keys(v.metadata))
+    end
     extra_default_vars = all_vars[checkextra.(all_vars)]
 
     replacements = []
@@ -241,21 +244,21 @@ function remove_extra_defaults(original_sys, simplified_sys)
     end
     new_eqs = substitute.(equations(original_sys), (Dict(replacements...),))
     new_unk = get_unknowns(new_eqs)
-    copy_with_change(original_sys; eqs=new_eqs, unknowns=new_unk,
-        parameters=parameters(original_sys))
+    copy_with_change(original_sys; eqs = new_eqs, unknowns = new_unk,
+        parameters = parameters(original_sys))
 end
 
 "Initialize the state variables."
 function init_u(mtk_sys::ODESystem, d::DomainInfo)
     vars = unknowns(mtk_sys)
     dflts = ModelingToolkit.get_defaults(mtk_sys)
-    u0 = [dflts[u] for u ∈ vars]
+    u0 = [dflts[u] for u in vars]
 
     T = dtype(d)
     g = grid(d)
     u = Array{T}(undef, length(vars), size(d)...)
     # Set initial conditions
-    for i ∈ eachindex(u0), j ∈ eachindex(g[1]), k ∈ eachindex(g[2]), l ∈ eachindex(g[3])
+    for i in eachindex(u0), j in eachindex(g[1]), k in eachindex(g[2]), l in eachindex(g[3])
         u[i, j, k, l] = u0[i]
     end
     u
@@ -282,7 +285,7 @@ function coord_params(mtk_sys::AbstractSystem, domain::DomainInfo)
     pv = pvars(domain)
     params = parameters(mtk_sys)
 
-    _pvidx = [matching_suffix_idx(params, p) for p ∈ pv]
+    _pvidx = [matching_suffix_idx(params, p) for p in pv]
     for (i, idx) in enumerate(_pvidx)
         if length(idx) > 1
             error("Partial independent variable '$(pv[i])' has multiple matches in system parameters: [$(parameters(mtk_sys)[idx])].")
@@ -300,7 +303,7 @@ function coord_setter(sys_mtk::ODESystem, domain::DomainInfo)
     II = CartesianIndices(tuple(size(domain)...))
     grd = grid(domain)
     function setp!(p, ii::CartesianIndex) # Set the parameters for the given grid cell index.
-        vals = (g[ii[jj]] for (jj, g) ∈ enumerate(grd)) # Get the coordinates of this grid cell.
+        vals = (g[ii[jj]] for (jj, g) in enumerate(grd)) # Get the coordinates of this grid cell.
         coord_setter(p, vals)
     end
     function setp!(p, j::Int) # Set the parameters for the jth grid cell.

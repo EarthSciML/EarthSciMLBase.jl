@@ -3,16 +3,15 @@ using EarthSciMLBase
 using ModelingToolkit, DynamicQuantities, Symbolics
 using ModelingToolkit: t, D
 
-@parameters α = 1 [unit = u"kg", description = "α description"]
-@parameters β = 2 [unit = u"kg*s", description = "β description"]
+@parameters α=1 [unit = u"kg", description = "α description"]
+@parameters β=2 [unit = u"kg*s", description = "β description"]
 @variables x(t) [unit = u"m", description = "x description"]
 eq = D(x) ~ α * x / β
-@named sys = ODESystem([eq], t; metadata=:metatest)
+@named sys = ODESystem([eq], t; metadata = :metatest)
 
 ii(x, y) = findfirst(isequal(x), y)
 isin(x, y) = ii(x, y) !== nothing
 @variables β(t) [unit = u"kg*s", description = "β description"]
-
 
 @testset "Single substitution" begin
     sys2 = param_to_var(sys, :β)
@@ -38,9 +37,9 @@ end
 end
 
 @testset "events" begin
-    @named sys = ODESystem([eq], t; metadata=:metatest,
-        continuous_events=[x ~ 0],
-        discrete_events=(t == 1.0) => [x ~ x + 1],
+    @named sys = ODESystem([eq], t; metadata = :metatest,
+        continuous_events = [x ~ 0],
+        discrete_events = (t == 1.0) => [x ~ x + 1]
     )
 
     sys3 = param_to_var(sys, :β, :α)

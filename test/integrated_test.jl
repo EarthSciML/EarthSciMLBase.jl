@@ -7,40 +7,40 @@ t = t_nounits
 D = D_nounits
 
 struct PhotolysisCoupler
-    sys
+    sys::Any
 end
-function Photolysis(; name=:Photolysis)
+function Photolysis(; name = :Photolysis)
     @variables j_NO2(t) = 1
     eqs = [
         j_NO2 ~ max(sin(t / 86400), 0)
     ]
-    ODESystem(eqs, t, [j_NO2], [], name=name,
-        metadata=Dict(:coupletype => PhotolysisCoupler))
+    ODESystem(eqs, t, [j_NO2], [], name = name,
+        metadata = Dict(:coupletype => PhotolysisCoupler))
 end
 
 struct ChemistryCoupler
-    sys
+    sys::Any
 end
-function Chemistry(; name=:Chemistry)
+function Chemistry(; name = :Chemistry)
     @parameters jNO2 = 1
     @species NO2(t) = 2
     rxs = [
         Reaction(jNO2, [NO2], [], [1], [])
     ]
     rsys = ReactionSystem(rxs, t, [NO2], [jNO2];
-        combinatoric_ratelaws=false, name=name)
-    convert(ODESystem, complete(rsys), metadata=Dict(:coupletype => ChemistryCoupler))
+        combinatoric_ratelaws = false, name = name)
+    convert(ODESystem, complete(rsys), metadata = Dict(:coupletype => ChemistryCoupler))
 end
 
 struct EmissionsCoupler
-    sys
+    sys::Any
 end
-function Emissions(; name=:Emissions)
+function Emissions(; name = :Emissions)
     @parameters emis = 1
     @variables NO2(t) = 3
     eqs = [D(NO2) ~ emis]
-    ODESystem(eqs, t; name=name,
-        metadata=Dict(:coupletype => EmissionsCoupler))
+    ODESystem(eqs, t; name = name,
+        metadata = Dict(:coupletype => EmissionsCoupler))
 end
 
 function EarthSciMLBase.couple2(c::ChemistryCoupler, p::PhotolysisCoupler)
@@ -82,6 +82,6 @@ end
     sys = convert(ODESystem, model)
 
     prob = ODEProblem(sys, [], (0.0, 1.0))
-    sol = solve(prob, u0=[1.0])
+    sol = solve(prob, u0 = [1.0])
     @test sol.retcode == ReturnCode.Success
 end

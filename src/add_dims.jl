@@ -25,7 +25,7 @@ EarthSciMLBase.add_dims(exp, [u, q], [x, y, t])
 function add_dims(exp, vars::AbstractVector, dims::AbstractVector)
     newvars = add_dims(vars, dims)
     @variables 🦖🌋temp # BUG(CT): If someone chooses 🦖🌋temp as a variable in their equation this will fail.
-    for (var, newvar) ∈ zip(vars, newvars)
+    for (var, newvar) in zip(vars, newvars)
         # Replace variable with temporary variable, then replace temporary
         # variable with new variable.
         # TODO(CT): Should be able to directly substitute all variables at once but doesn't work.
@@ -36,7 +36,7 @@ function add_dims(exp, vars::AbstractVector, dims::AbstractVector)
 end
 
 function add_dims(vars::AbstractVector, dims::AbstractVector)
-    syms = [Symbolics.tosymbol(x, escape=false) for x in vars]
+    syms = [Symbolics.tosymbol(x, escape = false) for x in vars]
     o = Num[]
     for (sym, var) in zip(syms, vars)
         newvar = (@variables $sym(..))[1]

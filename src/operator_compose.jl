@@ -22,7 +22,7 @@ Add a system scope to a variable name, for example so that
 """
 function add_scope(sys, v, iv)
     n = String(nameof(sys))
-    vstr = String(Symbolics.tosymbol(v, escape=false))
+    vstr = String(Symbolics.tosymbol(v, escape = false))
     vsym = Symbol("$(n)₊$(vstr)")
     vv = (@variables $vsym(iv))[1]
     add_metadata(vv, v)
@@ -39,7 +39,7 @@ function normalize_translate(translate::AbstractVector)
     end
     process_entry.(translate)
 end
-function normalize_translate(translate::T) where {T<:AbstractDict}
+function normalize_translate(translate::T) where {T <: AbstractDict}
     normalize_translate([k => v for (k, v) in translate])
 end
 function normalize_translate(translate)
@@ -63,7 +63,8 @@ The left hand sides of two equations will be considered matching if:
 4. There is an entry in the optional `translate` dictionary that maps the dependent variable in the first system to the dependent variable in the second system, with a conversion factor, e.g. `Dict(sys1.sys.x => sys2.sys.y => 6)`.
 
 """
-function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESystem, translate=Dict())
+function operator_compose(
+        a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESystem, translate = Dict())
     translate = normalize_translate(translate)
     a_eqs = deepcopy(equations(a))
     b_eqs = deepcopy(equations(b))
@@ -88,11 +89,12 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
             matches = [(adv => bdv, conv)]
         end
         b_eq_matches = [
-            # If the LHS == 0 (i.e. everything has already been shifted to the RHS),
-            # there's not anything we can do.
-            [!isequal(b_eq.lhs, 0) && isequal(abdv.second, add_scope(b, get_dv(b_eq.lhs, iv), iv)) for b_eq in b_eqs]
-            for (abdv, _) in matches
-        ]
+                        # If the LHS == 0 (i.e. everything has already been shifted to the RHS),
+                        # there's not anything we can do.
+                        [!isequal(b_eq.lhs, 0) &&
+                         isequal(abdv.second, add_scope(b, get_dv(b_eq.lhs, iv), iv))
+                         for b_eq in b_eqs]
+                        for (abdv, _) in matches]
         push!(all_matches, matches)
         push!(all_beq_matches, b_eq_matches)
     end
@@ -109,7 +111,7 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
                 # so create a new variable to represent the dependent variable
                 # of interest and add it to the RHS of the other equation, and then also set the two
                 # dependent variables to be equal.
-                bvar = String(Symbolics.tosymbol(b_eqs[j].lhs, escape=false))
+                bvar = String(Symbolics.tosymbol(b_eqs[j].lhs, escape = false))
                 if operation(b_eqs[j].lhs) == Differential(iv)
                     # The LHS of this equation is the time derivative of the dependent variable of interest,
                     var1 = Symbol("$(bname)_ddt_$(bvar)")
@@ -140,18 +142,19 @@ function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESy
             end
         end
     end
-    aa = copy_with_change(a; eqs=a_eqs)
-    bb = copy_with_change(b; eqs=b_eqs)
+    aa = copy_with_change(a; eqs = a_eqs)
+    bb = copy_with_change(b; eqs = b_eqs)
     ConnectorSystem(connections, aa, bb)
 end
 
 # PDESystems don't have a compose function, so we just add the equations together
 # here without trying to keep the systems in separate namespaces.
 # TODO(CT): Handle events
-function operator_compose!(a::ModelingToolkit.PDESystem, b::Vector{Symbolics.Equation})::ModelingToolkit.PDESystem
+function operator_compose!(a::ModelingToolkit.PDESystem,
+        b::Vector{Symbolics.Equation})::ModelingToolkit.PDESystem
     a_eqs = equations(a)
-    for (i, a_eq) ∈ enumerate(a_eqs)
-        for b_eq ∈ b
+    for (i, a_eq) in enumerate(a_eqs)
+        for b_eq in b
             if isequal(a_eq.lhs, b_eq.lhs)
                 a_eqs[i] = a_eq.lhs ~ a_eq.rhs + b_eq.rhs
             end

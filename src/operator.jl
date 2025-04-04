@@ -19,7 +19,8 @@ which should return a list of variables that are needed by the operator.
 """
 abstract type Operator end
 
-function get_scimlop(op::Operator, csys, mtk_sys, coord_args, domain::DomainInfo, u0, p, alg)
+function get_scimlop(
+        op::Operator, csys, mtk_sys, coord_args, domain::DomainInfo, u0, p, alg)
     ArgumentError("Operator $(typeof(op)) does not define a EarthSciMLBase.get_scimlop method with the correct signature.")
 end
 

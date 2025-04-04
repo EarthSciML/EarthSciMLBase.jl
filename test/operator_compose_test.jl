@@ -6,33 +6,33 @@ using Test
 using DynamicQuantities
 
 struct ExampleSysCoupler
-    sys
+    sys::Any
 end
 function ExampleSys()
     @variables x(t_nounits)
     @parameters p
-    ODESystem([D_nounits(x) ~ p], t_nounits; name=:sys1,
-        metadata=Dict(:coupletype => ExampleSysCoupler))
+    ODESystem([D_nounits(x) ~ p], t_nounits; name = :sys1,
+        metadata = Dict(:coupletype => ExampleSysCoupler))
 end
 
 struct ExampleSysCopyCoupler
-    sys
+    sys::Any
 end
 function ExampleSysCopy()
     @variables x(t_nounits)
     @parameters p
-    ODESystem([D_nounits(x) ~ p], t_nounits; name=:syscopy,
-        metadata=Dict(:coupletype => ExampleSysCopyCoupler))
+    ODESystem([D_nounits(x) ~ p], t_nounits; name = :syscopy,
+        metadata = Dict(:coupletype => ExampleSysCopyCoupler))
 end
 
 struct ExampleSys2Coupler
-    sys
+    sys::Any
 end
-function ExampleSys2(; name=:sys2)
+function ExampleSys2(; name = :sys2)
     @variables y(t_nounits)
     @parameters p
-    ODESystem([D_nounits(y) ~ p], t_nounits; name=name,
-        metadata=Dict(:coupletype => ExampleSys2Coupler))
+    ODESystem([D_nounits(y) ~ p], t_nounits; name = name,
+        metadata = Dict(:coupletype => ExampleSys2Coupler))
 end
 
 @testset "basic" begin
@@ -88,14 +88,14 @@ end
     sys1 = ExampleSys()
 
     struct ExampleSysXYCoupler
-        sys
+        sys::Any
     end
-    function ExampleSysXY(; name=:sysXY)
+    function ExampleSysXY(; name = :sysXY)
         @variables y1(t_nounits)
         @variables y2(t_nounits)
         @parameters p
-        ODESystem([D_nounits(y1) ~ p, D_nounits(y2) ~ p], t_nounits; name=name,
-            metadata=Dict(:coupletype => ExampleSysXYCoupler))
+        ODESystem([D_nounits(y1) ~ p, D_nounits(y2) ~ p], t_nounits; name = name,
+            metadata = Dict(:coupletype => ExampleSysXYCoupler))
     end
 
     sys2 = ExampleSysXY()
@@ -111,18 +111,19 @@ end
     eq = equations(op)
     obs = observed(op)
     eqstr = replace(string(eq), "Symbolics." => "")
-    @test eqstr == "Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + 2sys1₊sysXY_ddt_y2ˍt(t) + sys1₊sysXY_ddt_y1ˍt(t)]"
+    @test eqstr ==
+          "Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + 2sys1₊sysXY_ddt_y2ˍt(t) + sys1₊sysXY_ddt_y1ˍt(t)]"
 end
 
 @testset "Non-ODE" begin
     struct ExampleSysNonODECoupler
-        sys
+        sys::Any
     end
     function ExampleSysNonODE()
         @variables y(t_nounits)
         @parameters p
-        ODESystem([y ~ p], t; name=:sysnonode,
-            metadata=Dict(:coupletype => ExampleSysNonODECoupler))
+        ODESystem([y ~ p], t; name = :sysnonode,
+            metadata = Dict(:coupletype => ExampleSysNonODECoupler))
     end
 
     sys1 = ExampleSys()
@@ -143,7 +144,7 @@ end
 
 @testset "translated with conversion factor" begin
     sys1 = ExampleSys()
-    sys2 = ExampleSys2(; name=:sys22)
+    sys2 = ExampleSys2(; name = :sys22)
 
     function EarthSciMLBase.couple2(s1::ExampleSysCoupler, s2::ExampleSys2Coupler)
         s1, s2 = s1.sys, s2.sys
@@ -160,22 +161,22 @@ end
 
 @testset "Units" begin
     struct U1Coupler
-        sys
+        sys::Any
     end
     function U1()
         @variables x(t) [unit = u"kg"]
         @parameters p [unit = u"kg/s"]
-        ODESystem([ModelingToolkit.D(x) ~ p], t; name=:sys1,
-            metadata=Dict(:coupletype => U1Coupler))
+        ODESystem([ModelingToolkit.D(x) ~ p], t; name = :sys1,
+            metadata = Dict(:coupletype => U1Coupler))
     end
     struct U2Coupler
-        sys
+        sys::Any
     end
-    function U2(; name=:sys2)
+    function U2(; name = :sys2)
         @variables y(t) [unit = u"m"]
         @parameters p [unit = u"m/s"]
-        ODESystem([ModelingToolkit.D(y) ~ p], t; name=name,
-            metadata=Dict(:coupletype => U2Coupler))
+        ODESystem([ModelingToolkit.D(y) ~ p], t; name = name,
+            metadata = Dict(:coupletype => U2Coupler))
     end
 
     sys1 = U1()
@@ -183,7 +184,7 @@ end
 
     function EarthSciMLBase.couple2(s1::U1Coupler, s2::U2Coupler)
         s1, s2 = s1.sys, s2.sys
-        @constants uconv = 6.0 [unit = u"kg/m"]
+        @constants uconv=6.0 [unit = u"kg/m"]
         operator_compose(s1, s2, Dict(s1.x => s2.y => uconv))
     end
 
@@ -197,31 +198,30 @@ end
 
 @testset "Units Non-ODE" begin
     struct U1Coupler
-        sys
+        sys::Any
     end
     function U1()
         @variables x(t) [unit = u"kg"]
         @parameters p [unit = u"kg/s"]
-        ODESystem([D(x) ~ p], t; name=:sys1,
-            metadata=Dict(:coupletype => U1Coupler))
+        ODESystem([D(x) ~ p], t; name = :sys1,
+            metadata = Dict(:coupletype => U1Coupler))
     end
     struct U2Coupler
-        sys
+        sys::Any
     end
-    function U2(; name=:sys2)
+    function U2(; name = :sys2)
         @variables y(t) [unit = u"m/s"]
         @parameters p [unit = u"m/s"]
-        ODESystem([y ~ p], t; name=name,
-            metadata=Dict(:coupletype => U2Coupler))
+        ODESystem([y ~ p], t; name = name,
+            metadata = Dict(:coupletype => U2Coupler))
     end
-
 
     sys1 = U1()
     sys2 = U2()
 
     function EarthSciMLBase.couple2(s1::U1Coupler, s2::U2Coupler)
         s1, s2 = s1.sys, s2.sys
-        @constants uconv = 6.0 [unit = u"kg/m"]
+        @constants uconv=6.0 [unit = u"kg/m"]
         operator_compose(s1, s2, Dict(s1.x => s2.y => uconv))
     end
 
@@ -235,21 +235,21 @@ end
 
 @testset "Units 2" begin
     struct U1Coupler
-        sys
+        sys::Any
     end
     function U1()
         @variables x(t) [unit = u"kg*m^-3"]
-        ODESystem([D(x) ~ 0], t; name=:sys1,
-            metadata=Dict(:coupletype => U1Coupler))
+        ODESystem([D(x) ~ 0], t; name = :sys1,
+            metadata = Dict(:coupletype => U1Coupler))
     end
     struct U2Coupler
-        sys
+        sys::Any
     end
-    function U2(; name=:sys2)
+    function U2(; name = :sys2)
         @variables x(t) [unit = u"kg*m^-3/s"]
         @parameters p [unit = u"kg*m^-3/s"]
-        ODESystem([x ~ p], t; name=name,
-            metadata=Dict(:coupletype => U2Coupler))
+        ODESystem([x ~ p], t; name = name,
+            metadata = Dict(:coupletype => U2Coupler))
     end
 
     sys1 = U1()
@@ -268,7 +268,7 @@ end
 
 @testset "Reaction-Deposition" begin
     struct ChemCoupler
-        sys
+        sys::Any
     end
     function Chem()
         @species SO2(t_nounits) O2(t_nounits) SO4(t_nounits)
@@ -276,12 +276,12 @@ end
         rxns = [
             Reaction(α, [SO2, O2], [SO4], [1, 1], [1])
         ]
-        rs = complete(ReactionSystem(rxns, t_nounits; name=:chem))
-        convert(ODESystem, rs; metadata=Dict(:coupletype => ChemCoupler))
+        rs = complete(ReactionSystem(rxns, t_nounits; name = :chem))
+        convert(ODESystem, rs; metadata = Dict(:coupletype => ChemCoupler))
     end
 
     struct DepositionCoupler
-        sys
+        sys::Any
     end
     function Deposition()
         @variables SO2(t_nounits)
@@ -290,8 +290,8 @@ end
         eqs = [
             D_nounits(SO2) ~ -k * SO2
         ]
-        ODESystem(eqs, t_nounits, [SO2], [k]; name=:deposition,
-            metadata=Dict(:coupletype => DepositionCoupler))
+        ODESystem(eqs, t_nounits, [SO2], [k]; name = :deposition,
+            metadata = Dict(:coupletype => DepositionCoupler))
     end
 
     rn = Chem()
@@ -307,21 +307,22 @@ end
     eq = equations(cs)
 
     eqstr = replace(string(eq), "Symbolics." => "")
-    @test eqstr == "Equation[Differential(t)(chem₊SO2(t)) ~ chem₊deposition_ddt_SO2ˍt(t) - chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊O2(t)) ~ -chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊SO4(t)) ~ chem₊α*chem₊O2(t)*chem₊SO2(t)]"
+    @test eqstr ==
+          "Equation[Differential(t)(chem₊SO2(t)) ~ chem₊deposition_ddt_SO2ˍt(t) - chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊O2(t)) ~ -chem₊α*chem₊O2(t)*chem₊SO2(t), Differential(t)(chem₊SO4(t)) ~ chem₊α*chem₊O2(t)*chem₊SO2(t)]"
 end
 
 @testset "events" begin
-    @parameters α = 1 [unit = u"kg", description = "α description"]
-    @parameters β = 2 [unit = u"kg*s", description = "β description"]
+    @parameters α=1 [unit = u"kg", description = "α description"]
+    @parameters β=2 [unit = u"kg*s", description = "β description"]
     @variables x(t) [unit = u"m", description = "x description"]
     eq = D(x) ~ α * x / β
-    @named sys1 = ODESystem([eq], t; metadata=:metatest,
-        continuous_events=[x ~ 0],
-        discrete_events=(t == 1.0) => [x ~ x + 1],
+    @named sys1 = ODESystem([eq], t; metadata = :metatest,
+        continuous_events = [x ~ 0],
+        discrete_events = (t == 1.0) => [x ~ x + 1]
     )
-    @named sys2 = ODESystem([eq], t; metadata=:metatest,
-        continuous_events=[(x ~ 1.0) => [x ~ x + 1], (x ~ 2.0) => [x ~ x - 1]],
-        discrete_events=[(t == 1.0) => [x ~ x + 1], (t == 2.0) => [x ~ x - 1]],
+    @named sys2 = ODESystem([eq], t; metadata = :metatest,
+        continuous_events = [(x ~ 1.0) => [x ~ x + 1], (x ~ 2.0) => [x ~ x - 1]],
+        discrete_events = [(t == 1.0) => [x ~ x + 1], (t == 2.0) => [x ~ x - 1]]
     )
     sys3 = operator_compose(sys1, sys2)
     @test length(ModelingToolkit.get_continuous_events(sys3.from)) == 1
@@ -333,37 +334,35 @@ end
 # https://github.com/EarthSciML/EarthSciMLBase.jl/issues/76
 @testset "NonlinearSystem" begin
     struct ChemistryCoupler
-        sys
+        sys::Any
     end
-    function Chemistry(; name=:chemistry)
+    function Chemistry(; name = :chemistry)
         @variables k(t_nounits)
         @parameters a0 = 1
-        sys1 = NonlinearSystem([k ~ a0], [k], [a0]; name=:rate)
+        sys1 = NonlinearSystem([k ~ a0], [k], [a0]; name = :rate)
 
         function rate()
             return sys1.k
         end
         rx_sys = @reaction_network rx begin
-            @species(
-                A(t) = 20,
-                B(t) = 0,
-            )
+            @species(A(t)=20,
+                B(t)=0,)
             rate(), A --> B
         end
         rxns = compose(rx_sys, sys1)
-        convert(ODESystem, complete(rxns); combinatoric_ratelaws=false, name=name,
-            metadata=Dict(:coupletype => ChemistryCoupler))
+        convert(ODESystem, complete(rxns); combinatoric_ratelaws = false, name = name,
+            metadata = Dict(:coupletype => ChemistryCoupler))
     end
     sys1 = Chemistry()
 
     struct EmisCoupler
-        sys
+        sys::Any
     end
     function Emis()
         @variables A(t_nounits)
         @parameters p
-        ODESystem([D_nounits(A) ~ 2p], t_nounits; name=:Emis,
-            metadata=Dict(:coupletype => EmisCoupler))
+        ODESystem([D_nounits(A) ~ 2p], t_nounits; name = :Emis,
+            metadata = Dict(:coupletype => EmisCoupler))
     end
 
     sys2 = Emis()

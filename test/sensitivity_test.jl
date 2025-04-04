@@ -8,7 +8,8 @@ using Test
 struct ExampleOp <: Operator
 end
 
-function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args,
+function EarthSciMLBase.get_scimlop(
+        op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args,
         domain::DomainInfo, u0, p, alg::MapAlgorithm)
     α, x, y, z = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
 
@@ -21,10 +22,11 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
     function run(du, u, p, t) # In-place
         u = reshape(u, :, sz...)
         du = reshape(du, :, sz...)
-        for ix ∈ 1:size(u, 1)
+        for ix in 1:size(u, 1)
             for I in II
                 # Demonstrate coordinate transforms and observed values
-                x, y, z, fv = obs_f(view(u, :, I), p, t, coords1[I[1]], coords2[I[2]], coords3[I[3]])
+                x, y, z, fv = obs_f(
+                    view(u, :, I), p, t, coords1[I[1]], coords2[I[2]], coords3[I[3]])
                 # Set derivative value.
                 du[ix, I] = (x + y + z) * fv
             end
@@ -34,15 +36,15 @@ function EarthSciMLBase.get_scimlop(op::ExampleOp, csys::CoupledSystem, mtk_sys,
     function run(u, p, t) # Out-of-place
         u = reshape(u, :, sz...)
         II = CartesianIndices(size(u)[2:end])
-        du = [
-            begin
-                x, y, z, fv = obs_f(view(u, :, I), p, t, coords1[I[1]], coords2[I[2]], coords3[I[3]])
-                (x + y + z) * fv
-            end for ix ∈ 1:size(u, 1), I in II
-        ]
+        du = [begin
+                  x, y, z, fv = obs_f(
+                      view(u, :, I), p, t, coords1[I[1]], coords2[I[2]], coords3[I[3]])
+                  (x + y + z) * fv
+              end
+              for ix in 1:size(u, 1), I in II]
         reshape(du, :)
     end
-    FunctionOperator(run, reshape(u0, :), p=p)
+    FunctionOperator(run, reshape(u0, :), p = p)
 end
 
 function EarthSciMLBase.get_needed_vars(::ExampleOp, csys, mtk_sys, domain::DomainInfo)
@@ -54,11 +56,9 @@ lon_min, lon_max = -π, π
 lat_min, lat_max = -0.45π, 0.45π
 t_max = 11.5
 
-@parameters y lon = 0.0 lat = 0.0 lev = 1.0 t α = 10.0 β = 1.0
+@parameters y lon=0.0 lat=0.0 lev=1.0 t α=10.0 β=1.0
 @constants p = 1.0
-@variables(
-    u(t) = 1.0, v(t) = 1.0, x(t) = 1.0, y(t) = 1.0, z(t) = 1.0, windspeed(t)
-)
+@variables(u(t)=1.0, v(t)=1.0, x(t)=1.0, y(t)=1.0, z(t)=1.0, windspeed(t))
 Dt = Differential(t)
 
 indepdomain = t ∈ Interval(t_min, t_max)
@@ -69,16 +69,17 @@ partialdomains = [lon ∈ Interval(lon_min, lon_max),
 
 domain = DomainInfo(
     partialderivatives_δxyδlonlat,
-    constIC(16.0, indepdomain), constBC(16.0, partialdomains...); grid_spacing=[1.0, 1.0, 1.0])
+    constIC(16.0, indepdomain), constBC(16.0, partialdomains...); grid_spacing = [
+        1.0, 1.0, 1.0])
 
 eqs = [Dt(u) ~ -α * √abs(v) + lon + β,
     Dt(v) ~ -α * √abs(u) + lat + lev * 1e-14,
     windspeed ~ lat + lon + lev,
     x ~ 1.0 / EarthSciMLBase.lon2meters(lat),
     y ~ 1.0 / EarthSciMLBase.lat2meters,
-    z ~ 1.0 / lev,
+    z ~ 1.0 / lev
 ]
-sys = ODESystem(eqs, t, name=:sys)
+sys = ODESystem(eqs, t, name = :sys)
 
 op = ExampleOp()
 
@@ -86,13 +87,13 @@ csys = EarthSciMLBase.couple(sys, op, domain)
 model_sys = convert(ODESystem, csys)
 model_sys, = EarthSciMLBase._prepare_coord_sys(model_sys, domain)
 
-st = SolverIMEX(stiff_sparse=false)
+st = SolverIMEX(stiff_sparse = false)
 prob = ODEProblem{false}(csys, st)
 
 function loss(p)
     new_params = remake_buffer(model_sys, prob.p, [model_sys.sys₊α, model_sys.sys₊β], p)
-    newprob = remake(prob, p=new_params)
-    sol = solve(newprob, KenCarp47(linsolve=LUFactorization()))
+    newprob = remake(prob, p = new_params)
+    sol = solve(newprob, KenCarp47(linsolve = LUFactorization()))
     sum(abs.(sol))
 end
 

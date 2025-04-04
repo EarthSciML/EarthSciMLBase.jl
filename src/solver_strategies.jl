@@ -23,22 +23,21 @@ struct SolverIMEX <: SolverStrategy
     alg::MapAlgorithm
     stiff_sparse::Bool
     stiff_tgrad::Bool
-    function SolverIMEX(alg=MapBroadcast(); stiff_sparse=true, stiff_tgrad=true)
+    function SolverIMEX(alg = MapBroadcast(); stiff_sparse = true, stiff_tgrad = true)
         new(alg, stiff_sparse, stiff_tgrad)
     end
 end
 
-function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0=nothing,
-    name=:model, extra_vars=[], kwargs...) where {iip}
-
-    sys_mtk = convert(ODESystem, sys; name=name, extra_vars=extra_vars)
+function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0 = nothing,
+        name = :model, extra_vars = [], kwargs...) where {iip}
+    sys_mtk = convert(ODESystem, sys; name = name, extra_vars = extra_vars)
     dom = domain(sys)
 
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
     u0 = reshape(u0, :) # DiffEq state must be a vector.
 
     f1, sys_mtk, coord_args = mtk_grid_func(sys_mtk, dom, u0, st.alg;
-        sparse=st.stiff_sparse, tgrad=st.stiff_tgrad)
+        sparse = st.stiff_sparse, tgrad = st.stiff_tgrad)
 
     p = MTKParameters(sys_mtk, defaults(sys_mtk))
 
@@ -52,6 +51,8 @@ function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0=nothing,
 
     start, finish = get_tspan(dom)
     SplitODEProblem{iip}(f1, f2, u0, (start, finish), p,
-        callback=CallbackSet(cb...); kwargs...)
+        callback = CallbackSet(cb...); kwargs...)
 end
-ODEProblem(sys::CoupledSystem, st::SolverIMEX; kwargs...) = ODEProblem{true}(sys, st; kwargs...)
+function ODEProblem(sys::CoupledSystem, st::SolverIMEX; kwargs...)
+    ODEProblem{true}(sys, st; kwargs...)
+end

@@ -32,7 +32,7 @@ struct SolverStrangThreads <: SolverStrang
     "Number of threads to use"
     threads::Int
     "Stiff solver algorithm to use (see https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/)"
-    stiffalg
+    stiffalg::Any
     "Length of each splitting time step"
     timestep::AbstractFloat
     "Keyword arguments for the stiff ODEProblem constructor and solver."
@@ -40,10 +40,13 @@ struct SolverStrangThreads <: SolverStrang
     "Algoritm for performing gridded computations."
     alg::MapAlgorithm
 
-    SolverStrangThreads(nthreads, stiffalg, timestep; alg=MapBroadcast(), stiff_kwargs...) =
+    function SolverStrangThreads(
+            nthreads, stiffalg, timestep; alg = MapBroadcast(), stiff_kwargs...)
         new(nthreads, stiffalg, timestep, stiff_kwargs, alg)
-    SolverStrangThreads(stiffalg, timestep; alg=MapBroadcast(), stiff_kwargs...) =
+    end
+    function SolverStrangThreads(stiffalg, timestep; alg = MapBroadcast(), stiff_kwargs...)
         new(Threads.nthreads(), stiffalg, timestep, stiff_kwargs, alg)
+    end
 end
 
 """
@@ -67,24 +70,25 @@ WARNING: Is is not possible to change the parameters using this strategy..
 """
 struct SolverStrangSerial <: SolverStrang
     "Stiff solver algorithm to use (see https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/)"
-    stiffalg
+    stiffalg::Any
     "Length of each splitting time step"
     timestep::AbstractFloat
     "Keyword arguments for the stiff ODEProblem constructor and solver."
     stiff_kwargs::Any
     "Algoritm for performing gridded computations."
     alg::MapAlgorithm
-    SolverStrangSerial(stiffalg, timestep, alg::MapAlgorithm=MapBroadcast(); stiff_kwargs...) =
+    function SolverStrangSerial(
+            stiffalg, timestep, alg::MapAlgorithm = MapBroadcast(); stiff_kwargs...)
         new(stiffalg, timestep, stiff_kwargs, alg)
+    end
 end
 
 nthreads(st::SolverStrangThreads) = st.threads
 nthreads(st::SolverStrangSerial) = 1
 
-function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, tspan=nothing,
-    name=:model, extra_vars=[], kwargs...)
-
-    sys_mtk = convert(ODESystem, s; name=name, extra_vars=extra_vars)
+function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = nothing,
+        name = :model, extra_vars = [], kwargs...)
+    sys_mtk = convert(ODESystem, s; name = name, extra_vars = extra_vars)
 
     dom = domain(s)
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
@@ -94,11 +98,18 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, tspan=nothin
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
     tspan = isnothing(tspan) ? get_tspan(dom) : tspan
     start, finish = tspan
-    prob = ODEProblem(sys_mtk, [], (start, start + typeof(start)(st.timestep)), []; st.stiff_kwargs...)
-    stiff_integrators = [init(remake(prob, u0=zeros(eltype(u0), length(unknowns(sys_mtk))),
-            p=deepcopy(stiff_p)), st.stiffalg, save_on=false, save_start=false, save_end=false,
-        initialize_save=false;
-        st.stiff_kwargs...) for _ in 1:length(IIchunks)]
+    prob = ODEProblem(
+        sys_mtk, [], (start, start + typeof(start)(st.timestep)), []; st.stiff_kwargs...)
+    stiff_integrators = [init(
+                             remake(
+                                 prob, u0 = zeros(eltype(u0), length(unknowns(sys_mtk))),
+                                 p = deepcopy(stiff_p)),
+                             st.stiffalg,
+                             save_on = false,
+                             save_start = false,
+                             save_end = false,
+                             initialize_save = false;
+                             st.stiff_kwargs...) for _ in 1:length(IIchunks)]
 
     coord_sys, coord_args = _prepare_coord_sys(sys_mtk, dom)
     nonstiff_p = default_params(coord_sys)
@@ -108,14 +119,15 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0=nothing, tspan=nothin
 
     cb = CallbackSet(
         stiff_callback(setp!, u0, st, IIchunks, stiff_integrators),
-        get_callbacks(s, coord_sys, coord_args, dom, st.alg)...,
+        get_callbacks(s, coord_sys, coord_args, dom, st.alg)...
     )
-    ODEProblem(nonstiff_op, view(u0, :), (start, finish), nonstiff_p; callback=cb,
-        dt=st.timestep, kwargs...)
+    ODEProblem(nonstiff_op, view(u0, :), (start, finish), nonstiff_p; callback = cb,
+        dt = st.timestep, kwargs...)
 end
 
 "A callback to periodically run the stiff solver."
-function stiff_callback(setp!, u0::AbstractArray{T}, st::SolverStrang, IIchunks, integrators) where {T}
+function stiff_callback(
+        setp!, u0::AbstractArray{T}, st::SolverStrang, IIchunks, integrators) where {T}
     sz = size(u0)
     function affect!(integrator)
         u = reshape(integrator.u, sz...)
@@ -125,13 +137,14 @@ function stiff_callback(setp!, u0::AbstractArray{T}, st::SolverStrang, IIchunks,
     PeriodicCallback(
         affect!,
         T(st.timestep),
-        initial_affect=true,
-        final_affect=false,
+        initial_affect = true,
+        final_affect = false
     )
 end
 
 "Take a step using the ODE solver."
-function ode_step!(setp!, ::SolverStrangThreads, u, IIchunks, integrators, time, step_length)
+function ode_step!(
+        setp!, ::SolverStrangThreads, u, IIchunks, integrators, time, step_length)
     threaded_ode_step!(setp!, u, IIchunks, integrators, time, step_length)
 end
 function ode_step!(setp!, ::SolverStrangSerial, u, IIchunks, integrators, time, step_length)
@@ -141,7 +154,9 @@ end
 "Take a step using the ODE solver."
 function threaded_ode_step!(setp!, u, IIchunks, integrators, time, step_length)
     tasks = map(1:length(IIchunks)) do ithread
-        Threads.@spawn single_ode_step!(setp!, u, IIchunks[$ithread], integrators[$ithread], time, step_length)
+        Threads.@spawn single_ode_step!(
+            setp!, u, IIchunks[$ithread], integrators[$ithread],
+            time, step_length)
     end::Vector{Task}
     wait.(tasks)
     nothing
@@ -151,8 +166,8 @@ end
 function single_ode_step!(setp!, u, IIchunk, integrator, time, step_length)
     for ii in IIchunk
         uii = @view u[:, ii]
-        reinit!(integrator, uii, t0=time, tf=time + step_length,
-            erase_sol=false, reset_dt=true)
+        reinit!(integrator, uii, t0 = time, tf = time + step_length,
+            erase_sol = false, reset_dt = true)
         setp!(integrator.p, ii)
         solve!(integrator)
         @assert length(integrator.sol.u) == 0

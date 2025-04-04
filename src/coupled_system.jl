@@ -22,7 +22,7 @@ mutable struct CoupledSystem
     "Model components to be composed together"
     systems::Vector{ModelingToolkit.AbstractSystem}
     "Initial and boundary conditions and other domain information"
-    domaininfo::Union{Nothing,DomainInfo}
+    domaininfo::Union{Nothing, DomainInfo}
     """
     A vector of functions where each function takes as an argument the resulting PDESystem after DomainInfo is
     added to this system, and returns a transformed PDESystem.
@@ -42,7 +42,8 @@ mutable struct CoupledSystem
 end
 
 function Base.show(io::IO, cs::CoupledSystem)
-    print(io, "CoupledSystem containing $(length(cs.systems)) system(s), $(length(cs.ops)) operator(s), and $(length(cs.callbacks) + length(cs.init_callbacks)) callback(s).")
+    print(io,
+        "CoupledSystem containing $(length(cs.systems)) system(s), $(length(cs.ops)) operator(s), and $(length(cs.callbacks) + length(cs.init_callbacks)) callback(s).")
 end
 
 """
@@ -57,7 +58,7 @@ or any type `T` that has a method `couple(::CoupledSystem, ::T)::CoupledSystem` 
 """
 function couple(systems...)::CoupledSystem
     o = CoupledSystem([], nothing, [], [], [], [])
-    for sys ∈ systems
+    for sys in systems
         if sys isa DomainInfo # Add domain information to the system.
             if o.domaininfo !== nothing
                 error("Cannot add two sets of DomainInfo to a system.")
@@ -83,7 +84,8 @@ function couple(systems...)::CoupledSystem
             push!(o.callbacks, sys)
         elseif (sys isa Tuple) || (sys isa AbstractVector)
             o = couple(o, sys...)
-        elseif hasmethod(init_callback, (typeof(sys), CoupledSystem, Any, Any, DomainInfo,
+        elseif hasmethod(
+            init_callback, (typeof(sys), CoupledSystem, Any, Any, DomainInfo,
                 MapAlgorithm))
             push!(o.init_callbacks, sys)
         elseif hasmethod(couple2, (CoupledSystem, typeof(sys)))
@@ -145,20 +147,21 @@ Return values:
 - The ODESystem representation of the CoupledSystem
 - The extra observed equations which have been pruned to improve performance
 """
-function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, simplify=true,
-    prune=true, extra_vars=[], kwargs...)
+function Base.convert(
+        ::Type{<:ODESystem}, sys::CoupledSystem; name = :model, simplify = true,
+        prune = true, extra_vars = [], kwargs...)
     connector_eqs = Equation[]
     systems = copy(sys.systems)
-    for (i, a) ∈ enumerate(systems)
-        for (j, b) ∈ enumerate(systems)
+    for (i, a) in enumerate(systems)
+        for (j, b) in enumerate(systems)
             a_t, b_t = get_coupletype(a), get_coupletype(b)
             if hasmethod(couple2, (a_t, b_t))
                 cs = couple2(a_t(a), b_t(b))
-                @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a ConnectorSystem. " *
-                                               "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
+                @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a ConnectorSystem. "*
+                "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
                 systems[i], a = cs.from, cs.from
                 systems[j], b = cs.to, cs.to
-                for eq ∈ cs.eqs
+                for eq in cs.eqs
                     @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
                 end
                 append!(connector_eqs, cs.eqs)
@@ -167,7 +170,7 @@ function Base.convert(::Type{<:ODESystem}, sys::CoupledSystem; name=:model, simp
     end
 
     iv = ModelingToolkit.get_iv(first(systems))
-    connectors = ODESystem(connector_eqs, iv; name=name, kwargs...)
+    connectors = ODESystem(connector_eqs, iv; name = name, kwargs...)
 
     # Compose everything together.
     o = compose(connectors, systems...)
@@ -196,16 +199,17 @@ end
 
 Get the ModelingToolkit PDESystem representation of a [`CoupledSystem`](@ref).
 """
-function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name=:model, kwargs...)::ModelingToolkit.AbstractSystem
-    o = convert(ODESystem, sys; name=name, simplify=false, prune=false, kwargs...)
+function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
+        kwargs...)::ModelingToolkit.AbstractSystem
+    o = convert(ODESystem, sys; name = name, simplify = false, prune = false, kwargs...)
 
     if sys.domaininfo !== nothing
         o += sys.domaininfo
     end
 
     if length(sys.pdefunctions) > 0
-        @assert sys.domaininfo !== nothing "Cannot apply PDE functions to a system without domain information."
-        for f ∈ sys.pdefunctions
+        @assert sys.domaininfo!==nothing "Cannot apply PDE functions to a system without domain information."
+        for f in sys.pdefunctions
             o = f(o)
         end
     end
@@ -227,7 +231,8 @@ end
 # This works because SciMLOperators can be added together.
 function nonstiff_ops(sys::CoupledSystem, sys_mtk, coord_args, domain, u0, p, alg)
     nonstiff_op = length(sys.ops) > 0 ?
-                  sum([get_scimlop(op, sys, sys_mtk, coord_args, domain, u0, p, alg) for op ∈ sys.ops]) :
+                  sum([get_scimlop(op, sys, sys_mtk, coord_args, domain, u0, p, alg)
+                       for op in sys.ops]) :
                   NullOperator(length(u0))
     nonstiff_op = cache_operator(nonstiff_op, u0)
 end
@@ -250,7 +255,7 @@ init_callback() = error("Not implemented")
 
 function get_callbacks(sys::CoupledSystem, sys_mtk, coord_args, domain::DomainInfo, alg)
     extra_cb = [init_callback(c, sys, sys_mtk, coord_args, domain::DomainInfo, alg)
-                for c ∈ sys.init_callbacks]
+                for c in sys.init_callbacks]
     [sys.callbacks; extra_cb]
 end
 

@@ -1,20 +1,21 @@
 using EarthSciMLBase
 using Documenter
 
-DocMeta.setdocmeta!(EarthSciMLBase, :DocTestSetup, :(using EarthSciMLBase); recursive=true)
+DocMeta.setdocmeta!(
+    EarthSciMLBase, :DocTestSetup, :(using EarthSciMLBase); recursive = true)
 
 makedocs(;
-    modules=[EarthSciMLBase],
-    authors="EarthSciML Authors and Contributors",
-    repo="https://github.com/EarthSciML/EarthSciMLBase.jl/blob/{commit}{path}#{line}",
-    sitename="EarthSciMLBase.jl",
-    format=Documenter.HTML(;
-        prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://EarthSciML.github.io/EarthSciMLBase.jl",
-        assets=String[],
-        repolink="https://github.com/EarthSciML/EarthSciMLBase.jl"
+    modules = [EarthSciMLBase],
+    authors = "EarthSciML Authors and Contributors",
+    repo = "https://github.com/EarthSciML/EarthSciMLBase.jl/blob/{commit}{path}#{line}",
+    sitename = "EarthSciMLBase.jl",
+    format = Documenter.HTML(;
+        prettyurls = get(ENV, "CI", "false") == "true",
+        canonical = "https://EarthSciML.github.io/EarthSciMLBase.jl",
+        assets = String[],
+        repolink = "https://github.com/EarthSciML/EarthSciMLBase.jl"
     ),
-    pages=[
+    pages = [
         "Home" => "index.md",
         "Composition" => "composition.md",
         "Operator Composition" => "operator_compose.md",
@@ -24,13 +25,13 @@ makedocs(;
         "Coordinate Transforms" => "coord_transforms.md",
         "Operators" => "operator.md",
         "Examples" => [
-            "All Together" => "example_all_together.md",
+            "All Together" => "example_all_together.md"
         ],
-        "API Reference" => "api.md",
-    ],
+        "API Reference" => "api.md"
+    ]
 )
 
 deploydocs(;
-    repo="github.com/EarthSciML/EarthSciMLBase.jl",
-    devbranch="main",
+    repo = "github.com/EarthSciML/EarthSciMLBase.jl",
+    devbranch = "main"
 )
