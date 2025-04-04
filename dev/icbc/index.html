@@ -12,9 +12,9 @@ function ExampleSys()
     @parameters x=1 y=2
     eqs = [
         D(u) ~ √abs(v),
-        D(v) ~ √abs(u),
+        D(v) ~ √abs(u)
     ]
-    ODESystem(eqs, t, [u, v], [x, y]; name=:Docs₊Example)
+    ODESystem(eqs, t, [u, v], [x, y]; name = :Docs₊Example)
 end
 
 ExampleSys()</code></pre><p class="math-container">\[ \begin{align}
@@ -31,8 +31,8 @@ icbc = DomainInfo(
     constIC(4.0, t ∈ Interval(t_min, t_max)),
     constBC(16.0,
         x ∈ Interval(x_min, x_max),
-        y ∈ Interval(y_min, y_max),
-    ),
+        y ∈ Interval(y_min, y_max)
+    )
 )</code></pre><p>It is also possible to use periodic boundary conditions with <a href="../api/#EarthSciMLBase.periodicBC"><code>periodicBC</code></a> and zero-gradient boundary conditions with <a href="../api/#EarthSciMLBase.zerogradBC"><code>zerogradBC</code></a>.</p><p>Finally, we combine our initial and boundary conditions with our system of equations using the <a href="../api/#EarthSciMLBase.couple-Tuple"><code>couple</code></a> function.</p><pre><code class="language-julia hljs">model = couple(ExampleSys(), icbc)
 
 eq_sys = convert(PDESystem, model)</code></pre><p class="math-container">\[ \begin{align}
@@ -63,4 +63,4 @@ eq_sys = convert(PDESystem, model)</code></pre><p class="math-container">\[ \beg
 \mathtt{Docs.Example.v}\left( t, x, 0 \right) &amp;= 16 \\
 \mathtt{Docs.Example.v}\left( t, x, 1 \right) &amp;= 16
 \end{align}
- \]</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../param_to_var/">« Parameter Replacement</a><a class="docs-footer-nextpage" href="../advection/">Advection »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.10.1 on <span class="colophon-date" title="Friday 4 April 2025 13:51">Friday 4 April 2025</span>. Using Julia version 1.11.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ \]</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../param_to_var/">« Parameter Replacement</a><a class="docs-footer-nextpage" href="../advection/">Advection »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.10.1 on <span class="colophon-date" title="Friday 4 April 2025 15:34">Friday 4 April 2025</span>. Using Julia version 1.11.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

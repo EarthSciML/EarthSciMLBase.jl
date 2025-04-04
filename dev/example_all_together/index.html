@@ -9,38 +9,42 @@ using Plots
 # Create our independent variable `t` and our partially-independent variables `x` and `y`.
 @parameters x y
 
-struct ExampleSys1Coupler sys end
+struct ExampleSys1Coupler
+    sys
+end
 function ExampleSys1()
     @species c₁(t)=5.0 c₂(t)=5.0
     rs = ReactionSystem(
         [Reaction(2.0, [c₁], [c₂])],
-        t; name=:Sys1, combinatoric_ratelaws=false)
-    convert(ODESystem, complete(rs), metadata=Dict(:coupletype=&gt;ExampleSys1Coupler))
+        t; name = :Sys1, combinatoric_ratelaws = false)
+    convert(ODESystem, complete(rs), metadata = Dict(:coupletype =&gt; ExampleSys1Coupler))
 end
 
 ExampleSys1()</code></pre><p class="math-container">\[ \begin{align}
 \frac{\mathrm{d} \mathtt{c_1}\left( t \right)}{\mathrm{d}t} &amp;=  - 2 \mathtt{c_1}\left( t \right) \\
 \frac{\mathrm{d} \mathtt{c_2}\left( t \right)}{\mathrm{d}t} &amp;= 2 \mathtt{c_1}\left( t \right)
 \end{align}
- \]</p><p>Our second example system is a simple ODE system, with the same two variables.</p><pre><code class="language-julia hljs">struct ExampleSys2Coupler sys end
+ \]</p><p>Our second example system is a simple ODE system, with the same two variables.</p><pre><code class="language-julia hljs">struct ExampleSys2Coupler
+    sys
+end
 function ExampleSys2()
     @variables c₁(t)=5.0 c₂(t)=5.0
     @parameters p₁=1.0 p₂=0.5 x=1 y=1
     ODESystem(
         [D(c₁) ~ -p₁, D(c₂) ~ p₂],
-        t, [c₁, c₂], [p₁, p₂, x, y]; name=:Sys2,
-        metadata=Dict(:coupletype=&gt;ExampleSys2Coupler))
+        t, [c₁, c₂], [p₁, p₂, x, y]; name = :Sys2,
+        metadata = Dict(:coupletype =&gt; ExampleSys2Coupler))
 end
 
 ExampleSys2()</code></pre><p class="math-container">\[ \begin{align}
 \frac{\mathrm{d} \mathtt{c_1}\left( t \right)}{\mathrm{d}t} &amp;=  - \mathtt{p{_1}} \\
 \frac{\mathrm{d} \mathtt{c_2}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{p{_2}}
 \end{align}
- \]</p><p>Now, we specify what should happen when we couple the two systems together. In this case, we want the the derivative of the composed system to  be equal to the sum of the derivatives of the two systems. We can do that using the <a href="../api/#EarthSciMLBase.operator_compose"><code>operator_compose</code></a> function  from this package.</p><pre><code class="language-julia hljs">function EarthSciMLBase.couple2(sys1::ExampleSys1Coupler, sys2::ExampleSys2Coupler)
+ \]</p><p>Now, we specify what should happen when we couple the two systems together. In this case, we want the the derivative of the composed system to be equal to the sum of the derivatives of the two systems. We can do that using the <a href="../api/#EarthSciMLBase.operator_compose"><code>operator_compose</code></a> function from this package.</p><pre><code class="language-julia hljs">function EarthSciMLBase.couple2(sys1::ExampleSys1Coupler, sys2::ExampleSys2Coupler)
     sys1, sys2 = sys1.sys, sys2.sys
     sys1 = convert(ODESystem, sys1)
     operator_compose(sys1, sys2)
-end</code></pre><p>Once we specify all of the above, it is simple to create our two individual systems and then couple them together. </p><pre><code class="language-julia hljs">sys1 = ExampleSys1()
+end</code></pre><p>Once we specify all of the above, it is simple to create our two individual systems and then couple them together.</p><pre><code class="language-julia hljs">sys1 = ExampleSys1()
 sys2 = ExampleSys2()
 sys = couple(sys1, sys2)
 
@@ -60,14 +64,14 @@ convert(ODESystem, sys)</code></pre><p class="math-container">\[ \begin{align}
 \mathtt{Sys1.Sys2\_ddt\_c_{1}ˍt}\left( t \right) &amp;= \mathtt{Sys2.Sys2\_ddt\_c_{1}ˍt}\left( t \right) \\
 \mathtt{Sys1.Sys2\_ddt\_c_{2}ˍt}\left( t \right) &amp;= \mathtt{Sys2.Sys2\_ddt\_c_{2}ˍt}\left( t \right)
 \end{align}
- \]</p><p>We can also run simulations using this system:</p><pre><code class="language-julia hljs">odeprob = ODEProblem(simplified_sys, [], (0.0,10.0), [])
+ \]</p><p>We can also run simulations using this system:</p><pre><code class="language-julia hljs">odeprob = ODEProblem(simplified_sys, [], (0.0, 10.0), [])
 odesol = solve(odeprob)
-plot(odesol)</code></pre><img src="77c72f11.svg" alt="Example block output"/><p>Once we&#39;ve confirmed that our model works in a 0D &quot;box model&quot; setting, we can expand it to 1, 2, or 3 dimensions using by adding in initial  and boundary conditions. We will also add in advection using constant-velocity wind fields add the same time.</p><pre><code class="language-julia hljs">x_min = y_min = t_min = 0.0
+plot(odesol)</code></pre><img src="20396610.svg" alt="Example block output"/><p>Once we&#39;ve confirmed that our model works in a 0D &quot;box model&quot; setting, we can expand it to 1, 2, or 3 dimensions using by adding in initial and boundary conditions. We will also add in advection using constant-velocity wind fields add the same time.</p><pre><code class="language-julia hljs">x_min = y_min = t_min = 0.0
 x_max = y_max = t_max = 1.0
 domain = DomainInfo(
     constIC(4.0, t ∈ Interval(t_min, t_max)),
     periodicBC(x ∈ Interval(x_min, x_max)),
-    zerogradBC(y ∈ Interval(y_min, y_max)),
+    zerogradBC(y ∈ Interval(y_min, y_max))
 )
 
 sys_pde = couple(sys, domain, ConstantWind(t, 1.0, 1.0), Advection())
@@ -166,17 +170,19 @@ sys_pde_mtk = convert(PDESystem, sys_pde)</code></pre><p class="math-container">
 \frac{\mathrm{d}}{\mathrm{d}y} \mathtt{ConstantWind.v\_2}\left( t, x, 0 \right) &amp;= 0 \\
 \frac{\mathrm{d}}{\mathrm{d}y} \mathtt{ConstantWind.v\_2}\left( t, x, 1 \right) &amp;= 0
 \end{align}
- \]</p><p>Finally, we can run a simulation using this system:</p><pre><code class="language-julia hljs">discretization = MOLFiniteDifference([x=&gt;10, y=&gt;10], t, approx_order=2)
+ \]</p><p>Finally, we can run a simulation using this system:</p><pre><code class="language-julia hljs">discretization = MOLFiniteDifference([x =&gt; 10, y =&gt; 10], t, approx_order = 2)
 @time pdeprob = discretize(sys_pde_mtk, discretization)
-@time pdesol = solve(pdeprob, Tsit5(), saveat=0.1)
+@time pdesol = solve(pdeprob, Tsit5(), saveat = 0.1)
 
 # Plot the solution.
 discrete_x, discrete_y, discrete_t = pdesol[x], pdesol[y], pdesol[t]
 @variables Sys1₊c₁(..) Sys1₊c₂(..)
 solc1, solc2 = pdesol[Sys1₊c₁(t, x, y)], pdesol[Sys1₊c₂(t, x, y)]
 anim = @animate for k in 1:length(discrete_t)
-    p1 = heatmap(solc1[k, 1:end-1, 1:end-1], title=&quot;c₁ t=\$(discrete_t[k])&quot;, clim=(0,4.0), lab=:none)
-    p2 = heatmap(solc2[k, 1:end-1, 1:end-1], title=&quot;c₂ t=\$(discrete_t[k])&quot;, clim=(0,7.0), lab=:none)
-    plot(p1, p2, layout=(1,2), size=(800,400))
+    p1 = heatmap(solc1[k, 1:(end - 1), 1:(end - 1)],
+        title = &quot;c₁ t=\$(discrete_t[k])&quot;, clim = (0, 4.0), lab = :none)
+    p2 = heatmap(solc2[k, 1:(end - 1), 1:(end - 1)],
+        title = &quot;c₂ t=\$(discrete_t[k])&quot;, clim = (0, 7.0), lab = :none)
+    plot(p1, p2, layout = (1, 2), size = (800, 400))
 end
-gif(anim, fps = 8)</code></pre><img src="c158d100.gif" alt="Example block output"/><p>Because our system is a system of ordinary differential equations rather than partial differential equations, all of the grid cells in the animation above have the same value. Refer to the <a href="../advection/#Advection">advection example</a> for an example of a system of partial differential equations.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../operator/">« Operators</a><a class="docs-footer-nextpage" href="../api/">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.10.1 on <span class="colophon-date" title="Friday 4 April 2025 13:51">Friday 4 April 2025</span>. Using Julia version 1.11.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+gif(anim, fps = 8)</code></pre><img src="c158d100.gif" alt="Example block output"/><p>Because our system is a system of ordinary differential equations rather than partial differential equations, all of the grid cells in the animation above have the same value. Refer to the <a href="../advection/#Advection">advection example</a> for an example of a system of partial differential equations.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../operator/">« Operators</a><a class="docs-footer-nextpage" href="../api/">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.10.1 on <span class="colophon-date" title="Friday 4 April 2025 15:34">Friday 4 April 2025</span>. Using Julia version 1.11.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
