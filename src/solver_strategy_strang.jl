@@ -54,7 +54,7 @@ end
 ```julia
 # Specify the stiff ODE solver algorithm.
 # `timestep` is the length of time for each splitting step.
-SimulatorStrangSerial(stiffalg, timestep; kwargs...)
+SimulatorStrangSerial(stiffalg, timestep; stiff_kwargs...)
 ```
 
 Perform a simulation using [Strang splitting](https://en.wikipedia.org/wiki/Strang_splitting),
@@ -110,7 +110,7 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = no
                              save_start = false,
                              save_end = false,
                              initialize_save = false;
-                             st.stiff_kwargs...) for _ in 1:length(IIchunks)]
+                             kwargs...) for _ in 1:length(IIchunks)]
 
     coord_sys, coord_args = _prepare_coord_sys(sys_mtk, dom)
     nonstiff_p = default_params(coord_sys)
