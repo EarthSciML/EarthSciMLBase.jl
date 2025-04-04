@@ -17,9 +17,9 @@ abstract type SolverStrang <: SolverStrategy end
 ```julia
 # Specify the number of threads and the stiff ODE solver algorithm.
 # `timestep` is the length of time for each splitting step.
-SimulatorStrangThreads(threads, stiffalg, timestep; kwargs...)
+SimulatorStrangThreads(threads, stiffalg, timestep; stiff_kwargs...)
 # Use the default number of threads.
-SimulatorStrangThreads(stiffalg, timestep; kwargs...)
+SimulatorStrangThreads(stiffalg, timestep; stiff_kwargs...)
 ```
 
 Perform a simulation using [Strang splitting](https://en.wikipedia.org/wiki/Strang_splitting),
