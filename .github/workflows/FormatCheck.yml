@@ -10,4 +10,4 @@ on:
 jobs:
   format-check:
     name: "Format Check"
-    uses: "EarthSciML/.github/.github/workflows/format-check.yml"
+    uses: "EarthSciML/.github/.github/workflows/format_check.yml@v1"

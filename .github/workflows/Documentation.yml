@@ -16,5 +16,5 @@ concurrency:
 jobs:
   build-and-deploy-docs:
     name: "Documentation"
-    uses: "EarthSciML/.github/.github/workflows/documentation.yml"
+    uses: "EarthSciML/.github/.github/workflows/documentation.yml@v1"
     secrets: "inherit"
