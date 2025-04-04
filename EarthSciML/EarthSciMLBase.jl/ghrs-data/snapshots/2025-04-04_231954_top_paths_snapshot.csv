@@ -1,0 +1,11 @@
+url_path,views_total,views_unique
+/EarthSciML/EarthSciMLBase.jl,4,2
+/EarthSciML/EarthSciMLBase.jl/pulls,3,1
+/EarthSciML/EarthSciMLBase.jl/tree/main/src,2,2
+/EarthSciML/EarthSciMLBase.jl/pull/82,2,1
+/EarthSciML/EarthSciMLBase.jl/blob/main/src/blockdiagonal.jl,1,1
+/EarthSciML/EarthSciMLBase.jl/blob/main/src/mtk_grid_func.jl,1,1
+/EarthSciML/EarthSciMLBase.jl/blob/main/src/operator.jl,1,1
+/EarthSciML/EarthSciMLBase.jl/blob/main/src/param_to_var.jl,1,1
+/EarthSciML/EarthSciMLBase.jl/blob/main/src/solver_strategies.jl,1,1
+/EarthSciML/EarthSciMLBase.jl/blob/main/src/solver_strategy_strang.jl,1,1
