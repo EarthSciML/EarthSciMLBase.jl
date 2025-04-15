@@ -28,7 +28,7 @@ ThreadsX = "ac1d9e8a-700a-412c-b207-f0111f4b6c0d"
 [compat]
 Accessors = "0.1.42"
 ArrayInterface = "7.18.0"
-Catalyst = "14.4.1"
+Catalyst = "14.4.1, 15"
 DiffEqCallbacks = "4.3"
 DifferentialEquations = "7.16.1"
 DocStringExtensions = "0.9.3"
