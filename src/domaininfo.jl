@@ -165,7 +165,7 @@ function grid(d::DomainInfo{T}, staggering) where {T}
     @assert length(staggering)==length(endpts) "The number of staggering values $(length(staggering)) must match the number of partial independent variables $(length(endpts))."
     @assert all(isa.(staggering, (Bool,))) "Staggering must be a vector of booleans."
     g_nostagger = [s:d:e for ((s, e), d) in zip(endpts, d.grid_spacing)]
-    endpts = [staggering[i] ? (e[1] - d.grid_spacing[i] / 2, e[2] + d.grid_spacing[i] / 2) :
+    endpts = [staggering[i] ? (e[1] - d.grid_spacing[i] / 2, e[2] + d.grid_spacing[i] / 2 + 1e-15) :
               e
               for (i, e) in enumerate(endpts)]
     g = [s:d:e for ((s, e), d) in zip(endpts, d.grid_spacing)]
