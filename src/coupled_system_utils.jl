@@ -131,9 +131,16 @@ function copy_with_change(sys::ODESystem;
         continuous_events = ModelingToolkit.get_continuous_events(sys),
         discrete_events = ModelingToolkit.get_discrete_events(sys)
 )
-    ODESystem(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
-        name = name, metadata = metadata,
-        continuous_events = continuous_events, discrete_events = discrete_events)
+    try
+        ODESystem(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
+            name = name, metadata = metadata,
+            continuous_events = continuous_events, discrete_events = discrete_events)
+    catch e
+        if isa(e, ModelingToolkit.ValidationError)
+            @warn "Equations:\n$(join(["  $i. $eq" for (i, eq) in enumerate(eqs)], "\n"))"
+        end
+        rethrow(e)
+    end
 end
 
 # Get variables effected by this event.
