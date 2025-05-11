@@ -90,7 +90,7 @@ function couple(systems...)::CoupledSystem
             push!(o.init_callbacks, sys)
         elseif hasmethod(couple2, (CoupledSystem, typeof(sys)))
             o = couple2(o, sys)
-        elseif hasmethod(couple2, (typeof(sys), CoupledSystem))
+        elseif hasmethod(couple2, (typeof(sys), CoupledSystem)) # TODO(CT): Mismatch between couple and couple2 here?
             o = couple(sys, o)
         else
             error("Cannot couple a $(typeof(sys)).")
@@ -159,7 +159,7 @@ function Base.convert(
             a_t, b_t = get_coupletype(a), get_coupletype(b)
             if hasmethod(couple2, (a_t, b_t))
                 cs = couple2(a_t(a), b_t(b))
-                @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a ConnectorSystem. "*
+                @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a EarthSciMLBase.ConnectorSystem. "*
                 "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
                 systems[i], a = cs.from, cs.from
                 systems[j], b = cs.to, cs.to
