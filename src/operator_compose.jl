@@ -51,6 +51,21 @@ function get_matching_translate(translate, a)
     translate[idx]
 end
 
+# Generate a unique name for a connector variable.
+function connector_name(name::AbstractString, taken_names::AbstractDict)
+    if haskey(taken_names, name)
+        i = 1
+        while haskey(taken_names, "$(name)_$(i)")
+            i += 1
+        end
+        taken_names["$(name)_$(i)"] = true
+        return Symbol("$(name)_$(i)"), taken_names
+    else
+        taken_names[name] = true
+        return Symbol(name), taken_names
+    end
+end
+
 """
 $(SIGNATURES)
 
@@ -74,6 +89,7 @@ function operator_compose(
     connections = Equation[]
     all_matches = []
     all_beq_matches = []
+    taken_names = Dict()
     for a_eq in a_eqs
         if isequal(a_eq.lhs, 0)
             # If the LHS == 0 (i.e. everything has already been shifted to the RHS),
@@ -114,7 +130,7 @@ function operator_compose(
                 bvar = String(Symbolics.tosymbol(b_eqs[j].lhs, escape = false))
                 if operation(b_eqs[j].lhs) == Differential(iv)
                     # The LHS of this equation is the time derivative of the dependent variable of interest,
-                    var1 = Symbol("$(bname)_ddt_$(bvar)")
+                    var1, taken_names = connector_name("$(bname)_ddt_$(bvar)", taken_names)
                     term1 = (@variables $var1(iv))[1]
                     term1 = add_metadata(term1, b_eqs[j].lhs)
                     b_eqs[j] = term1 ~ b_eqs[j].rhs
@@ -130,7 +146,7 @@ function operator_compose(
                     # Now set the dependent variables in the two systems to be equal.
                     push!(connections, adv ~ bdv * conv)
                 else # The LHS of this equation is the dependent variable of interest.
-                    var1 = Symbol("$(bname)_$(bvar)")
+                    var1, taken_names = connector_name("$(bname)_$(bvar)", taken_names)
                     term1 = (@variables $var1(iv))[1]
                     term1 = add_metadata(term1, b_eqs[j].lhs * conv)
                     var2 = Symbol("$(aname)₊", var1)

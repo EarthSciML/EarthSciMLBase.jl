@@ -8,10 +8,10 @@ using DynamicQuantities
 struct ExampleSysCoupler
     sys::Any
 end
-function ExampleSys()
+function ExampleSys(; name = :sys1)
     @variables x(t_nounits)
     @parameters p
-    ODESystem([D_nounits(x) ~ p], t_nounits; name = :sys1,
+    ODESystem([D_nounits(x) ~ p], t_nounits; name = name,
         metadata = Dict(:coupletype => ExampleSysCoupler))
 end
 
@@ -157,6 +157,45 @@ end
     streq = string(equations(op))
     @test occursin("sys1₊p", streq)
     @test occursin("sys1₊sys22_ddt_yˍt(t)", streq)
+end
+
+@testset "translated with multiple conversion factors" begin
+    struct KCoupler
+        sys::Any
+    end
+    function KSys(; name = :ksys)
+        @variables k(t_nounits)
+        @parameters p
+        ODESystem([k ~ p], t_nounits; name = name,
+            metadata = Dict(:coupletype => KCoupler))
+    end
+    struct twovarCoupler
+        sys::Any
+    end
+    function twovar(; name = :twovar)
+        @variables x(t_nounits) y(t_nounits)
+        @parameters p
+        ODESystem([D_nounits(x) ~ p, D_nounits(y) ~ p], t_nounits; name = name,
+            metadata = Dict(:coupletype => twovarCoupler))
+    end
+
+    sys1 = twovar()
+    sys2 = KSys()
+
+    function EarthSciMLBase.couple2(s1::twovarCoupler, s2::KCoupler)
+        s1, s2 = s1.sys, s2.sys
+        operator_compose(s1, s2, Dict(
+            s1.x => s2.k => s1.x,
+            s1.y => s2.k => s1.y
+        ))
+    end
+
+    combined = couple(sys1, sys2)
+    op = convert(ODESystem, combined)
+    streq = string(equations(op))
+    @test occursin("twovar₊p", streq)
+    @test occursin("twovar₊ksys_k(t)", streq)
+    @test occursin("twovar₊ksys_k_1(t)", streq)
 end
 
 @testset "Units" begin
