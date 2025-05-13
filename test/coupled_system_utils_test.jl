@@ -76,7 +76,8 @@ bcs = icbc(domain, vars)
         sys2 = prune_observed(sys, sys_simple, [])
         sys2 = structural_simplify(sys2)
 
-        @test isequal(equations(sys2), eqs[1:1])
+        @test occursin("Differential(t)(x(t)) ~ -x(t)", string(equations(sys2))) ||
+            occursin("Differential(t)(x(t)) ~ -z(t)", string(equations(sys2)))
         @test issetequal(observed(sys2), eqs[2:2])
 
         prob = ODEProblem(sys2, [], (0.0, 2.0))

@@ -10,7 +10,7 @@ struct PhotolysisCoupler
     sys::Any
 end
 function Photolysis(; name = :Photolysis)
-    @variables j_NO2(t) = 1
+    @variables j_NO2(t)
     eqs = [
         j_NO2 ~ max(sin(t / 86400), 0)
     ]
