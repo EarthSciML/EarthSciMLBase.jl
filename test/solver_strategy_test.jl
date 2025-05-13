@@ -41,7 +41,8 @@ function EarthSciMLBase.get_scimlop(
         u = reshape(u, :, sz...)
         II = CartesianIndices(size(u)[2:end])
         du = vcat([begin
-                       t1, t2, t3, fv = obs_f(view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
+                       t1, t2, t3, fv = obs_f(view(u, :, I), p, t,
+                        c1[I[1]], c2[I[2]], c3[I[3]])
                        (t1 + t2 + t3) * fv
                    end
                    for ix in 1:size(u, 1), I in II]...)
@@ -61,7 +62,7 @@ t_max = 11.5
 
 @parameters y lon=0.0 lat=0.0 lev=1.0 t α=10.0
 @constants p = 1.0
-@variables(u(t)=1.0, v(t)=1.0, x(t), [unit = u"1/m"], y(t), [unit = u"1/m"], z(t),
+@variables(u(t)=1.0, v(t)=1.0, x(t), [unit=u"1/m"], y(t), [unit=u"1/m"], z(t),
     windspeed(t))
 Dt = Differential(t)
 
@@ -137,7 +138,8 @@ sol1 = solve(prob, Tsit5(); abstol = 1e-12, reltol = 1e-12)
 st = SolverStrangThreads(Tsit5(), 1.0)
 p = EarthSciMLBase.default_params(sys_mtk)
 
-IIchunks, integrators = let
+IIchunks,
+integrators = let
     II = CartesianIndices(size(u)[2:4])
     IIchunks = collect(Iterators.partition(II, length(II) ÷ st.threads))
     start, finish = get_tspan(domain)
@@ -160,7 +162,8 @@ EarthSciMLBase.threaded_ode_step!(setp!, u, IIchunks, integrators, 0.0, 1.0)
 
 @testset "mtk_func" begin
     ucopy = copy(u)
-    f, sys_coords, coord_args = EarthSciMLBase.mtk_grid_func(
+    f, sys_coords,
+    coord_args = EarthSciMLBase.mtk_grid_func(
         sys_mtk, domain, ucopy; sparse = true, tgrad = true)
     fthreads, = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy,
         MapThreads(); sparse = false, tgrad = false)

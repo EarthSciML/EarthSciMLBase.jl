@@ -26,8 +26,8 @@ function EarthSciMLBase.get_scimlop(
         for ix in 1:size(u, 1)
             for I in II
                 # Demonstrate coordinate transforms and observed values
-                x, y, z, fv = obs_f(
-                    view(u, :, I), p, t, coords1[I[1]], coords2[I[2]], coords3[I[3]])
+                x, y, z, fv = obs_f(view(u, :, I), p, t,
+                    coords1[I[1]], coords2[I[2]], coords3[I[3]])
                 # Set derivative value.
                 du[ix, I] = (x + y + z) * fv
             end
@@ -38,7 +38,9 @@ function EarthSciMLBase.get_scimlop(
         u = reshape(u, :, sz...)
         II = CartesianIndices(size(u)[2:end])
         du = [begin
-                  x, y, z, fv = obs_f(
+                  x, y,
+                  z,
+                  fv = obs_f(
                       view(u, :, I), p, t, coords1[I[1]], coords2[I[2]], coords3[I[3]])
                   (x + y + z) * fv
               end
@@ -59,8 +61,8 @@ t_max = 11.5
 
 @parameters y lon=0.0 lat=0.0 lev=1.0 t α=10.0 β=1.0
 @constants p = 1.0
-@variables(u(t)=1.0, v(t)=1.0, x(t)=1.0, [unit = u"1/m"],
-    y(t)=1.0, [unit = u"1/m"], z(t)=1.0, windspeed(t))
+@variables(u(t)=1.0, v(t)=1.0, x(t)=1.0, [unit=u"1/m"],
+    y(t)=1.0, [unit=u"1/m"], z(t)=1.0, windspeed(t))
 Dt = Differential(t)
 
 indepdomain = t ∈ Interval(t_min, t_max)

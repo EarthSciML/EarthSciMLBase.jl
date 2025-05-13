@@ -23,7 +23,6 @@ ModelingToolkit.jl ODESystem or Catalyst.jl ReactionSystem.
 **NOTE**: The independent variable (usually time) must be first in the list of initial and boundary conditions.
 
 $(FIELDS)
-
 """
 struct DomainInfo{T}
     """
@@ -78,11 +77,11 @@ struct DomainInfo{T}
             spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
         @assert dtype(datetime2unix(starttime))<dtype(datetime2unix(endtime)) "starttime must be before endtime when represented as $dtype."
         @assert (!isnothing(xrange) &&
-                 !isnothing(yrange))||
-        (!isnothing(latrange) && !isnothing(lonrange)) "Either x and y ranges or lat and lon ranges must be provided."
+                 !isnothing(yrange)) ||
+                (!isnothing(latrange) && !isnothing(lonrange)) "Either x and y ranges or lat and lon ranges must be provided."
         @assert (isnothing(xrange) &&
-                 isnothing(yrange))||
-        (isnothing(latrange) && isnothing(lonrange)) "Either x and y ranges or lat and lon ranges must be provided, not both."
+                 isnothing(yrange)) ||
+                (isnothing(latrange) && isnothing(lonrange)) "Either x and y ranges or lat and lon ranges must be provided, not both."
 
         # Coordinate transforms
         fdxs = Vector{Function}()
@@ -340,7 +339,6 @@ Construct constant initial conditions equal to the value
 specified by `val`.
 
 $(FIELDS)
-
 """
 struct constIC <: ICcomponent
     "The value of the constant initial conditions."
@@ -370,7 +368,6 @@ Construct constant boundary conditions equal to the value
 specified by `val`.
 
 $(FIELDS)
-
 """
 struct constBC <: BCcomponent
     "The value of the constant boundary conditions."
@@ -412,7 +409,6 @@ $(TYPEDSIGNATURES)
 Construct zero-gradient boundary conditions for the given `partialdomains`.
 
 $(FIELDS)
-
 """
 struct zerogradBC <: BCcomponent
     "The partial domains, e.g. `[x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)]`."
@@ -455,7 +451,6 @@ side of the domain is set equal to the value at the other side, so
 that the domain "wraps around" from one side to the other.
 
 $(FIELDS)
-
 """
 struct periodicBC <: BCcomponent
     "The partial domains, e.g. `[x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)]`."
@@ -520,15 +515,16 @@ function Base.:(+)(
         eqs, icbc(di, statevars), domains(di), dimensions, dvs, ps, name = nameof(sys))
 end
 
-Base.:(+)(di::DomainInfo, sys::ModelingToolkit.ODESystem)::ModelingToolkit.PDESystem = sys +
-                                                                                       di
+Base.:(+)(
+    di::DomainInfo, sys::ModelingToolkit.ODESystem)::ModelingToolkit.PDESystem = sys +
+                                                                                 di
 
 function Base.:(+)(sys::Catalyst.ReactionSystem, di::DomainInfo)::ModelingToolkit.PDESystem
     convert(ODESystem, sys; combinatoric_ratelaws = false) + di
 end
 
-Base.:(+)(di::DomainInfo, sys::Catalyst.ReactionSystem)::ModelingToolkit.PDESystem = sys +
-                                                                                     di
+Base.:(+)(di::DomainInfo,
+    sys::Catalyst.ReactionSystem)::ModelingToolkit.PDESystem = sys + di
 
 # Match local parameters with the global parameters of the same name.
 function replacement_params(localcoords::AbstractVector, globalcoords::AbstractVector)

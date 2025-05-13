@@ -43,7 +43,6 @@ end
 $(SIGNATURES)
 
 Apply advection to a model.
-
 """
 struct Advection end
 

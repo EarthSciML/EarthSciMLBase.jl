@@ -25,6 +25,8 @@ This can be useful to replace a parameter that does not change in time in a mode
 with one specified by another system that does change in time (or space). For example, the
 code below specifies a first-order loss equation, and then changes the temperature (which
 determines the loss rate) with a temperature value that varies in time.
+
+```
 ```
 """
 function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)

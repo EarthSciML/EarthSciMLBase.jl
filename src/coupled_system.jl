@@ -6,17 +6,18 @@ A system for composing together other systems using the [`couple`](@ref) functio
 $(FIELDS)
 
 Things that can be added to a `CoupledSystem`:
-    * `ModelingToolkit.ODESystem`s. If the ODESystem has a field in the metadata called
-        `:coupletype` (e.g. `ModelingToolkit.get_metadata(sys)[:coupletype]` returns a struct type
-        with a single field called `sys`)
-        then that type will be used to check for methods of `EarthSciMLBase.couple` that use that type.
-    * [`Operator`](@ref)s
-    * [`DomainInfo`](@ref)s
-    * [Callbacks](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/)
-    * Types `X` that implement a `EarthSciMLBase.init_callback(::X, sys::CoupledSystem, sys_mtk, domain::DomainInfo)::DECallback` method
-    * Other `CoupledSystem`s
-    * Types `X` that implement a `EarthSciMLBase.couple2(::X, ::CoupledSystem)` or `EarthSciMLBase.couple2(::CoupledSystem, ::X)` method.
-    * `Tuple`s or `AbstractVector`s of any of the things above.
+
+  - `ModelingToolkit.ODESystem`s. If the ODESystem has a field in the metadata called
+    `:coupletype` (e.g. `ModelingToolkit.get_metadata(sys)[:coupletype]` returns a struct type
+    with a single field called `sys`)
+    then that type will be used to check for methods of `EarthSciMLBase.couple` that use that type.
+  - [`Operator`](@ref)s
+  - [`DomainInfo`](@ref)s
+  - [Callbacks](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/)
+  - Types `X` that implement a `EarthSciMLBase.init_callback(::X, sys::CoupledSystem, sys_mtk, domain::DomainInfo)::DECallback` method
+  - Other `CoupledSystem`s
+  - Types `X` that implement a `EarthSciMLBase.couple2(::X, ::CoupledSystem)` or `EarthSciMLBase.couple2(::CoupledSystem, ::X)` method.
+  - `Tuple`s or `AbstractVector`s of any of the things above.
 """
 mutable struct CoupledSystem
     "Model components to be composed together"
@@ -129,8 +130,10 @@ EarthSciMLBase.couple2(a::ACoupler, b::BCoupler)::ConnectorSystem
 where `ACoupler` and `BCoupler` are `:coupletype`s defined like this:
 
 ```julia
-struct ACoupler sys end
-@named asys = ODESystem([], t, metadata=Dict(:coupletype=>ACoupler))
+struct ACoupler
+    sys
+end
+@named asys = ODESystem([], t, metadata = Dict(:coupletype=>ACoupler))
 ```
 """
 couple2() = nothing
@@ -141,13 +144,15 @@ $(SIGNATURES)
 Get the ODE ModelingToolkit ODESystem representation of a [`CoupledSystem`](@ref).
 
 kwargs:
-- name: The desired name for the resulting ODESystem
-- simplify: Whether to run `structural_simplify` on the resulting ODESystem
-- prune: Whether to prune the extra observed equations to improve performance
+
+  - name: The desired name for the resulting ODESystem
+  - simplify: Whether to run `structural_simplify` on the resulting ODESystem
+  - prune: Whether to prune the extra observed equations to improve performance
 
 Return values:
-- The ODESystem representation of the CoupledSystem
-- The extra observed equations which have been pruned to improve performance
+
+  - The ODESystem representation of the CoupledSystem
+  - The extra observed equations which have been pruned to improve performance
 """
 function Base.convert(
         ::Type{<:ODESystem}, sys::CoupledSystem; name = :model, simplify = true,
@@ -159,8 +164,8 @@ function Base.convert(
             a_t, b_t = get_coupletype(a), get_coupletype(b)
             if hasmethod(couple2, (a_t, b_t))
                 cs = couple2(a_t(a), b_t(b))
-                @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a EarthSciMLBase.ConnectorSystem. "*
-                "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
+                @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a EarthSciMLBase.ConnectorSystem. " *
+                                               "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
                 systems[i], a = cs.from, cs.from
                 systems[j], b = cs.to, cs.to
                 for eq in cs.eqs

@@ -62,8 +62,9 @@ where the MTK system is assumed to be stiff and the operators are assumed to be 
 The solution will be calculated in serial.
 
 Additional kwargs for ODEProblem constructor:
-- u0: initial condtions; if "nothing", default values will be used.
-- p: parameters; if "nothing", default values will be used.
+
+  - u0: initial condtions; if "nothing", default values will be used.
+  - p: parameters; if "nothing", default values will be used.
 
 $(FIELDS)
 

@@ -69,8 +69,8 @@ using OrdinaryDiffEq
     want_eqs = [
         D(reqn.R) ~ reqn.γ * reqn.I,
         D(seqn.S) ~ (-seqn.β * seqn.I * seqn.S) / (seqn.I + seqn.R + seqn.S),
-        D(ieqn.I) ~ (ieqn.β * ieqn.I * ieqn.S) / (ieqn.I + ieqn.R + ieqn.S) -
-                    ieqn.γ * ieqn.I
+        D(ieqn.I) ~ (ieqn.β * ieqn.I * ieqn.S) /
+            (ieqn.I + ieqn.R + ieqn.S) - ieqn.γ * ieqn.I
     ]
 
     have_eqs = equations(sirfinal)
