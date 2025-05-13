@@ -77,7 +77,7 @@ bcs = icbc(domain, vars)
         sys2 = structural_simplify(sys2)
 
         @test occursin("Differential(t)(x(t)) ~ -x(t)", string(equations(sys2))) ||
-            occursin("Differential(t)(x(t)) ~ -z(t)", string(equations(sys2)))
+              occursin("Differential(t)(x(t)) ~ -z(t)", string(equations(sys2)))
 
         prob = ODEProblem(sys2, [], (0.0, 2.0))
         sol = solve(prob, saveat = 0.05)
