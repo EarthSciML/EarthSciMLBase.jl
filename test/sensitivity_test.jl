@@ -26,7 +26,9 @@ function EarthSciMLBase.get_scimlop(
         for ix in 1:size(u, 1)
             for I in II
                 # Demonstrate coordinate transforms and observed values
-                x, y, z, fv = obs_f(view(u, :, I), p, t,
+                x, y,
+                z,
+                fv = obs_f(view(u, :, I), p, t,
                     coords1[I[1]], coords2[I[2]], coords3[I[3]])
                 # Set derivative value.
                 du[ix, I] = (x + y + z) * fv

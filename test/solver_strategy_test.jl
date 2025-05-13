@@ -41,8 +41,9 @@ function EarthSciMLBase.get_scimlop(
         u = reshape(u, :, sz...)
         II = CartesianIndices(size(u)[2:end])
         du = vcat([begin
-                       t1, t2, t3, fv = obs_f(view(u, :, I), p, t,
-                        c1[I[1]], c2[I[2]], c3[I[3]])
+                       t1, t2,
+                       t3, fv = obs_f(view(u, :, I), p, t,
+                           c1[I[1]], c2[I[2]], c3[I[3]])
                        (t1 + t2 + t3) * fv
                    end
                    for ix in 1:size(u, 1), I in II]...)
