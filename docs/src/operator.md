@@ -22,7 +22,7 @@ D = D_nounits
 
 @parameters y lon=0.0 lat=0.0 lev=1.0 t α=10.0
 @constants p = 1.0
-@variables(u(t)=1.0, v(t)=1.0, x(t), [unit=u"m"], y(t), [unit=u"m"], 
+@variables(u(t)=1.0, v(t)=1.0, x(t), [unit=u"1/m"], y(t), [unit=u"1/m"], 
     z(t), windspeed(t))
 Dt = Differential(t)
 
