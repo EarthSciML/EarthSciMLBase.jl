@@ -15,13 +15,15 @@ using EarthSciMLBase
 using ModelingToolkit, DifferentialEquations
 using SciMLOperators, Plots
 using DomainSets
+using DynamicQuantities
 using ModelingToolkit: t_nounits, D_nounits
 t = t_nounits
 D = D_nounits
 
 @parameters y lon=0.0 lat=0.0 lev=1.0 t α=10.0
 @constants p = 1.0
-@variables(u(t)=1.0, v(t)=1.0, x(t), y(t), z(t), windspeed(t))
+@variables(u(t)=1.0, v(t)=1.0, x(t), [unit=u"m"], y(t), [unit=u"m"], 
+    z(t), windspeed(t))
 Dt = Differential(t)
 
 eqs = [Dt(u) ~ -α * √abs(v) + lon,
