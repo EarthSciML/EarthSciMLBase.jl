@@ -90,31 +90,45 @@ end
 """
 $(SIGNATURES)
 
-Return the indexes of the system variables that the state variables of the final
+Return the system variables that the state variables of the final
 simplified system depend on. This should be done before running `structural_simplify`
 on the system.
 `extra_vars` is a list of additional variables that need to be kept.
 """
-function get_needed_vars(
-        original_sys::ODESystem, simplified_sys::ODESystem, extra_vars = [])
-    varvardeps = ModelingToolkit.varvar_dependencies(
-        ModelingToolkit.asgraph(original_sys),
-        ModelingToolkit.variable_dependencies(original_sys)
+function get_needed_vars(original_sys::ODESystem, simplified_sys::ODESystem,
+        extra_vars = [])
+
+    # Move observed equations back into the simplified system.
+    # This allows us to account for any changes to the equations that have been made
+    # by `structural_simplify`.
+    simplified_sys_obs_reintegrated = copy_with_change(simplified_sys;
+        eqs = vcat(equations(simplified_sys), observed(simplified_sys)),
+        unknowns = unknowns(original_sys)
     )
-    g = SimpleDiGraph(length(unknowns(original_sys)))
+
+    varvardeps = ModelingToolkit.varvar_dependencies(
+        ModelingToolkit.asgraph(simplified_sys_obs_reintegrated),
+        ModelingToolkit.variable_dependencies(simplified_sys_obs_reintegrated)
+    )
+    g = SimpleDiGraph(length(unknowns(simplified_sys_obs_reintegrated)))
     for (i, es) in enumerate(varvardeps.badjlist)
         for e in es
             add_edge!(g, i, e)
         end
     end
-    allst = unknowns(original_sys)
+    allst = unknowns(original_sys) # Get the state variables of the original system.
+    # Get the state variables of the simplified system.
     simpst = unique(vcat(unknowns(simplified_sys), extra_vars))
-    stidx = [only(findall(isequal(s), allst)) for s in simpst]
-    if length(stidx) == 0
-        return []
-    end
+    # Get the state variables in `simplified_sys_obs_reintegrated`.
+    simpobsst = unknowns(simplified_sys_obs_reintegrated)
+    # Get the index of the simplified state variables in `simplified_sys_obs_reintegrated`.
+    stidx = [only(findall(isequal(s), simpobsst)) for s in simpst]
+    # Get the index of the variables we need to keep from `simplified_sys_obs_reintegrated`.
     idx = collect(Graphs.DFSIterator(g, stidx))
-    unknowns(original_sys)[idx]
+    # Get the index of the state variables in the original system corresponding to the
+    # variables we need from the simplified system.
+    stidx = [only(findall(isequal(s), allst)) for s in simpobsst[idx]]
+    allst[stidx] # Return the list of variables we need from the original system.
 end
 
 """
@@ -206,6 +220,7 @@ function prune_observed(original_sys::ODESystem, simplified_sys, extra_vars)
             push!(deleteindex, i)
         end
     end
+    todelete = [obs[i] for i in deleteindex]
     deleteat!(obs, deleteindex)
     discrete_events = filter_discrete_events(simplified_sys, obs)
     new_eqs = [equations(simplified_sys); obs]

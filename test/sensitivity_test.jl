@@ -2,6 +2,7 @@ using EarthSciMLBase
 using SciMLSensitivity, ForwardDiff, Zygote
 using ModelingToolkit, DomainSets, OrdinaryDiffEq, SymbolicIndexingInterface
 using SciMLOperators
+using DynamicQuantities
 using LinearSolve
 using Test
 
@@ -58,7 +59,8 @@ t_max = 11.5
 
 @parameters y lon=0.0 lat=0.0 lev=1.0 t α=10.0 β=1.0
 @constants p = 1.0
-@variables(u(t)=1.0, v(t)=1.0, x(t)=1.0, y(t)=1.0, z(t)=1.0, windspeed(t))
+@variables(u(t)=1.0, v(t)=1.0, x(t)=1.0, [unit = u"1/m"],
+    y(t)=1.0, [unit = u"1/m"], z(t)=1.0, windspeed(t))
 Dt = Differential(t)
 
 indepdomain = t ∈ Interval(t_min, t_max)
