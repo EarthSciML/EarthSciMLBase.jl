@@ -199,10 +199,10 @@ function prune_observed(original_sys::ODESystem, simplified_sys, extra_vars)
     deleteindex = []
     obs = observed(simplified_sys)
     for (i, eq) in enumerate(obs)
-        lhsvars = var2symbol.(Symbolics.get_variables(eq.lhs))
-        # Only keep equations where all variables on the LHS are in at least one
+        vars = var2symbol.(get_unknowns([eq]))
+        # Only keep equations where all variables are in at least one
         # equation describing the system state.
-        if !all((var) -> var ∈ needed_vars, lhsvars)
+        if !all((var) -> var ∈ needed_vars, vars)
             push!(deleteindex, i)
         end
     end

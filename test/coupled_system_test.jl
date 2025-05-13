@@ -1,6 +1,7 @@
 using EarthSciMLBase
 using ModelingToolkit
 using ModelingToolkit: t, D
+using ModelingToolkit: t_nounits, D_nounits
 using Test
 using Catalyst
 using DynamicQuantities
@@ -349,4 +350,62 @@ end
     sol = solve(prob, abstol = 1e-8, reltol = 1e-8)
     @test length(sol.u[end]) == 2
     @test all(sol.u[end] .≈ 3)
+end
+
+@testset "Transient Equality" begin
+    struct SourceCoupler
+        sys::Any
+    end
+    function Source(; name = :Source)
+        @parameters T_0 = 300
+        @variables T(t)
+        ODESystem([T ~ T_0], t_nounits, [T], [T_0]; name = name,
+            metadata = Dict(:coupletype => SourceCoupler))
+    end
+
+    struct DestCoupler
+        sys::Any
+    end
+    function Dest(; name = :Dest)
+        @parameters T = 400
+        @variables x(t)
+        ODESystem([D_nounits(x) ~ T], t_nounits, [x], [T]; name = name,
+            metadata = Dict(:coupletype => DestCoupler))
+    end
+    struct DestCoupler
+        sys::Any
+    end
+    function Dest2(; name = :Dest2)
+        @parameters T = 400
+        @variables x(t)
+        ODESystem([x ~ T], t_nounits, [x], [T]; name = name,
+            metadata = Dict(:coupletype => DestCoupler))
+    end
+
+    function EarthSciMLBase.couple2(s::SourceCoupler, d::DestCoupler)
+        s, d = s.sys, d.sys
+        d = param_to_var(d, :T)
+        ConnectorSystem([d.T ~ s.T], s, d)
+    end
+
+    src = Source()
+    @named dst1 = Dest()
+    @named dst2 = Dest2()
+
+    for systems in [(src, dst1, dst2),
+        (dst1, src, dst2),
+        (dst2, src, dst1),
+        (src, dst2, dst1),
+        (dst1, dst2, src),
+        (dst2, dst1, src)]
+        coupled_sys = couple(systems...)
+
+        sys = convert(ODESystem, coupled_sys)
+        equations(sys)
+        observed(sys)
+
+        obs_lhss = [eq.lhs for eq in observed(sys)]
+        @test contains(string(obs_lhss), "dst1₊T(t)")
+        @test !contains(string(obs_lhss), "dst2₊T(t)")
+    end
 end
