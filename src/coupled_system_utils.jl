@@ -335,3 +335,18 @@ function coord_setter(sys_mtk::ODESystem, domain::DomainInfo)
     end
     return setp!
 end
+
+# Change the initial condition of a variable in a system.
+function change_ic(sys, var::Symbol, new_ic)
+    vars = unknowns(sys)
+    # Get the index of the variable in the system.
+    var_idx = findfirst(v -> var2symbol(v) == var, vars)
+    if isnothing(var_idx)
+        error("Variable $var not found in system $(nameof(sys)).")
+    end
+    new_var = ModelingToolkit.setdefault(vars[var_idx], new_ic)
+
+    new_eqs = substitute.(equations(sys), (Dict(vars[var_idx] => new_var),))
+    new_unk = get_unknowns(new_eqs)
+    copy_with_change(sys; eqs=new_eqs, unknowns = new_unk)
+end

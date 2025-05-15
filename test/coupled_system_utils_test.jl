@@ -104,3 +104,14 @@ bcs = icbc(domain, vars)
         @test length(ModelingToolkit.get_discrete_events(sys2)) == 1
     end
 end
+
+@testset "change_ic" begin
+    params = @parameters a = 1
+    vars = @variables x(t) = a
+    @named sys = ODESystem([D(x) ~ a], t)
+    sys2 = EarthSciMLBase.change_ic(sys, :x, 6a + 2)
+    prob = ODEProblem(structural_simplify(sys2))
+    @test prob.ps[Initial(x)] == 6 * 1 + 2
+
+    @test_throws UndefVarError EarthSciMLBase.change_ic!(sys, :y, 6a + 2)
+end
