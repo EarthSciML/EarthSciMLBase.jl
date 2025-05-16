@@ -131,15 +131,15 @@ function operator_compose(
                     # The LHS of this equation is the time derivative of the dependent variable of interest,
                     var1, taken_names = connector_name("$(bname)_ddt_$(bvar)", taken_names)
                     term1 = (@variables $var1(iv))[1]
-                    term1 = add_metadata(term1, b_eqs[j].lhs)
+                    term1 = add_metadata(term1, b_eqs[j].lhs; exclude_default=true)
                     b_eqs[j] = term1 ~ b_eqs[j].rhs
 
                     var2 = Symbol("$(aname)₊", var1)
                     term2 = (@variables $var2(iv))[1]
-                    term2 = add_metadata(term2, b_eqs[j].lhs)
+                    term2 = add_metadata(term2, b_eqs[j].lhs; exclude_default=true)
                     var3 = Symbol("$(bname)₊", var1)
                     term3 = (@variables $var3(iv))[1]
-                    term3 = add_metadata(term3, b_eqs[j].lhs)
+                    term3 = add_metadata(term3, b_eqs[j].lhs; exclude_default=true)
                     push!(connections, term2 ~ term3)
                     a_eqs[i] = a_eqs[i].lhs ~ a_eqs[i].rhs + term1 * conv
                     # Now set the dependent variables in the two systems to be equal.
@@ -147,10 +147,10 @@ function operator_compose(
                 else # The LHS of this equation is the dependent variable of interest.
                     var1, taken_names = connector_name("$(bname)_$(bvar)", taken_names)
                     term1 = (@variables $var1(iv))[1]
-                    term1 = add_metadata(term1, b_eqs[j].lhs * conv)
+                    term1 = add_metadata(term1, b_eqs[j].lhs * conv; exclude_default=true)
                     var2 = Symbol("$(aname)₊", var1)
                     term2 = (@variables $var2(iv))[1]
-                    term2 = add_metadata(term2, b_eqs[j].lhs * conv)
+                    term2 = add_metadata(term2, b_eqs[j].lhs * conv; exclude_default=true)
                     a_eqs[i] = a_eqs[i].lhs ~ a_eqs[i].rhs + term1
                     push!(connections, term2 ~ bdv * conv)
                 end

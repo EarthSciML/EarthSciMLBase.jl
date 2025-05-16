@@ -220,11 +220,10 @@ function prune_observed(original_sys::ODESystem, simplified_sys, extra_vars)
             push!(deleteindex, i)
         end
     end
-    todelete = [obs[i] for i in deleteindex]
     deleteat!(obs, deleteindex)
     discrete_events = filter_discrete_events(simplified_sys, obs)
     new_eqs = [equations(simplified_sys); obs]
-    sys2 = copy_with_change(simplified_sys;
+    sys2 = copy_with_change(original_sys;
         eqs = new_eqs,
         unknowns = get_unknowns(new_eqs),
         discrete_events = discrete_events
@@ -238,6 +237,17 @@ function get_unknowns(eqs)
     unk = []
     for v in all_vars
         if !isnothing(v.metadata) && v.metadata[Symbolics.VariableSource][1] == :variables
+            push!(unk, v)
+        end
+    end
+    unk
+end
+
+function get_parameters(eqs)
+    all_vars = unique(vcat(get_variables.(eqs)...))
+    unk = []
+    for v in all_vars
+        if !isnothing(v.metadata) && v.metadata[Symbolics.VariableSource][1] == :parameters
             push!(unk, v)
         end
     end
@@ -266,8 +276,9 @@ function remove_extra_defaults(original_sys, simplified_sys)
     end
     new_eqs = substitute.(equations(original_sys), (Dict(replacements...),))
     new_unk = get_unknowns(new_eqs)
+    new_params = get_parameters(new_eqs)
     copy_with_change(original_sys; eqs = new_eqs, unknowns = new_unk,
-        parameters = parameters(original_sys))
+        parameters = new_params)
 end
 
 """

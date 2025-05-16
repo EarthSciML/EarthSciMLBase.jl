@@ -193,8 +193,8 @@ function Base.convert(
         end
         o = prune_observed(o, o_simplified, vcat(extra_vars, extra_vars2))
     end
-    o_simplified = structural_simplify(o)
-    o = remove_extra_defaults(o, o_simplified)
+    #o_simplified = structural_simplify(o)
+    #o = remove_extra_defaults(o, o_simplified)
     if simplify
         o = structural_simplify(o)
     end

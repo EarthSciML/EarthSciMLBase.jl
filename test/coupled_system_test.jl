@@ -200,7 +200,7 @@ end
     @parameters p_4(ModelingToolkit.t_nounits) = 1
     @variables x(ModelingToolkit.t_nounits) = 0
     @variables x2(ModelingToolkit.t_nounits) = 0
-    @variables x3(ModelingToolkit.t_nounits) = 0
+    @variables x3(ModelingToolkit.t_nounits)
 
     event1 = [1.0, 2, 3] => (update_affect!, [], [p_1], [], p1)
     event2 = [1.0, 2, 3] => [p_2 ~ t]
@@ -216,7 +216,7 @@ end
         ModelingToolkit.t_nounits; name = :test,
         discrete_events = [event1, event2, event3, event4]
     )
-    sys = EarthSciMLBase.remove_extra_defaults(sys, structural_simplify(sys))
+    #sys = EarthSciMLBase.remove_extra_defaults(sys, structural_simplify(sys))
 
     prob = ODEProblem(structural_simplify(sys), [], (0, 100), [])
     sol = solve(prob, abstol = 1e-8, reltol = 1e-8)
@@ -292,8 +292,9 @@ end
         ODESystem(Equation[], ModelingToolkit.t_nounits; name = :coupled),
         create_sys(name = :a), create_sys(name = :b))
     sys_flattened = ModelingToolkit.flatten(sys_composed)
-    sysc2 = EarthSciMLBase.remove_extra_defaults(
-        sys_flattened, structural_simplify(sys_flattened))
+    #sysc2 = EarthSciMLBase.remove_extra_defaults(
+    #    sys_flattened, structural_simplify(sys_flattened))
+    sysc2 = sys_flattened
     sysc3 = EarthSciMLBase.prune_observed(sysc2, structural_simplify(sysc2), [])
     prob = ODEProblem(structural_simplify(sysc3), [], (0, 100), [])
     sol = solve(prob, abstol = 1e-8, reltol = 1e-8)
