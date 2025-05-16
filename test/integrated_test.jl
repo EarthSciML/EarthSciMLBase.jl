@@ -37,7 +37,7 @@ struct EmissionsCoupler
 end
 function Emissions(; name = :Emissions)
     @parameters emis = 1
-    @variables NO2(t) = 3
+    @variables NO2(t)
     eqs = [D(NO2) ~ emis]
     ODESystem(eqs, t; name = name,
         metadata = Dict(:coupletype => EmissionsCoupler))
@@ -72,7 +72,8 @@ end
 
 e = Emissions()
 @testset "Emissions single" begin
-    prob = ODEProblem(structural_simplify(e), [], (0.0, 1.0))
+    ee = structural_simplify(e)
+    prob = ODEProblem(ee, [ee.NO2=>0], (0.0, 1.0))
     sol = solve(prob)
     @test sol.retcode == ReturnCode.Success
 end

@@ -156,7 +156,7 @@ Return values:
 """
 function Base.convert(
         ::Type{<:ODESystem}, sys::CoupledSystem; name = :model, simplify = true,
-        prune = true, extra_vars = [], kwargs...)
+        prune = false, extra_vars = [], kwargs...)
     connector_eqs = Equation[]
     systems = copy(sys.systems)
     for (i, a) in enumerate(systems)

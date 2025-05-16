@@ -317,7 +317,7 @@ end
         @parameters p_4(ModelingToolkit.t_nounits) = 1
         @variables x(ModelingToolkit.t_nounits) = 0
         @variables x2(ModelingToolkit.t_nounits) = 0
-        @variables x3(ModelingToolkit.t_nounits) = 0
+        @variables x3(ModelingToolkit.t_nounits)
 
         event1 = [1.0, 2, 3] => (update_affect!, [], [p_1], [], nothing)
         event2 = [1.0, 2, 3] => [p_2 ~ t]
@@ -408,6 +408,6 @@ end
 
         obs_lhss = [eq.lhs for eq in observed(sys)]
         @test contains(string(obs_lhss), "dst1₊T(t)")
-        @test !contains(string(obs_lhss), "dst2₊T(t)")
+        @test contains(string(obs_lhss), "dst2₊T(t)")
     end
 end
