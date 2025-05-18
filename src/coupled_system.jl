@@ -164,8 +164,8 @@ function Base.convert(
             a_t, b_t = get_coupletype(a), get_coupletype(b)
             if hasmethod(couple2, (a_t, b_t))
                 cs = couple2(a_t(a), b_t(b))
-                @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a EarthSciMLBase.ConnectorSystem. " *
-                                               "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
+                @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a EarthSciMLBase.ConnectorSystem. "*
+                "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
                 systems[i], a = cs.from, cs.from
                 systems[j], b = cs.to, cs.to
                 for eq in cs.eqs
@@ -185,8 +185,8 @@ function Base.convert(
         o = extend(o, partialderivative_transform_eqs(o, sys.domaininfo))
     end
     o = ModelingToolkit.flatten(o)
-    o_simplified = structural_simplify(o)
     if prune
+        o_simplified = structural_simplify(o)
         extra_vars2 = []
         if !isnothing(sys.domaininfo)
             extra_vars2 = operator_vars(sys, o_simplified, sys.domaininfo)
