@@ -2,7 +2,7 @@
 
 Sometimes, something needs to happen to a component process in system which depends information about the fully coupled system.
 For example, the data in data loaders may need to be periodically updated as the simulation runs, but we would want to avoid updating
-any data loaders that are included in the data component of the model but are not needed for updating any of the state variables in 
+any data loaders that are included in the data component of the model but are not needed for updating any of the state variables in
 the full model that is running.
 
 Take, for example, the model below, which has two variables, but only one of them ($x$) is associated with a differential equation.
@@ -24,7 +24,6 @@ end
 
 @named sys1 = ODESystem([D(x) ~ a], t_nounits, [x], [a])
 @named sys2 = ODESystem([y ~ b], t_nounits, [y], [b])
-
 
 model1 = couple(sys1, sys2)
 sys = convert(ODESystem, model1)
@@ -99,6 +98,7 @@ model1 = couple(sys1, sys2)
 sys = convert(ODESystem, model1)
 sol = solve(ODEProblem(sys), tspan = (0, 10))
 ```
+
 If we plot the results, we can see that the system event did indeed update the parameter value for $a$, which changed the rate of change of $x$.
 
 ```@example system_events

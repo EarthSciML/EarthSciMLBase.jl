@@ -15,7 +15,7 @@ function meanwind_vars(t, domain::DomainInfo; prefix = "", multidim = false)
         δ = δs[i].ts[i] # get the partial derivative operator for the variable
         unit = ModelingToolkit.get_unit(pv) / ModelingToolkit.get_unit(δ) / denominator
         # set metadata
-        uv = add_metadata(uv, pv; exclude_default=true)
+        uv = add_metadata(uv, pv; exclude_default = true)
         uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableUnit, unit)
         uv = Symbolics.setmetadata(uv, ModelingToolkit.VariableDescription,
             "Mean wind speed in the $(pv) direction.")
