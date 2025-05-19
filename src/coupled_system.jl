@@ -14,7 +14,7 @@ Things that can be added to a `CoupledSystem`:
   - [`Operator`](@ref)s
   - [`DomainInfo`](@ref)s
   - [Callbacks](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/)
-  - Types `X` that implement a `EarthSciMLBase.init_callback(::X, sys::CoupledSystem, sys_mtk, domain::DomainInfo)::DECallback` method
+  - Types `X` that implement a `EarthSciMLBase.init_callback(::X, ::CoupledSystem, sys_mtk, ::DomainInfo, ::MapAlgorithm)::DECallback` method
   - Other `CoupledSystem`s
   - Types `X` that implement a `EarthSciMLBase.couple2(::X, ::CoupledSystem)` or `EarthSciMLBase.couple2(::CoupledSystem, ::X)` method.
   - `Tuple`s or `AbstractVector`s of any of the things above.
@@ -115,6 +115,24 @@ function get_coupletype(sys::ModelingToolkit.AbstractSystem)
 end
 
 """
+Retuns the `sys_discrete_event` function associated with the given system, which
+is meant to be a function that takes the fully coupled ODESystem and returns a discrete
+event that should be applied to it.
+"""
+function get_sys_discrete_event(sys::ModelingToolkit.AbstractSystem)
+    md = ModelingToolkit.get_metadata(sys)
+    if (!isa(md, Dict)) || (:sys_discrete_event ∉ keys(md))
+        return nothing
+    end
+    f = md[:sys_discrete_event]
+    @assert f isa Function "The `sys_discrete_event` for $(nameof(sys)) must be a function."
+    @assert hasmethod(f, (AbstractSystem,))
+    """The `sys_discrete_event` for $(nameof(sys)) must be a function that takes a
+    ModelingToolkit.AbstractSystem as an argument and returns a ModelingToolkit event."""
+    f
+end
+
+"""
 $(SIGNATURES)
 
 Perform bi-directional coupling for two
@@ -158,13 +176,14 @@ function Base.convert(
         ::Type{<:ODESystem}, sys::CoupledSystem; name = :model, simplify = true,
         prune = false, extra_vars = [], kwargs...)
     connector_eqs = Equation[]
+    discrete_event_fs = []
     systems = copy(sys.systems)
     for (i, a) in enumerate(systems)
         for (j, b) in enumerate(systems)
             a_t, b_t = get_coupletype(a), get_coupletype(b)
             if hasmethod(couple2, (a_t, b_t))
                 cs = couple2(a_t(a), b_t(b))
-                @assert cs isa ConnectorSystem "The result of coupling two systems together with must be a EarthSciMLBase.ConnectorSystem. "*
+                @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. "*
                 "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
                 systems[i], a = cs.from, cs.from
                 systems[j], b = cs.to, cs.to
@@ -174,13 +193,29 @@ function Base.convert(
                 append!(connector_eqs, cs.eqs)
             end
         end
+        de = get_sys_discrete_event(a)
+        (!isnothing(de)) && push!(discrete_event_fs, de)
     end
 
     iv = ModelingToolkit.get_iv(first(systems))
-    connectors = ODESystem(connector_eqs, iv; name = name, kwargs...)
+
+    # Create temporary coupled system and use it to get system events.
+    if length(discrete_event_fs) > 0
+        temp_connectors = ODESystem(connector_eqs, iv; name = name, kwargs...)
+        temp_sys = structural_simplify(ModelingToolkit.flatten(compose(temp_connectors, systems...)))
+        de = [f(temp_sys) for f in discrete_event_fs]
+
+        # Create system of connectors and events.
+        connectors = ODESystem(connector_eqs, iv; name = name,
+            discrete_events = de, kwargs...)
+    else
+        # Create system of connectors.
+        connectors = ODESystem(connector_eqs, iv; name = name, kwargs...)
+    end
 
     # Compose everything together.
     o = compose(connectors, systems...)
+
     if !isnothing(sys.domaininfo) # Add coordinate transform equations.
         o = extend(o, partialderivative_transform_eqs(o, sys.domaininfo))
     end

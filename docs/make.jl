@@ -20,6 +20,7 @@ makedocs(;
         "Composition" => "composition.md",
         "Operator Composition" => "operator_compose.md",
         "Parameter Replacement" => "param_to_var.md",
+        "System Events" => "system_events.md",
         "Initial and Boundary Conditions" => "icbc.md",
         "Advection" => "advection.md",
         "Coordinate Transforms" => "coord_transforms.md",

@@ -69,9 +69,8 @@ using OrdinaryDiffEq
     want_eqs = [
         D(reqn.R) ~ reqn.γ * reqn.I,
         D(seqn.S) ~ (-seqn.β * seqn.I * seqn.S) / (seqn.I + seqn.R + seqn.S),
-        D(ieqn.I) ~
-        (ieqn.β * ieqn.I * ieqn.S) /
-        (ieqn.I + ieqn.R + ieqn.S) - ieqn.γ * ieqn.I
+        D(ieqn.I) ~ (ieqn.β * ieqn.I * ieqn.S) /
+                    (ieqn.I + ieqn.R + ieqn.S) - ieqn.γ * ieqn.I
     ]
 
     have_eqs = equations(sirfinal)
@@ -410,4 +409,106 @@ end
         @test contains(string(obs_lhss), "dst1₊T(t)")
         @test contains(string(obs_lhss), "dst2₊T(t)")
     end
+end
+
+@testset "sys_discrete_event" begin
+    @parameters a=0 b=0
+    @variables begin
+        x(t_nounits) = 0
+        y(t_nounits)
+    end
+
+    # Utility function to check if a variable is needed in the system,
+    # i.e., if one of the state variables depends on it.
+    function is_var_needed(var, sys)
+        var = EarthSciMLBase.var2symbol(var)
+        if var in EarthSciMLBase.var2symbol.(unknowns(sys))
+            return true
+        end
+        exprs = [eq.rhs for eq in equations(sys)]
+        needed_obs = ModelingToolkit.observed_equations_used_by(sys, exprs)
+        needed_vars = getproperty.(observed(sys)[needed_obs], :lhs)
+        return var in EarthSciMLBase.var2symbol.(needed_vars)
+    end
+
+    runcount1 = 0
+    function sysevent1(sys)
+        function f1!(integ, u, p, ctx)
+            if is_var_needed(sys.sys1₊x, sys) # Only run if x is needed in the system.
+                #global runcount1 += 1
+                runcount1 += 1
+                integ.ps[p.sys1₊a] = 1
+            end
+        end
+        return [3.0] => (f1!, [], [sys.sys1₊a], [], nothing)
+    end
+    runcount2 = 0
+    function sysevent2(sys)
+        function f2!(integ, u, p, ctx)
+            if is_var_needed(sys.sys2₊y, sys) # Only run if y is needed in the system.
+                #global runcount2 += 1
+                runcount2 += 1
+                integ.ps[p.sys2₊b] = 1
+            end
+        end
+        return [5.0] => (f2!, [], [sys.sys2₊b], [], nothing)
+    end
+
+    sys1 = ODESystem([D(x) ~ a], t_nounits, [x], [a]; name = :sys1,
+        metadata = Dict(:sys_discrete_event => sysevent1))
+    sys2 = ODESystem([y ~ b], t_nounits, [y], [b]; name = :sys2,
+        metadata = Dict(:sys_discrete_event => sysevent2))
+
+    model1 = couple(sys1, sys2)
+    sys = convert(ODESystem, model1)
+
+    @test length(ModelingToolkit.get_discrete_events(sys)) == 2
+
+    sol = solve(ODEProblem(sys), tspan = (0, 10))
+
+    # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for
+    # the rest of the simulation, so the final value of x should be 7.
+    # Because sys2.y is not a state variable, sysevent 2 does not run.
+    @test sol[sys.sys1₊x][end] ≈ 7
+    @test runcount1 == 1
+    @test runcount2 == 0
+
+    ### Now, try again after coupling the two variables together so x depends on y.
+
+    # reset count.
+    runcount1, runcount2 = 0, 0
+
+    struct Couple1
+        sys::Any
+    end
+    struct Couple2
+        sys::Any
+    end
+
+    sys1 = ODESystem([D(x) ~ a], t_nounits, [x], [a]; name = :sys1,
+        metadata = Dict(:sys_discrete_event => sysevent1,
+            :coupletype => Couple1))
+    sys2 = ODESystem([y ~ b], t_nounits, [y], [b]; name = :sys2,
+        metadata = Dict(:sys_discrete_event => sysevent2,
+            :coupletype => Couple2))
+
+    function EarthSciMLBase.couple2(s1::Couple1, s2::Couple2)
+        s1, s2 = s1.sys, s2.sys
+        EarthSciMLBase.operator_compose(s1, s2, Dict(
+            s1.x => s2.y
+        ))
+    end
+
+    model1 = couple(sys1, sys2)
+    sys = convert(ODESystem, model1)
+
+    @test length(ModelingToolkit.get_discrete_events(sys)) == 2
+
+    sol = solve(ODEProblem(sys), tspan = (0, 10))
+
+    # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for
+    # until t = 5, and then because of sysevent2 it become 2 for the rest of the simulation.
+    @test sol[sys.sys1₊x][end] ≈ 12
+    @test runcount1 == 1
+    @test runcount2 == 1
 end
