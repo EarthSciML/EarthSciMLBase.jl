@@ -46,8 +46,12 @@ function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0 = nothing,
 
     f2 = nonstiff_ops(sys, sys_mtk, coord_args, dom, u0, p, st.alg)
 
-    cb = get_callbacks(sys, sys_mtk, coord_args, dom, st.alg)
-    push!(cb, ModelingToolkit.process_events(sys_mtk))
+    cb = []
+    event_cb = ModelingToolkit.process_events(sys_mtk)
+    if !isnothing(event_cb)
+        push!(cb, event_cb)
+    end
+    push!(cb, get_callbacks(sys, sys_mtk, coord_args, dom, st.alg)...)
     if :callback in keys(kwargs)
         push!(cb, kwargs[:callback])
         kwargs = filter((p -> p.first ≠ :callback), kwargs)
