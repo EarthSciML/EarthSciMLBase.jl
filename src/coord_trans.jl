@@ -18,6 +18,10 @@ after converting variables named `lon` and `lat` from degrees to x and y meters,
 assuming they represent longitude and latitude on a spherical Earth.
 """
 function partialderivatives_δxyδlonlat(pvars::AbstractVector; default_lat = 0.0)
+    Base.depwarn(
+        "EarthSciMLBase.partialderivatives_δxyδlonlat is deprecated," *
+        " add coordinate transforms directly to data loaders instead",
+        :partialderivatives_δxyδlonlat)
     latindex = matching_suffix_idx(pvars, :lat)
     lonindex = matching_suffix_idx(pvars, :lon)
     if length(latindex) > 1

@@ -18,6 +18,9 @@ substituting in the constants observed values of other variables.
 `extra_eqs` is a list of additional equations to use in the substitution.
 """
 function observed_expression(eqs, x)
+    Base.depwarn(
+        "EarthSciMLBase.observed_expression is deprecated",
+        :observed_expression)
     expr = nothing
     for eq in eqs
         if isequal(eq.lhs, x)
@@ -53,6 +56,9 @@ on the input arguments in `coords`.
 the value of `x`.
 """
 function observed_function(eqs, x, coords)
+    Base.depwarn(
+        "EarthSciMLBase.observed_function is deprecated",
+        :observed_function)
     expr = observed_expression(eqs, x)
     vars = Symbolics.get_variables(expr)
     if length(vars) > length(coords)
@@ -97,6 +103,10 @@ on the system.
 """
 function get_needed_vars(original_sys::ODESystem, simplified_sys::ODESystem,
         extra_vars = [])
+
+    Base.depwarn(
+        "EarthSciMLBase.get_needed_vars is deprecated",
+        :get_needed_vars)
 
     # Move observed equations back into the simplified system.
     # This allows us to account for any changes to the equations that have been made
@@ -159,6 +169,9 @@ end
 
 # Get variables effected by this event.
 function get_affected_vars(event)
+    Base.depwarn(
+        "EarthSciMLBase.get_affected_vars is deprecated",
+        :get_affected_vars)
     vars = []
     if event.affects isa AbstractVector
         for aff in event.affects
@@ -189,6 +202,9 @@ end
 # needed to specify the state variables of the given system.
 # This function should be run after running `structural_simplify`.
 function filter_discrete_events(simplified_sys, obs_eqs)
+    Base.depwarn(
+        "EarthSciMLBase.filter_discrete_events is deprecated",
+        :filter_discrete_events)
     de = ModelingToolkit.get_discrete_events(simplified_sys)
     needed_eqs = vcat(equations(simplified_sys), obs_eqs)
     keep = []
@@ -209,6 +225,9 @@ present in any of the equations for the state variables. This can be used to
 remove computationally intensive equations that are not used in the final model.
 """
 function prune_observed(original_sys::ODESystem, simplified_sys, extra_vars)
+    Base.depwarn(
+        "EarthSciMLBase.prune_observed is deprecated",
+        :prune_observed)
     needed_vars = var2symbol.(get_needed_vars(original_sys, simplified_sys, extra_vars))
     deleteindex = []
     obs = observed(simplified_sys)
@@ -256,6 +275,9 @@ end
 
 # Remove extra variable defaults that would cause a solver initialization error.
 function remove_extra_defaults(original_sys, simplified_sys)
+    Base.depwarn(
+        "EarthSciMLBase.remove_extra_defaults is deprecated",
+        :remove_extra_defaults)
     all_vars = unknowns(original_sys)
 
     unk = var2symbol.(unknowns(simplified_sys))
