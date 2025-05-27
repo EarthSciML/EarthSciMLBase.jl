@@ -103,7 +103,6 @@ on the system.
 """
 function get_needed_vars(original_sys::ODESystem, simplified_sys::ODESystem,
         extra_vars = [])
-
     Base.depwarn(
         "EarthSciMLBase.get_needed_vars is deprecated",
         :get_needed_vars)

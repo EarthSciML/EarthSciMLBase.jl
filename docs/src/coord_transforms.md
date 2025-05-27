@@ -39,9 +39,8 @@ Multiple functions can be included in the `DomainInfo` constructor, just by incl
 
 ```julia
 domain = DomainInfo(
-    [transform1, transform2, ...],
-    constIC(0.0, t ∈ Interval(0.0f0, 3600.0f0)),
-    ...
+    [transform1, transform2],
+    constIC(0.0, t ∈ Interval(0.0f0, 3600.0f0))
 )
 ```
 

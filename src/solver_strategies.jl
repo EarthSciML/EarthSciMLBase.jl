@@ -38,7 +38,8 @@ function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0 = nothing,
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
     u0 = reshape(u0, :) # DiffEq state must be a vector.
 
-    f1, sys_mtk, coord_args = mtk_grid_func(sys_mtk, dom, u0,
+    f1, sys_mtk,
+    coord_args = mtk_grid_func(sys_mtk, dom, u0,
         st.alg; sparse = st.stiff_sparse,
         tgrad = st.stiff_tgrad)
 
