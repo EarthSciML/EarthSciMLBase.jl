@@ -68,7 +68,7 @@ Additional kwargs for ODEProblem constructor:
 
 $(FIELDS)
 
-WARNING: Is is not possible to change the parameters using this strategy..
+WARNING: Is is not possible to change the parameters using this strategy.
 """
 struct SolverStrangSerial <: SolverStrang
     "Stiff solver algorithm to use (see https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/)"
@@ -100,8 +100,8 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = no
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
     tspan = isnothing(tspan) ? get_tspan(dom) : tspan
     start, finish = tspan
-    prob = ODEProblem(
-        sys_mtk, [], (start, start + typeof(start)(st.timestep)), []; st.stiff_kwargs...)
+    prob = ODEProblem(sys_mtk, [], (start, start + typeof(start)(st.timestep)), [];
+        st.stiff_kwargs...)
     stiff_integrators = [init(
                              remake(
                                  prob, u0 = zeros(eltype(u0), length(unknowns(sys_mtk))),
@@ -130,8 +130,8 @@ end
 """
 A callback to periodically run the stiff solver.
 """
-function stiff_callback(
-        setp!, u0::AbstractArray{T}, st::SolverStrang, IIchunks, integrators) where {T}
+function stiff_callback(setp!, u0::AbstractArray{T}, st::SolverStrang,
+        IIchunks, integrators) where {T}
     sz = size(u0)
     function affect!(integrator)
         u = reshape(integrator.u, sz...)

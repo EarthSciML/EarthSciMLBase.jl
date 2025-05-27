@@ -70,8 +70,11 @@ function _prepare_coord_sys(sys, domain)
         substitute(ModelingToolkit.observed(sys),
             Dict(coords .=> coord_arg_consts)),
         ModelingToolkit.get_iv(sys_coord))
-    sys_coord = copy_with_change(sys_coord, eqs = [equations(sys_coord); equations(obs)],
+    sys_coord = copy_with_change(sys_coord,
+        eqs = [equations(sys_coord); equations(obs)],
         unknowns = unique([unknowns(sys_coord); unknowns(obs)]),
+        discrete_events = ModelingToolkit.get_discrete_events(sys),
+        continuous_events = ModelingToolkit.get_continuous_events(sys),
         parameters = parameters(sys))
     return structural_simplify(sys_coord), coord_args
 end

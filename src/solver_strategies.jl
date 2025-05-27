@@ -38,8 +38,7 @@ function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0 = nothing,
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
     u0 = reshape(u0, :) # DiffEq state must be a vector.
 
-    f1, sys_mtk,
-    coord_args = mtk_grid_func(sys_mtk, dom, u0,
+    f1, sys_mtk, coord_args = mtk_grid_func(sys_mtk, dom, u0,
         st.alg; sparse = st.stiff_sparse,
         tgrad = st.stiff_tgrad)
 
@@ -48,6 +47,7 @@ function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0 = nothing,
     f2 = nonstiff_ops(sys, sys_mtk, coord_args, dom, u0, p, st.alg)
 
     cb = get_callbacks(sys, sys_mtk, coord_args, dom, st.alg)
+    push!(cb, ModelingToolkit.process_events(sys_mtk))
     if :callback in keys(kwargs)
         push!(cb, kwargs[:callback])
         kwargs = filter((p -> p.first ≠ :callback), kwargs)
