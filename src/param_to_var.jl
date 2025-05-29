@@ -31,6 +31,7 @@ determines the loss rate) with a temperature value that varies in time.
 """
 function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
     params = parameters(sys)
+    defaults = copy(sys.defaults)
     replace = Dict()
     for p in ps
         if p in ModelingToolkit.tosymbol.(unknowns(sys), escape = false) # Skip if it is already a variable.
@@ -44,6 +45,7 @@ function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
         newvar = only(@variables $p(iv))
         newvar = add_metadata(newvar, param; exclude_default = true)
         replace[param] = newvar
+        delete!(defaults, param)
     end
 
     if isempty(replace)
@@ -53,6 +55,7 @@ function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
     copy_with_change(newsys;
         metadata = ModelingToolkit.get_metadata(sys),
         discrete_events = ModelingToolkit.get_discrete_events(sys),
-        continuous_events = ModelingToolkit.get_continuous_events(sys)
+        continuous_events = ModelingToolkit.get_continuous_events(sys),
+        defaults = defaults
     )
 end

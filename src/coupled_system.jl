@@ -183,8 +183,8 @@ function Base.convert(
             a_t, b_t = get_coupletype(a), get_coupletype(b)
             if hasmethod(couple2, (a_t, b_t))
                 cs = couple2(a_t(a), b_t(b))
-                @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
-                                               "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
+                @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. "*
+                "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
                 systems[i], a = cs.from, cs.from
                 systems[j], b = cs.to, cs.to
                 for eq in cs.eqs
@@ -200,18 +200,22 @@ function Base.convert(
     iv = ModelingToolkit.get_iv(first(systems))
 
     # Create temporary coupled system and use it to get system events.
+    defaults = ModelingToolkit.get_defaults(ModelingToolkit.flatten(
+        ODESystem(Equation[], iv; name = :temp, systems = systems)))
     if length(discrete_event_fs) > 0
-        temp_connectors = ODESystem(connector_eqs, iv; name = name, kwargs...)
+        temp_connectors = ODESystem(connector_eqs, iv; name = name,
+            defaults = defaults, kwargs...)
         temp_sys = structural_simplify(ModelingToolkit.flatten(compose(
             temp_connectors, systems...)))
-        de = [f(temp_sys) for f in discrete_event_fs]
+        de = filter(!isnothing, [f(temp_sys) for f in discrete_event_fs])
 
         # Create system of connectors and events.
         connectors = ODESystem(connector_eqs, iv; name = name,
-            discrete_events = de, kwargs...)
+            discrete_events = de, defaults = defaults, kwargs...)
     else
         # Create system of connectors.
-        connectors = ODESystem(connector_eqs, iv; name = name, kwargs...)
+        connectors = ODESystem(connector_eqs, iv; name = name,
+            defaults = defaults, kwargs...)
     end
 
     # Compose everything together.

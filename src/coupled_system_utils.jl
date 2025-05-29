@@ -152,12 +152,15 @@ function copy_with_change(sys::ODESystem;
         parameters = parameters(sys),
         metadata = ModelingToolkit.get_metadata(sys),
         continuous_events = ModelingToolkit.get_continuous_events(sys),
-        discrete_events = ModelingToolkit.get_discrete_events(sys)
+        discrete_events = ModelingToolkit.get_discrete_events(sys),
+        defaults = sys.defaults
 )
     try
         ODESystem(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
             name = name, metadata = metadata,
-            continuous_events = continuous_events, discrete_events = discrete_events)
+            continuous_events = continuous_events, discrete_events = discrete_events,
+            defaults = defaults
+        )
     catch e
         if isa(e, ModelingToolkit.ValidationError)
             @warn "Equations:\n$(join(["  $i. $eq" for (i, eq) in enumerate(eqs)], "\n"))"
