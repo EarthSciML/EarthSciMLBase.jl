@@ -1,6 +1,5 @@
 export DomainInfo, ICBCcomponent, constIC, constBC, zerogradBC, periodicBC,
-       partialderivatives,
-       get_tspan, get_tspan_datetime
+       partialderivatives, get_tref, get_tspan, get_tspan_datetime
 
 """
 Initial and boundary condition components that can be combined to
@@ -47,8 +46,11 @@ struct DomainInfo{T}
     "The spatial reference system for the domain."
     spatial_ref::Any
 
-    "The time offset for the domain."
-    time_offset::T
+    """
+    The reference time for the domain, relative to which the simulation time
+    period will be calculated.
+    """
+    tref::T
 
     function DomainInfo(pdfs, gs, icbc, sr, to::T) where {T}
         new{T}(pdfs, gs, icbc, sr, to)
@@ -73,7 +75,8 @@ struct DomainInfo{T}
     end
     function DomainInfo(starttime::DateTime, endtime::DateTime;
             xrange = nothing, yrange = nothing, levrange = nothing,
-            latrange = nothing, lonrange = nothing, dtype = Float64, level_trans = nothing, offsettime = 0.0,
+            latrange = nothing, lonrange = nothing, dtype = Float64, level_trans = nothing,
+            tref = starttime,
             spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
         @assert dtype(datetime2unix(starttime))<dtype(datetime2unix(endtime)) "starttime must be before endtime when represented as $dtype."
         @assert (!isnothing(xrange) &&
@@ -90,10 +93,10 @@ struct DomainInfo{T}
         end
         !isnothing(level_trans) ? push!(fdxs, level_trans) : nothing
 
-        offset = offsettime isa DateTime ? datetime2unix(offsettime) : offsettime
+        tref = tref isa DateTime ? datetime2unix(tref) : tref
         ic = constIC(dtype(0.0),
             ModelingToolkit.t ∈
-            Interval(dtype.(datetime2unix.([starttime, endtime]) .- offset)...))
+            Interval(dtype.(datetime2unix.([starttime, endtime]) .- tref)...))
 
         boundaries = [] # Boundary conditions
         grid_spacing = []
@@ -122,7 +125,7 @@ struct DomainInfo{T}
             push!(grid_spacing, dtype(step(levrange)))
         end
         bcs = constBC(dtype(0.0), boundaries...)
-        new{dtype}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, offset)
+        new{dtype}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, tref)
     end
 end
 
@@ -199,9 +202,10 @@ function endpoints(d::DomainInfo{T}) where {T}
 end
 
 """
-$(SIGNATURES)
+$(TYPEDSIGNATURES)
 
-Return the time range associated with this domain, returning the values as Unix times.
+Return the time range associated with this domain, returning the values as Unix times
+relative to the reference time `tref`.
 """
 function get_tspan(d::DomainInfo{T})::Tuple{T, T} where {T <: AbstractFloat}
     for icbc in d.icbc
@@ -214,12 +218,19 @@ function get_tspan(d::DomainInfo{T})::Tuple{T, T} where {T <: AbstractFloat}
 end
 
 """
+$(TYPEDSIGNATURES)
+
+Return the reference time for this simulation.
+"""
+get_tref(d::DomainInfo) = d.tref
+
+"""
 $(SIGNATURES)
 
 Return the time range associated with this domain, returning the values as DateTimes.
 """
 function get_tspan_datetime(d::DomainInfo)
-    (Float64.(get_tspan(d)) .+ Float64(d.time_offset)) .|> unix2datetime
+    (Float64.(get_tspan(d)) .+ Float64(get_tref(d))) .|> unix2datetime
 end
 
 """
