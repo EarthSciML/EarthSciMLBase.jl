@@ -11,7 +11,7 @@ abstract type ICBCcomponent end
 abstract type ICcomponent <: ICBCcomponent end
 abstract type BCcomponent <: ICBCcomponent end
 
-function _process_uproto(u_proto{AT})
+function _process_uproto(u_proto::AT) where {AT}
     if length(size(u_proto)) != 4
         throw(ArgumentError("The prototype state array `u_proto` must be 4 dimensional"))
     end
@@ -140,8 +140,6 @@ struct DomainInfo{ET, AT}
         new{et, at}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, tref)
     end
 end
-@deprecate DomainInfo(args; dtype, kwargs...) DomainInfo(
-    args; u_proto = zeros(dtype, 1, 1, 1, 1), kwargs...)
 
 Base.size(d::DomainInfo) = tuple((length(g) for g in grid(d))...)
 function Base.size(d::DomainInfo, staggering::NTuple{3, Bool})
@@ -155,8 +153,8 @@ $(TYPEDSIGNATURES)
 
 Return the scalar data type of the state variable elements for this domain.
 """
-eltype(_::DomainInfo{ET}) where {ET} = ET
-@deprecate :dtype eltype
+Base.eltype(_::DomainInfo{ET}) where {ET} = ET
+Base.@deprecate dtype(d) eltype(d)
 
 """
 $(TYPEDSIGNATURES)

@@ -230,7 +230,7 @@ sol = solve(prob, Euler(); dt = 1.0, abstol = 1e-12, reltol = 1e-12)
     domain = DomainInfo(
         partialderivatives_δxyδlonlat,
         constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
-        dtype = Float32, grid_spacing = [0.1, 0.1, 1])
+        u_proto = zeros(Float32, 1, 1, 1, 1), grid_spacing = [0.1, 0.1, 1])
 
     csys = couple(sys, op, domain)
 
@@ -244,7 +244,7 @@ end
     domain = DomainInfo(
         partialderivatives_δxyδlonlat,
         constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
-        dtype = Float32, grid_spacing = [0.1, 0.1, 1])
+        u_proto = zeros(Float32, 1, 1, 1, 1), grid_spacing = [0.1, 0.1, 1])
 
     csys = couple(sys, domain)
 

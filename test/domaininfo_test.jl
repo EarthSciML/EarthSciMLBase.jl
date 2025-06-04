@@ -223,25 +223,35 @@ end
     @test Symbol.(pvars(di)) == [:x, :y]
     @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0]
     @test grid(di, (true, false)) == [-0.05:0.1:1.05, 0.0:0.1:2.0]
-    @test get_tspan(di) == (1.7040672e9, 1.704078e9)
+    @test get_tspan(di) == (0.0, 10800.0)
     @test length(di.partial_derivative_funcs) == 0
 end
 
-@testset "xy offset" begin
-    di = DomainInfo(
-        DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime = DateTime(2024, 1, 1),
-        xrange = 0:0.1:1, yrange = 0:0.1:2)
-
-    @test Symbol.(pvars(di)) == [:x, :y]
-    @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0]
+@testset "t_ref" begin
+    s, e = DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3)
+    di = DomainInfo(s, e; xrange = 0:0.1:1, yrange = 0:0.1:2)
     @test get_tspan(di) == (0.0, 10800.0)
-    @test get_tspan_datetime(di) == (DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3))
-    @test length(di.partial_derivative_funcs) == 0
+
+    di = DomainInfo(s, e; tref = 0.0, xrange = 0:0.1:1, yrange = 0:0.1:2)
+    @test get_tspan(di) == (1.7040672e9, 1.704078e9)
+
+    t_ref = DateTime(2024, 1, 1, 2)
+    di = DomainInfo(s, e; tref = t_ref, xrange = 0:0.1:1, yrange = 0:0.1:2)
+    @test get_tspan(di) == (1.7040672e9, 1.704078e9) .- datetime2unix(t_ref)
+
+    t_ref = datetime2unix(t_ref)
+    di = DomainInfo(s, e; tref = t_ref,
+        xrange = 0:0.1:1, yrange = 0:0.1:2)
+    @test get_tspan(di) == (1.7040672e9, 1.704078e9) .- t_ref
+
+    @test get_tspan_datetime(di) == (s, e)
+
+    @test get_tref(di) == t_ref
 end
 
 @testset "xy level" begin
     di = DomainInfo(
-        DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime = DateTime(2024, 1, 1),
+        DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
         xrange = 0:0.1:1, yrange = 0:0.1:2, levrange = 1:15)
 
     @test Symbol.(pvars(di)) == [:x, :y, :lev]
@@ -252,8 +262,9 @@ end
 
 @testset "xy float32" begin
     di = DomainInfo(
-        DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime = DateTime(2024, 1, 1),
-        xrange = 0:0.1:1, yrange = 0:0.1:2, levrange = 1:15, dtype = Float32)
+        DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
+        xrange = 0:0.1:1, yrange = 0:0.1:2, levrange = 1:15,
+        u_proto = zeros(Float32, 1, 1, 1, 1))
 
     @test Symbol.(pvars(di)) == [:x, :y, :lev]
     @test grid(di) == [0.0f0:0.1f0:1.0f0, 0.0f0:0.1f0:2.0f0, 1.0f0:15.0f0]
@@ -263,8 +274,9 @@ end
 
 @testset "lon lat float32" begin
     di = DomainInfo(
-        DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime = DateTime(2024, 1, 1),
-        lonrange = (-2π):(π / 10):(2π), latrange = 0:(π / 10):π, levrange = 1:0.5:10, dtype = Float32)
+        DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
+        lonrange = (-2π):(π / 10):(2π), latrange = 0:(π / 10):π, levrange = 1:0.5:10,
+        u_proto = zeros(Float32, 1, 1, 1, 1))
 
     @test Symbol.(pvars(di)) == [:lon, :lat, :lev]
     @test grid(di) ≈ [Float32(-2π):Float32(π / 10):Float32(2π),
@@ -275,7 +287,7 @@ end
 
 @testset "lon lat" begin
     di = DomainInfo(
-        DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime = DateTime(2024, 1, 1),
+        DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
         lonrange = (-2π):(π / 10):(2π), latrange = 0:(π / 5):π, levrange = 1:0.5:10)
 
     @test Symbol.(pvars(di)) == [:lon, :lat, :lev]
@@ -286,7 +298,7 @@ end
 
 @testset "add pd func" begin
     di = DomainInfo(
-        DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3); offsettime = DateTime(2024, 1, 1),
+        DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
         lonrange = (-2π):(π / 10):(2π), latrange = 0:(π / 5):π, levrange = 1:0.5:10)
 
     di = add_partial_derivative_func(di, x -> x^2)
