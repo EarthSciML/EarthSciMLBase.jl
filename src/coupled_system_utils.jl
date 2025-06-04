@@ -308,19 +308,16 @@ end
 """
 Initialize the state variables.
 """
-function init_u(mtk_sys::ODESystem, d::DomainInfo)
+function init_u(mtk_sys::ODESystem, d::DomainInfo{ET, AT}) where {ET, AT}
     vars = unknowns(mtk_sys)
     dflts = ModelingToolkit.get_defaults(mtk_sys)
     u0 = [dflts[u] for u in vars]
 
-    T = dtype(d)
     g = grid(d)
-    u = Array{T}(undef, length(vars), size(d)...)
     # Set initial conditions
-    for i in eachindex(u0), j in eachindex(g[1]), k in eachindex(g[2]), l in eachindex(g[3])
-        u[i, j, k, l] = u0[i]
-    end
-    u
+    AT([u0[i]
+        for i in eachindex(u0), j in eachindex(g[1]),
+    k in eachindex(g[2]), l in eachindex(g[3])])
 end
 
 function default_params(mtk_sys::AbstractSystem)

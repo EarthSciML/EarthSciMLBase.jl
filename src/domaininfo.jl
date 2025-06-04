@@ -11,6 +11,13 @@ abstract type ICBCcomponent end
 abstract type ICcomponent <: ICBCcomponent end
 abstract type BCcomponent <: ICBCcomponent end
 
+function _process_uproto(u_proto{AT})
+    if length(size(u_proto)) != 4
+        throw(ArgumentError("The prototype state array `u_proto` must be 4 dimensional"))
+    end
+    eltype(u_proto), AT
+end
+
 """
 $(SIGNATURES)
 
@@ -23,7 +30,7 @@ ModelingToolkit.jl ODESystem or Catalyst.jl ReactionSystem.
 
 $(FIELDS)
 """
-struct DomainInfo{T}
+struct DomainInfo{ET, AT}
     """
     Function that returns spatial derivatives of the partially-independent variables,
     optionally performing a coordinate transformation first.
@@ -50,35 +57,40 @@ struct DomainInfo{T}
     The reference time for the domain, relative to which the simulation time
     period will be calculated.
     """
-    tref::T
+    tref::ET
 
-    function DomainInfo(pdfs, gs, icbc, sr, to::T) where {T}
-        new{T}(pdfs, gs, icbc, sr, to)
+    function DomainInfo(pdfs, gs, icbc, sr, t_ref::ET) where {ET}
+        new{ET, Array{ET, 4}}(pdfs, gs, icbc, sr, t_ref)
     end
-    function DomainInfo(icbc::ICBCcomponent...; dtype = Float64, grid_spacing = nothing,
+    function DomainInfo(
+            icbc::ICBCcomponent...; u_proto = zeros(1, 1, 1, 1), grid_spacing = nothing,
             spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        new{dtype}([], grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
+        et, at = _process_uproto(u_proto)
+        new{et, at}([], grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
     end
     function DomainInfo(fdx::Function, icbc::ICBCcomponent...; grid_spacing = nothing,
-            dtype = Float64, spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
+            u_proto = zeros(1, 1, 1, 1), spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        new{dtype}([fdx], grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
+        et, at = _process_uproto(u_proto)
+        new{et, at}([fdx], grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
     end
     function DomainInfo(fdxs::Vector{Function}, icbc::ICBCcomponent...;
-            dtype = Float64, grid_spacing = nothing, spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
+            u_proto = zeros(1, 1, 1, 1), grid_spacing = nothing, spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        new{dtype}(fdxs, grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
+        et, at = _process_uproto(u_proto)
+        new{et, at}(fdxs, grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
     end
     function DomainInfo(starttime::DateTime, endtime::DateTime;
             xrange = nothing, yrange = nothing, levrange = nothing,
-            latrange = nothing, lonrange = nothing, dtype = Float64, level_trans = nothing,
-            tref = starttime,
+            latrange = nothing, lonrange = nothing, u_proto = zeros(1, 1, 1, 1),
+            level_trans = nothing, tref = starttime,
             spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
-        @assert dtype(datetime2unix(starttime))<dtype(datetime2unix(endtime)) "starttime must be before endtime when represented as $dtype."
+        et, at = _process_uproto(u_proto)
+        @assert et(datetime2unix(starttime))<et(datetime2unix(endtime)) "starttime must be before endtime when represented as $et."
         @assert (!isnothing(xrange) &&
                  !isnothing(yrange)) ||
                 (!isnothing(latrange) && !isnothing(lonrange)) "Either x and y ranges or lat and lon ranges must be provided."
@@ -94,9 +106,9 @@ struct DomainInfo{T}
         !isnothing(level_trans) ? push!(fdxs, level_trans) : nothing
 
         tref = tref isa DateTime ? datetime2unix(tref) : tref
-        ic = constIC(dtype(0.0),
+        ic = constIC(et(0.0),
             ModelingToolkit.t ∈
-            Interval(dtype.(datetime2unix.([starttime, endtime]) .- tref)...))
+            Interval(et.(datetime2unix.([starttime, endtime]) .- tref)...))
 
         boundaries = [] # Boundary conditions
         grid_spacing = []
@@ -107,27 +119,29 @@ struct DomainInfo{T}
                 unit = u"rad", description = "Longitude"])
             lat = only(@parameters lat=mean(latrange) [
                 unit = u"rad", description = "Latitude"])
-            push!(boundaries, lon ∈ Interval(dtype.([first(lonrange), last(lonrange)])...))
-            push!(boundaries, lat ∈ Interval(dtype.([first(latrange), last(latrange)])...))
-            push!(grid_spacing, dtype.([step(lonrange), step(latrange)])...)
+            push!(boundaries, lon ∈ Interval(et.([first(lonrange), last(lonrange)])...))
+            push!(boundaries, lat ∈ Interval(et.([first(latrange), last(latrange)])...))
+            push!(grid_spacing, et.([step(lonrange), step(latrange)])...)
         else
             x = only(@parameters x=mean(xrange) [
                 unit = u"m", description = "East-West Distance"])
             y = only(@parameters y=mean(yrange) [
                 unit = u"m", description = "North-South Distance"])
-            push!(boundaries, x ∈ Interval(dtype.([first(xrange), last(xrange)])...))
-            push!(boundaries, y ∈ Interval(dtype.([first(yrange), last(yrange)])...))
-            push!(grid_spacing, dtype.([step(xrange), step(yrange)])...)
+            push!(boundaries, x ∈ Interval(et.([first(xrange), last(xrange)])...))
+            push!(boundaries, y ∈ Interval(et.([first(yrange), last(yrange)])...))
+            push!(grid_spacing, et.([step(xrange), step(yrange)])...)
         end
         if !isnothing(levrange)
             lev = only(@parameters lev=mean(levrange) [description = "Level Index"])
-            push!(boundaries, lev ∈ Interval(dtype.([first(levrange), last(levrange)])...))
-            push!(grid_spacing, dtype(step(levrange)))
+            push!(boundaries, lev ∈ Interval(et.([first(levrange), last(levrange)])...))
+            push!(grid_spacing, et(step(levrange)))
         end
-        bcs = constBC(dtype(0.0), boundaries...)
-        new{dtype}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, tref)
+        bcs = constBC(et(0.0), boundaries...)
+        new{et, at}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, tref)
     end
 end
+@deprecate DomainInfo(args; dtype, kwargs...) DomainInfo(
+    args; u_proto = zeros(dtype, 1, 1, 1, 1), kwargs...)
 
 Base.size(d::DomainInfo) = tuple((length(g) for g in grid(d))...)
 function Base.size(d::DomainInfo, staggering::NTuple{3, Bool})
@@ -137,12 +151,19 @@ Base.size(d::DomainInfo, i) = length(grid(d)[i])
 Base.size(d::DomainInfo, staggering::NTuple{3, Bool}, i) = length(grid(d, staggering)[i])
 
 """
-$(SIGNATURES)
+$(TYPEDSIGNATURES)
 
-Return the data type of the state variables for this domain,
-based on the data types of the boundary conditions domain intervals.
+Return the scalar data type of the state variable elements for this domain.
 """
-dtype(_::DomainInfo{T}) where {T} = T
+eltype(_::DomainInfo{ET}) where {ET} = ET
+@deprecate :dtype eltype
+
+"""
+$(TYPEDSIGNATURES)
+
+Return the data type of the state variable array for this domain.
+"""
+arraytype(_::DomainInfo{ET, AT}) where {ET, AT} = AT
 
 """
 $(SIGNATURES)
