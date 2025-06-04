@@ -1,7 +1,7 @@
 using EarthSciMLBase
 using Test
 using DomainSets, ModelingToolkit
-using MethodOfLines, DifferentialEquations
+using MethodOfLines, OrdinaryDiffEqTsit5
 using ModelingToolkit: t, D
 import SciMLBase
 using DynamicQuantities

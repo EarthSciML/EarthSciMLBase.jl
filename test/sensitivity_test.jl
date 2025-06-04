@@ -1,6 +1,6 @@
 using EarthSciMLBase
 using SciMLSensitivity, ForwardDiff, Zygote
-using ModelingToolkit, DomainSets, OrdinaryDiffEq, SymbolicIndexingInterface
+using ModelingToolkit, DomainSets, OrdinaryDiffEqSDIRK, SymbolicIndexingInterface
 using SciMLOperators
 using DynamicQuantities
 using LinearSolve

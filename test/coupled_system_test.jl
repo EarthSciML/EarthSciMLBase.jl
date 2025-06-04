@@ -5,7 +5,7 @@ using ModelingToolkit: t_nounits, D_nounits
 using Test
 using Catalyst
 using DynamicQuantities
-using OrdinaryDiffEq
+using OrdinaryDiffEqTsit5
 
 @testset "Composed System" begin
     struct SEqnCoupler
@@ -219,7 +219,7 @@ end
     #sys = EarthSciMLBase.remove_extra_defaults(sys, structural_simplify(sys))
 
     prob = ODEProblem(structural_simplify(sys), [], (0, 100), [])
-    sol = solve(prob, abstol = 1e-8, reltol = 1e-8)
+    sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
     @test sol[x][end] ≈ 3
     @test sol[x2][end] ≈ 3
 
@@ -256,7 +256,7 @@ end
 
     sys2 = EarthSciMLBase.prune_observed(sys, structural_simplify(sys), [])
     prob = ODEProblem(structural_simplify(sys2), [], (0, 100), [])
-    sol = solve(prob, abstol = 1e-8, reltol = 1e-8)
+    sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
     @test sol[x][end] ≈ 3
     @test sol[x2][end] ≈ 3
 end
@@ -297,7 +297,7 @@ end
     sysc2 = sys_flattened
     sysc3 = EarthSciMLBase.prune_observed(sysc2, structural_simplify(sysc2), [])
     prob = ODEProblem(structural_simplify(sysc3), [], (0, 100), [])
-    sol = solve(prob, abstol = 1e-8, reltol = 1e-8)
+    sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
     @test length(sol.u[end]) == 4
     @test all(sol.u[end] .≈ 3)
 end
@@ -349,7 +349,7 @@ end
     @test occursin("a₊b_ddt_xˍt(t)", string(equations(sys)))
     @test occursin("a₊b_ddt_x2ˍt(t)", string(equations(sys)))
     prob = ODEProblem(sys, [], (0, 100), [])
-    sol = solve(prob, abstol = 1e-8, reltol = 1e-8)
+    sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
     @test length(sol.u[end]) == 2
     @test all(sol.u[end] .≈ 3)
 end
@@ -465,7 +465,7 @@ end
 
     @test length(ModelingToolkit.get_discrete_events(sys)) == 2
 
-    sol = solve(ODEProblem(sys), tspan = (0, 10))
+    sol = solve(ODEProblem(sys), Tsit5(), tspan = (0, 10))
 
     # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for
     # the rest of the simulation, so the final value of x should be 7.
@@ -505,7 +505,7 @@ end
 
     @test length(ModelingToolkit.get_discrete_events(sys)) == 2
 
-    sol = solve(ODEProblem(sys), tspan = (0, 10))
+    sol = solve(ODEProblem(sys), Tsit5(), tspan = (0, 10))
 
     # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for
     # until t = 5, and then because of sysevent2 it become 2 for the rest of the simulation.

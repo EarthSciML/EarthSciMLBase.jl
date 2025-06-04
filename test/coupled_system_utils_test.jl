@@ -8,7 +8,7 @@ t = t_nounits;
 using ModelingToolkit: D_nounits;
 D = D_nounits;
 using DynamicQuantities
-using OrdinaryDiffEq: solve
+using OrdinaryDiffEqTsit5
 using SciMLBase: ReturnCode
 
 @test steplength([0, 0.1, 0.2]) == 0.1
@@ -81,7 +81,7 @@ bcs = icbc(domain, vars)
               occursin("Differential(t)(x(t)) ~ -z(t)", string(equations(sys2)))
 
         prob = ODEProblem(sys2, [], (0.0, 2.0))
-        sol = solve(prob, saveat = 0.05)
+        sol = solve(prob, Tsit5(), saveat = 0.05)
         @test sol.retcode == ReturnCode.Success
 
         @test length(ModelingToolkit.get_continuous_events(sys2)) == 2
@@ -99,7 +99,7 @@ bcs = icbc(domain, vars)
         @test length(equations(sys2)) == 2
 
         prob = ODEProblem(sys2, [], (0.0, 2.0))
-        sol = solve(prob, saveat = 0.05)
+        sol = solve(prob, Tsit5(), saveat = 0.05)
         @test sol.retcode == ReturnCode.Success
 
         @test length(ModelingToolkit.get_continuous_events(sys2)) == 2

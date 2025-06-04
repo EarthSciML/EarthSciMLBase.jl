@@ -3,7 +3,7 @@ using EarthSciMLBase
 using EarthSciMLBase: pvars, grid, get_tspan, get_tspan_datetime,
                       add_partial_derivative_func
 using ModelingToolkit, Catalyst
-using MethodOfLines, DifferentialEquations, DomainSets
+using MethodOfLines, OrdinaryDiffEqTsit5, DomainSets
 using ModelingToolkit: t_nounits;
 t = t_nounits;
 using ModelingToolkit: D_nounits;

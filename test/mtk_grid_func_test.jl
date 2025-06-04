@@ -3,7 +3,8 @@ using ModelingToolkit
 using DomainSets
 using Test
 using SymbolicIndexingInterface
-using OrdinaryDiffEq
+using OrdinaryDiffEqTsit5
+using JLArrays
 
 @parameters y lon=0.0 lat=0.0 lev=1.0 t α=10.0 β=1.0
 @constants p = 1.0
@@ -68,16 +69,27 @@ u0 = EarthSciMLBase.init_u(sys_coord, domain)
 
 @testset "grid solve" begin
     f, _ = EarthSciMLBase.mtk_grid_func(sys, domain, u0)
-    prob = ODEProblem(f, reshape(u0, :), (0.0, 1.0), p)
 
     @testset "in place" begin
-        sol1 = solve(prob)
+        prob = ODEProblem(f, reshape(u0, :), (0.0, 1.0), p)
+        sol1 = solve(prob, Tsit5())
         @test sum(sol1[end]) ≈ -3029.442918648946
     end
 
     @testset "out of place" begin
-        sol2 = solve(prob)
+        prob = ODEProblem{false}(f, reshape(u0, :), (0.0, 1.0), p)
+        sol2 = solve(prob, Tsit5())
         @test sum(sol2[end]) ≈ -3029.442918648946
+    end
+
+    @testset "In place GPU" begin
+        prob_gpu = ODEProblem(f, jl(reshape(u0, :)), (0.0, 1.0), p)
+        @test_broken sol = solve(prob_gpu, Tsit5())
+    end
+
+    @testset "Out of place GPU" begin
+        prob_gpu = ODEProblem{false}(f, jl(reshape(u0, :)), (0.0, 1.0), p)
+        @test_broken sol = solve(prob_gpu, Tsit5())
     end
 end
 

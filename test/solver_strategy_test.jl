@@ -1,6 +1,7 @@
 using EarthSciMLBase
 using Test
-using ModelingToolkit, DomainSets, OrdinaryDiffEq
+using ModelingToolkit, DomainSets
+using OrdinaryDiffEqTsit5, OrdinaryDiffEqSDIRK, OrdinaryDiffEqLowOrderRK
 using SciMLOperators
 using DynamicQuantities
 using SciMLBase: DiscreteCallback, ReturnCode

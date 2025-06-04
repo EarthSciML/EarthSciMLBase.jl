@@ -1,7 +1,7 @@
 using Test
 using ModelingToolkit, Catalyst, EarthSciMLBase
 using ModelingToolkit: t_nounits, D_nounits
-using OrdinaryDiffEq: ODEProblem, solve
+using OrdinaryDiffEqTsit5
 using SciMLBase: ReturnCode
 t = t_nounits
 D = D_nounits
@@ -59,14 +59,14 @@ end
 p = Photolysis()
 @testset "Photolysis single" begin
     prob = ODEProblem(structural_simplify(p), [], (0.0, 1.0))
-    sol = solve(prob)
+    sol = solve(prob, Tsit5())
     @test sol.retcode == ReturnCode.Success
 end
 
 c = Chemistry()
 @testset "Chemistry single" begin
     prob = ODEProblem(structural_simplify(c), [], (0.0, 1.0))
-    sol = solve(prob)
+    sol = solve(prob, Tsit5())
     @test sol.retcode == ReturnCode.Success
 end
 
@@ -74,7 +74,7 @@ e = Emissions()
 @testset "Emissions single" begin
     ee = structural_simplify(e)
     prob = ODEProblem(ee, [ee.NO2=>0], (0.0, 1.0))
-    sol = solve(prob)
+    sol = solve(prob, Tsit5())
     @test sol.retcode == ReturnCode.Success
 end
 
@@ -83,6 +83,6 @@ end
     sys = convert(ODESystem, model)
 
     prob = ODEProblem(sys, [], (0.0, 1.0))
-    sol = solve(prob, u0 = [1.0])
+    sol = solve(prob, Tsit5(), u0 = [1.0])
     @test sol.retcode == ReturnCode.Success
 end
