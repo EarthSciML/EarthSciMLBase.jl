@@ -7,7 +7,7 @@ using ModelingToolkit: t, D
 @parameters β=2 [unit = u"kg*s", description = "β description"]
 @variables x(t) [unit = u"m", description = "x description"]
 eq = D(x) ~ α * x / β
-@named sys = ODESystem([eq], t; metadata = :metatest)
+@named sys = System([eq], t; metadata = Dict(CoupleType => :metatest))
 
 ii(x, y) = findfirst(isequal(x), y)
 isin(x, y) = ii(x, y) !== nothing
@@ -21,7 +21,7 @@ isin(x, y) = ii(x, y) !== nothing
     var = unknowns(sys2)[ii(β, unknowns(sys2))]
     @test Symbolics.getmetadata(var, ModelingToolkit.VariableUnit) == u"kg*s"
     @test Symbolics.getmetadata(var, ModelingToolkit.VariableDescription) == "β description"
-    @test ModelingToolkit.get_metadata(sys2) == :metatest
+    @test getmetadata(sys2, CoupleType, nothing) == :metatest
 end
 
 @variables α(t) [unit = u"kg*s", description = "α description"]
@@ -37,7 +37,7 @@ end
 end
 
 @testset "events" begin
-    @named sys = ODESystem([eq], t; metadata = :metatest,
+    @named sys = System([eq], t; metadata = :metatest,
         continuous_events = [x ~ 0],
         discrete_events = (t == 1.0) => [x ~ x + 1]
     )

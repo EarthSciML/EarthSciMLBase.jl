@@ -101,7 +101,7 @@ simplified system depend on. This should be done before running `structural_simp
 on the system.
 `extra_vars` is a list of additional variables that need to be kept.
 """
-function get_needed_vars(original_sys::ODESystem, simplified_sys::ODESystem,
+function get_needed_vars(original_sys::System, simplified_sys::System,
         extra_vars = [])
     Base.depwarn(
         "EarthSciMLBase.get_needed_vars is deprecated",
@@ -143,9 +143,9 @@ end
 """
 $(SIGNATURES)
 
-Create a copy of an ODESystem with the given changes.
+Create a copy of an System with the given changes.
 """
-function copy_with_change(sys::ODESystem;
+function copy_with_change(sys::System;
         eqs = equations(sys),
         name = nameof(sys),
         unknowns = unknowns(sys),
@@ -153,10 +153,10 @@ function copy_with_change(sys::ODESystem;
         metadata = ModelingToolkit.get_metadata(sys),
         continuous_events = ModelingToolkit.get_continuous_events(sys),
         discrete_events = ModelingToolkit.get_discrete_events(sys),
-        defaults = sys.defaults
+        defaults = getfield(sys, :defaults)
 )
     try
-        ODESystem(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
+        System(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
             name = name, metadata = metadata,
             continuous_events = continuous_events, discrete_events = discrete_events,
             defaults = defaults
@@ -222,11 +222,11 @@ end
 """
 $(SIGNATURES)
 
-Remove equations from an ODESystem where the variable in the LHS is not
+Remove equations from an System where the variable in the LHS is not
 present in any of the equations for the state variables. This can be used to
 remove computationally intensive equations that are not used in the final model.
 """
-function prune_observed(original_sys::ODESystem, simplified_sys, extra_vars)
+function prune_observed(original_sys::System, simplified_sys, extra_vars)
     Base.depwarn(
         "EarthSciMLBase.prune_observed is deprecated",
         :prune_observed)
@@ -308,7 +308,7 @@ end
 """
 Initialize the state variables.
 """
-function init_u(mtk_sys::ODESystem, d::DomainInfo{ET, AT}) where {ET, AT}
+function init_u(mtk_sys::System, d::DomainInfo{ET, AT}) where {ET, AT}
     vars = unknowns(mtk_sys)
     dflts = ModelingToolkit.get_defaults(mtk_sys)
     u0 = [dflts[u] for u in vars]
@@ -353,7 +353,7 @@ function coord_params(mtk_sys::AbstractSystem, domain::DomainInfo)
 end
 
 # Create a function to set the coordinates in a parameter vector for a given grid cell
-function coord_setter(sys_mtk::ODESystem, domain::DomainInfo)
+function coord_setter(sys_mtk::System, domain::DomainInfo)
     coords = coord_params(sys_mtk, domain)
     coord_setter = setp(sys_mtk, coords)
     II = CartesianIndices(tuple(size(domain)...))

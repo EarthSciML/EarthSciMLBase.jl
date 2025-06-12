@@ -78,7 +78,7 @@ The left hand sides of two equations will be considered matching if:
  4. There is an entry in the optional `translate` dictionary that maps the dependent variable in the first system to the dependent variable in the second system, with a conversion factor, e.g. `Dict(sys1.sys.x => sys2.sys.y => 6)`.
 """
 function operator_compose(
-        a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESystem, translate = Dict())
+        a::ModelingToolkit.System, b::ModelingToolkit.System, translate = Dict())
     translate = normalize_translate(translate)
     a_eqs = deepcopy(equations(a))
     b_eqs = deepcopy(equations(b))

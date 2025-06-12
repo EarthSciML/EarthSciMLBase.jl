@@ -17,7 +17,7 @@ D = D_nounits
 function ExampleSys()
     @variables y(t)
     @parameters p=2.0 x=1
-    ODESystem([D(y) ~ p], t, [y], [p, x]; name = :ExampleSys)
+    System([D(y) ~ p], t, [y, p, x]; name = :ExampleSys)
 end
 
 ExampleSys()

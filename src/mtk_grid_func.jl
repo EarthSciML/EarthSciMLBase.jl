@@ -66,7 +66,7 @@ function _prepare_coord_sys(sys, domain)
     coord_arg_consts = [only(@constants $(ca) = 1) for ca in coord_args]
     coord_arg_consts = add_metadata.(coord_arg_consts, coords; exclude_default = true)
     sys_coord = substitute(sys, Dict(coords .=> coord_arg_consts))
-    @named obs = ODESystem(
+    @named obs = System(
         substitute(ModelingToolkit.observed(sys),
             Dict(coords .=> coord_arg_consts)),
         ModelingToolkit.get_iv(sys_coord))
@@ -134,7 +134,7 @@ end
 
 # Return a function to apply the MTK system to each column of u after reshaping to a matrix.
 function mtk_grid_func(
-        sys_mtk::ODESystem, domain::DomainInfo{T}, u0, alg::MA = MapBroadcast();
+        sys_mtk::System, domain::DomainInfo{T}, u0, alg::MA = MapBroadcast();
         sparse = false, tgrad = false, vjp = true) where {T, MA <: MapAlgorithm}
     sys_mtk, coord_args = _prepare_coord_sys(sys_mtk, domain)
 

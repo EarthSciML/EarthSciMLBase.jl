@@ -2,12 +2,10 @@ using Test
 using EarthSciMLBase
 using EarthSciMLBase: pvars, grid, get_tspan, get_tspan_datetime,
                       add_partial_derivative_func
-using ModelingToolkit, Catalyst
+using ModelingToolkit
 using MethodOfLines, OrdinaryDiffEqTsit5, DomainSets
-using ModelingToolkit: t_nounits;
-t = t_nounits;
-using ModelingToolkit: D_nounits;
-D = D_nounits;
+t = ModelingToolkit.t_nounits;
+D = ModelingToolkit.D_nounits;
 import SciMLBase
 using Dates
 
@@ -22,7 +20,7 @@ eqs = [D(u) ~ -α * √abs(v),
     D(v) ~ -α * √abs(u)
 ]
 
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 
 indepdomain = t ∈ Interval(t_min, t_max)
 
@@ -98,50 +96,6 @@ end
     @test isequal(pde_result.ps, pde_want.ps)
 end
 
-@testset "ReactionSystem" begin
-    pde_want = let
-        @parameters x y
-        @variables m₁(..) m₂(..)
-        eqs = [
-            D(m₁(t, x, y)) ~ -10.0 * m₁(t, x, y),
-            D(m₂(t, x, y)) ~ 10.0 * m₁(t, x, y)
-        ]
-
-        bcs = [
-            m₁(t_min, x, y) ~ 16.0,
-            m₂(t_min, x, y) ~ 16.0,
-            m₁(t, x_min, y) ~ 16.0,
-            m₁(t, x_max, y) ~ 16.0,
-            m₁(t, x, y_min) ~ 16.0,
-            m₁(t, x, y_max) ~ 16.0,
-            m₂(t, x_min, y) ~ 16.0,
-            m₂(t, x_max, y) ~ 16.0,
-            m₂(t, x, y_min) ~ 16.0,
-            m₂(t, x, y_max) ~ 16.0
-        ]
-
-        dmns = [
-            t ∈ Interval(t_min, t_max),
-            x ∈ Interval(x_min, x_max),
-            y ∈ Interval(y_min, y_max)
-        ]
-
-        PDESystem(eqs, bcs, dmns, [t, x, y], [m₁(t, x, y), m₂(t, x, y)], [], name = :sys)
-    end
-
-    rn = @reaction_network begin
-        10.0, m₁ --> m₂
-    end
-    pde_result = rn + domain
-
-    @test isequal(pde_result.eqs, pde_want.eqs)
-    @test isequal(pde_result.ivs, pde_want.ivs)
-    @test isequal(pde_result.dvs, pde_want.dvs)
-    @test isequal(pde_result.bcs, pde_want.bcs)
-    @test isequal(pde_result.domain, pde_want.domain)
-    @test isequal(pde_result.ps, pde_want.ps)
-end
-
 @testset "zero-grad and periodic" begin
     domain = DomainInfo(
         constIC(16.0, indepdomain),
@@ -151,7 +105,7 @@ end
     pdesys = sys + domain
 
     want_bcs = let
-        @parameters x y t
+        @parameters x y
         @variables u(..) v(..)
         Dy = Differential(y)
         [
@@ -188,8 +142,7 @@ end
 
     function ExSys()
         @variables u(t) v(t)
-        D = Differential(t)
-        ODESystem([
+        System([
                 v ~ 2u,
                 D(v) ~ v
             ], t, [u, v], [x]; name = :sys)

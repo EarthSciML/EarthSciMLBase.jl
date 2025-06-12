@@ -1,4 +1,4 @@
-export CoupledSystem, ConnectorSystem, couple
+export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent
 
 """
 A system for composing together other systems using the [`couple`](@ref) function.
@@ -7,7 +7,7 @@ $(FIELDS)
 
 Things that can be added to a `CoupledSystem`:
 
-  - `ModelingToolkit.ODESystem`s. If the ODESystem has a field in the metadata called
+  - `ModelingToolkit.System`s. If the System has a field in the metadata called
     `:coupletype` (e.g. `ModelingToolkit.get_metadata(sys)[:coupletype]` returns a struct type
     with a single field called `sys`)
     then that type will be used to check for methods of `EarthSciMLBase.couple` that use that type.
@@ -101,30 +101,40 @@ function couple(systems...)::CoupledSystem
 end
 
 """
+The DataType that should be used in the ModelingToolkit System
+metadata for specifying a system's coupling behavior.
+"""
+struct CoupleType end
+
+"""
 Return the coupling type associated with the given system.
 """
 function get_coupletype(sys::ModelingToolkit.AbstractSystem)
-    md = ModelingToolkit.get_metadata(sys)
-    if (!isa(md, Dict)) || (:coupletype ∉ keys(md))
+    T = getmetadata(sys, CoupleType, nothing)
+    if isnothing(T)
         return Nothing
     end
-    T = md[:coupletype]
     @assert ((length(fieldnames(T)) == 1) && (only(fieldnames(T)) == :sys))
     "The `couple_type` $T must have a single field named `:sys` and no other fields"
     T
 end
 
 """
-Retuns the `sys_discrete_event` function associated with the given system, which
-is meant to be a function that takes the fully coupled ODESystem and returns a discrete
-event that should be applied to it.
+The DataType that should be used in the ModelingToolkit System
+metadata for specifying a discrete system event.
 """
-function get_sys_discrete_event(sys::ModelingToolkit.AbstractSystem)
-    md = ModelingToolkit.get_metadata(sys)
-    if (!isa(md, Dict)) || (:sys_discrete_event ∉ keys(md))
-        return nothing
+struct SysDiscreteEvent end
+
+"""
+Retuns the `sys_discrete_event` function associated with the given system, which
+is meant to be a function that takes the fully coupled ModelingToolkit System and returns
+a discrete event that should be applied to it.
+"""
+function get_sys_discrete_event(sys::ModelingToolkit.System)
+    f = getmetadata(sys, SysDiscreteEvent, nothing)
+    if isnothing(f)
+        return f
     end
-    f = md[:sys_discrete_event]
     @assert f isa Function "The `sys_discrete_event` for $(nameof(sys)) must be a function."
     @assert hasmethod(f, (AbstractSystem,))
     """The `sys_discrete_event` for $(nameof(sys)) must be a function that takes a
@@ -151,7 +161,7 @@ where `ACoupler` and `BCoupler` are `:coupletype`s defined like this:
 struct ACoupler
     sys
 end
-@named asys = ODESystem([], t, metadata = Dict(:coupletype=>ACoupler))
+@named asys = System([], t, metadata = Dict(:coupletype=>ACoupler))
 ```
 """
 couple2() = nothing
@@ -159,21 +169,19 @@ couple2() = nothing
 """
 $(SIGNATURES)
 
-Get the ODE ModelingToolkit ODESystem representation of a [`CoupledSystem`](@ref).
+Get the ODE ModelingToolkit System representation of a [`CoupledSystem`](@ref).
 
 kwargs:
 
-  - name: The desired name for the resulting ODESystem
-  - simplify: Whether to run `structural_simplify` on the resulting ODESystem
+  - name: The desired name for the resulting System
+  - simplify: Whether to run `structural_simplify` on the resulting System
   - prune: Whether to prune the extra observed equations to improve performance
 
 Return values:
 
-  - The ODESystem representation of the CoupledSystem
-  - The extra observed equations which have been pruned to improve performance
+  - The ModelingToolkit System representation of the CoupledSystem
 """
-function Base.convert(
-        ::Type{<:ODESystem}, sys::CoupledSystem; name = :model, simplify = true,
+function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, simplify = true,
         prune = false, extra_vars = [], kwargs...)
     connector_eqs = Equation[]
     discrete_event_fs = []
@@ -201,20 +209,20 @@ function Base.convert(
 
     # Create temporary coupled system and use it to get system events.
     defaults = ModelingToolkit.get_defaults(ModelingToolkit.flatten(
-        ODESystem(Equation[], iv; name = :temp, systems = systems)))
+        System(Equation[], iv; name = :temp, systems = systems)))
     if length(discrete_event_fs) > 0
-        temp_connectors = ODESystem(connector_eqs, iv; name = name,
+        temp_connectors = System(connector_eqs, iv; name = name,
             defaults = defaults, kwargs...)
         temp_sys = structural_simplify(ModelingToolkit.flatten(compose(
             temp_connectors, systems...)))
         de = filter(!isnothing, [f(temp_sys) for f in discrete_event_fs])
 
         # Create system of connectors and events.
-        connectors = ODESystem(connector_eqs, iv; name = name,
+        connectors = System(connector_eqs, iv; name = name,
             discrete_events = de, defaults = defaults, kwargs...)
     else
         # Create system of connectors.
-        connectors = ODESystem(connector_eqs, iv; name = name,
+        connectors = System(connector_eqs, iv; name = name,
             defaults = defaults, kwargs...)
     end
 
@@ -248,7 +256,7 @@ Get the ModelingToolkit PDESystem representation of a [`CoupledSystem`](@ref).
 """
 function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
         kwargs...)::ModelingToolkit.AbstractSystem
-    o = convert(ODESystem, sys; name = name, simplify = false, prune = false, kwargs...)
+    o = convert(System, sys; name = name, simplify = false, prune = false, kwargs...)
 
     if sys.domaininfo !== nothing
         o += sys.domaininfo

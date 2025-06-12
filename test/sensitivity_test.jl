@@ -85,12 +85,12 @@ eqs = [Dt(u) ~ -α * √abs(v) + lon + β,
     y ~ 1.0 / EarthSciMLBase.lat2meters,
     z ~ 1.0 / lev
 ]
-sys = ODESystem(eqs, t, name = :sys)
+sys = System(eqs, t, name = :sys)
 
 op = ExampleOp()
 
 csys = EarthSciMLBase.couple(sys, op, domain)
-model_sys = convert(ODESystem, csys)
+model_sys = convert(System, csys)
 model_sys, = EarthSciMLBase._prepare_coord_sys(model_sys, domain)
 
 st = SolverIMEX(stiff_sparse = false)

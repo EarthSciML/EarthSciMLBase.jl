@@ -86,13 +86,13 @@ eqs = [Dt(u) ~ -α * √abs(v) + lon,
     y ~ 1.0 / EarthSciMLBase.lat2meters,
     z ~ 1.0 / lev
 ]
-sys = ODESystem(eqs, t, name = :sys)
+sys = System(eqs, t, name = :sys)
 
 op = ExampleOp()
 
 csys = EarthSciMLBase.couple(sys, op, domain)
 
-sys_mtk = convert(ODESystem, csys)
+sys_mtk = convert(System, csys)
 
 @test Symbol.(EarthSciMLBase.partialderivative_transform_vars(sys_mtk, domain)) == [
     Symbol("δsys₊lon_transform(t)"),

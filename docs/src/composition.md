@@ -18,7 +18,7 @@ function Photolysis(; name = :Photolysis)
     eqs = [
         j_NO2 ~ max(sin(t / 86400), 0)
     ]
-    ODESystem(eqs, t, [j_NO2], [], name = name,
+    System(eqs, t, [j_NO2], [], name = name,
         metadata = Dict(:coupletype => PhotolysisCoupler))
 end
 
@@ -40,7 +40,7 @@ It is important that this type is a struct, and that the struct has a single fie
 When defining your own coupled systems, you can just copy the line of code above but change the
 name of the type (i.e., change it to something besides `PhotolysisCoupler`).
 
-The second unique part is that we define some metadata for our ODESystem to tell it what coupling
+The second unique part is that we define some metadata for our System to tell it what coupling
 type to use:
 
 ```julia
@@ -63,14 +63,14 @@ function Chemistry(; name = :Chemistry)
     ]
     rsys = ReactionSystem(rxs, t, [NO2], [jNO2];
         combinatoric_ratelaws = false, name = name)
-    convert(ODESystem, complete(rsys), metadata = Dict(:coupletype => ChemistryCoupler))
+    convert(System, complete(rsys), metadata = Dict(:coupletype => ChemistryCoupler))
 end
 
 Chemistry()
 ```
 
 For our chemistry component above, because it's is originally a ReactionSystem instead of an
-ODESystem, we convert it to an ODESystem before adding the metadata.
+ModelingToolkit System, we convert it to a ModelingToolkit System before adding the metadata.
 
 ```@example composition
 struct EmissionsCoupler
@@ -80,8 +80,7 @@ function Emissions(; name = :Emissions)
     @parameters emis = 1
     @variables NO2(t)
     eqs = [NO2 ~ emis]
-    ODESystem(eqs, t; name = name,
-        metadata = Dict(:coupletype => EmissionsCoupler))
+    System(eqs, t; name = name, metadata = Dict(:coupletype => EmissionsCoupler))
 end
 
 Emissions()
@@ -89,7 +88,7 @@ Emissions()
 
 Now, we need to define ways to couple the model components together.
 We can do this by defining a coupling function (as a method of [`EarthSciMLBase.couple2`](@ref)) for each pair of model components that we want to couple.
-Each coupling function should have the signature `EarthSciMLBase.couple2(a::ACoupler, b::BCoupler)::ConnectorSystem`, and should assume that the two `ODESystem`s are inside their respective couplers in the `sys` field.
+Each coupling function should have the signature `EarthSciMLBase.couple2(a::ACoupler, b::BCoupler)::ConnectorSystem`, and should assume that the two ModelingToolkit `System`s are inside their respective couplers in the `sys` field.
 It should make any edits to the components as needed and return a [`ConnectorSystem`](@ref) which defines the relationship between the two components.
 
 The code below defines a method for coupling the `Chemistry` and `Photolysis` components.
@@ -99,7 +98,7 @@ The next effect is that the photolysis rate in the `Chemistry` component is now 
 ```@example composition
 function EarthSciMLBase.couple2(c::ChemistryCoupler, p::PhotolysisCoupler)
     c, p = c.sys, p.sys
-    c = param_to_var(convert(ODESystem, c), :jNO2)
+    c = param_to_var(convert(System, c), :jNO2)
     ConnectorSystem([c.jNO2 ~ p.j_NO2], c, p)
 end
 nothing # hide
@@ -111,18 +110,18 @@ To do this we use the [`operator_compose`](@ref operator_compose) function to ad
 ```@example composition
 function EarthSciMLBase.couple2(c::ChemistryCoupler, emis::EmissionsCoupler)
     c, emis = c.sys, emis.sys
-    operator_compose(convert(ODESystem, c), emis, Dict(
+    operator_compose(convert(System, c), emis, Dict(
         c.NO2 => emis.NO2,
     ))
 end
 nothing # hide
 ```
 
-Finally, we can compose the model components together to create our complete model. To do so, we just initialize each model component and add the components together using the [`couple`](@ref) function. We can use the `convert` function to convert the composed model to a [ModelingToolkit](https://mtk.sciml.ai/dev/) `ODESystem` so we can see what the combined equations look like.
+Finally, we can compose the model components together to create our complete model. To do so, we just initialize each model component and add the components together using the [`couple`](@ref) function. We can use the `convert` function to convert the composed model to a [ModelingToolkit](https://mtk.sciml.ai/dev/) `System` so we can see what the combined equations look like.
 
 ```@example composition
 model = couple(Photolysis(), Chemistry(), Emissions())
-convert(ODESystem, model)
+convert(System, model)
 ```
 
 Finally, we can use the [`graph`](@ref) function to visualize the model components and their connections.

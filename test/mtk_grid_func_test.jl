@@ -31,10 +31,10 @@ eqs = [Dt(u) ~ -α * √abs(v) + u + lon + β,
     Dt(v) ~ -α * √abs(u) + lat + lev * 1e-14,
     windspeed ~ lon + 2lat + 3lev
 ]
-sys = ODESystem(eqs, t, name = :sys)
+sys = System(eqs, t, name = :sys)
 
 sys_simplified = structural_simplify(sys)
-prob = ODEProblem(sys_simplified, jac = true, tgrad = true)
+prob = ODEProblem(sys_simplified, [], (0.0, 1); jac = true, tgrad = true)
 
 sys_coord, coord_args = EarthSciMLBase._prepare_coord_sys(sys_simplified, domain)
 @test occursin("lat_arg", string(ModelingToolkit.observed(sys_coord)))

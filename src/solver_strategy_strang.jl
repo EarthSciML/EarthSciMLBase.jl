@@ -90,7 +90,7 @@ nthreads(st::SolverStrangSerial) = 1
 
 function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = nothing,
         name = :model, extra_vars = [], kwargs...)
-    sys_mtk = convert(ODESystem, s; name = name, extra_vars = extra_vars)
+    sys_mtk = convert(System, s; name = name, extra_vars = extra_vars)
 
     dom = domain(s)
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
