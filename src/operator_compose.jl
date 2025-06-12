@@ -77,8 +77,8 @@ The left hand sides of two equations will be considered matching if:
  3. There is an entry in the optional `translate` dictionary that maps the dependent variable in the first system to the dependent variable in the second system, e.g. `Dict(sys1.sys.x => sys2.sys.y)`.
  4. There is an entry in the optional `translate` dictionary that maps the dependent variable in the first system to the dependent variable in the second system, with a conversion factor, e.g. `Dict(sys1.sys.x => sys2.sys.y => 6)`.
 """
-function operator_compose(
-        a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESystem, translate = Dict())
+function operator_compose(a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESystem,
+    translate = Dict(); match_override = Dict())
     translate = normalize_translate(translate)
     a_eqs = deepcopy(equations(a))
     b_eqs = deepcopy(equations(b))
@@ -143,7 +143,8 @@ function operator_compose(
                     push!(connections, term2 ~ term3)
                     a_eqs[i] = a_eqs[i].lhs ~ a_eqs[i].rhs + term1 * conv
                     # Now set the dependent variables in the two systems to be equal.
-                    push!(connections, adv ~ bdv * conv)
+                    match_var = bdv in keys(match_override) ? match_override[bdv] : adv
+                    push!(connections, match_var ~ bdv * conv)
                 else # The LHS of this equation is the dependent variable of interest.
                     var1, taken_names = connector_name("$(bname)_$(bvar)", taken_names)
                     term1 = (@variables $var1(iv))[1]
@@ -152,7 +153,8 @@ function operator_compose(
                     term2 = (@variables $var2(iv))[1]
                     term2 = add_metadata(term2, b_eqs[j].lhs * conv; exclude_default = true)
                     a_eqs[i] = a_eqs[i].lhs ~ a_eqs[i].rhs + term1
-                    push!(connections, term2 ~ bdv * conv)
+                    match_var = bdv in keys(match_override) ? match_override[bdv] : term2
+                    push!(connections, match_var ~ bdv * conv)
                 end
             end
         end
