@@ -227,6 +227,17 @@ end
     @test length(di.partial_derivative_funcs) == 0
 end
 
+@testset "xy staggered" begin
+    di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
+        xrange = 0:0.1:1, yrange = 0:0.1:2, u_proto = zeros(Float32, 1, 1, 1, 1))
+
+    @test Symbol.(pvars(di)) == [:x, :y]
+    @test grid(di) == [0.0f0:0.1f0:1.0f0, 0.0f0:0.1f0:2.0f0]
+    @test grid(di, (true, false)) ≈ [-0.05f0:0.1f0:1.0500001f0, 0.0f0:0.1f0:2.0f0]
+    @test get_tspan(di) == (0.0, 10800.0)
+    @test length(di.partial_derivative_funcs) == 0
+end
+
 @testset "t_ref" begin
     s, e = DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3)
     di = DomainInfo(s, e; xrange = 0:0.1:1, yrange = 0:0.1:2)
