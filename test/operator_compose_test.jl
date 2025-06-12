@@ -11,7 +11,7 @@ function ExampleSys(; name = :sys1)
     @variables x(t_nounits)
     @parameters p
     System([D_nounits(x) ~ p], t_nounits; name = name,
-        metadata = Dict(:coupletype => ExampleSysCoupler))
+        metadata = Dict(CoupleType => ExampleSysCoupler))
 end
 
 struct ExampleSysCopyCoupler
@@ -21,7 +21,7 @@ function ExampleSysCopy()
     @variables x(t_nounits)
     @parameters p
     System([D_nounits(x) ~ p], t_nounits; name = :syscopy,
-        metadata = Dict(:coupletype => ExampleSysCopyCoupler))
+        metadata = Dict(CoupleType => ExampleSysCopyCoupler))
 end
 
 struct ExampleSys2Coupler
@@ -31,7 +31,7 @@ function ExampleSys2(; name = :sys2)
     @variables y(t_nounits)
     @parameters p
     System([D_nounits(y) ~ p], t_nounits; name = name,
-        metadata = Dict(:coupletype => ExampleSys2Coupler))
+        metadata = Dict(CoupleType => ExampleSys2Coupler))
 end
 
 @testset "basic" begin
@@ -94,7 +94,7 @@ end
         @variables y2(t_nounits)
         @parameters p
         System([D_nounits(y1) ~ p, D_nounits(y2) ~ p], t_nounits; name = name,
-            metadata = Dict(:coupletype => ExampleSysXYCoupler))
+            metadata = Dict(CoupleType => ExampleSysXYCoupler))
     end
 
     sys2 = ExampleSysXY()
@@ -122,7 +122,7 @@ end
         @variables y(t_nounits)
         @parameters p
         System([y ~ p], t; name = :sysnonode,
-            metadata = Dict(:coupletype => ExampleSysNonODECoupler))
+            metadata = Dict(CoupleType => ExampleSysNonODECoupler))
     end
 
     sys1 = ExampleSys()
@@ -166,7 +166,7 @@ end
         @variables k(t_nounits)
         @parameters p
         System([k ~ p], t_nounits; name = name,
-            metadata = Dict(:coupletype => KCoupler))
+            metadata = Dict(CoupleType => KCoupler))
     end
     struct twovarCoupler
         sys::Any
@@ -175,7 +175,7 @@ end
         @variables x(t_nounits) y(t_nounits)
         @parameters p
         System([D_nounits(x) ~ p, D_nounits(y) ~ p], t_nounits; name = name,
-            metadata = Dict(:coupletype => twovarCoupler))
+            metadata = Dict(CoupleType => twovarCoupler))
     end
 
     sys1 = twovar()
@@ -205,7 +205,7 @@ end
         @variables x(t) [unit = u"kg"]
         @parameters p [unit = u"kg/s"]
         System([ModelingToolkit.D(x) ~ p], t; name = :sys1,
-            metadata = Dict(:coupletype => U1Coupler))
+            metadata = Dict(CoupleType => U1Coupler))
     end
     struct U2Coupler
         sys::Any
@@ -214,7 +214,7 @@ end
         @variables y(t) [unit = u"m"]
         @parameters p [unit = u"m/s"]
         System([ModelingToolkit.D(y) ~ p], t; name = name,
-            metadata = Dict(:coupletype => U2Coupler))
+            metadata = Dict(CoupleType => U2Coupler))
     end
 
     sys1 = U1()
@@ -242,7 +242,7 @@ end
         @variables x(t) [unit = u"kg"]
         @parameters p [unit = u"kg/s"]
         System([D(x) ~ p], t; name = :sys1,
-            metadata = Dict(:coupletype => U1Coupler))
+            metadata = Dict(CoupleType => U1Coupler))
     end
     struct U2Coupler
         sys::Any
@@ -251,7 +251,7 @@ end
         @variables y(t) [unit = u"m/s"]
         @parameters p [unit = u"m/s"]
         System([y ~ p], t; name = name,
-            metadata = Dict(:coupletype => U2Coupler))
+            metadata = Dict(CoupleType => U2Coupler))
     end
 
     sys1 = U1()
@@ -278,7 +278,7 @@ end
     function U1()
         @variables x(t) [unit = u"kg*m^-3"]
         System([D(x) ~ 0], t; name = :sys1,
-            metadata = Dict(:coupletype => U1Coupler))
+            metadata = Dict(CoupleType => U1Coupler))
     end
     struct U2Coupler
         sys::Any
@@ -287,7 +287,7 @@ end
         @variables x(t) [unit = u"kg*m^-3/s"]
         @parameters p [unit = u"kg*m^-3/s"]
         System([x ~ p], t; name = name,
-            metadata = Dict(:coupletype => U2Coupler))
+            metadata = Dict(CoupleType => U2Coupler))
     end
 
     sys1 = U1()
@@ -309,13 +309,15 @@ end
         sys::Any
     end
     function Chem()
-        @species SO2(t_nounits) O2(t_nounits) SO4(t_nounits)
+        @variables SO2(t_nounits) O2(t_nounits) SO4(t_nounits)
         @parameters α β
-        rxns = [
-            Reaction(α, [SO2, O2], [SO4], [1, 1], [1])
+        eqs = [
+            D_nounits(SO2) ~ -α * SO2 * O2,
+            D_nounits(O2) ~ -α * SO2 * O2,
+            D_nounits(SO4) ~ α * SO2 * O2
         ]
-        rs = complete(ReactionSystem(rxns, t_nounits; name = :chem))
-        convert(System, rs; metadata = Dict(:coupletype => ChemCoupler))
+        System(eqs, t_nounits; name = :chem,
+            metadata = Dict(CoupleType => ChemCoupler))
     end
 
     struct DepositionCoupler
@@ -329,7 +331,7 @@ end
             D_nounits(SO2) ~ -k * SO2
         ]
         System(eqs, t_nounits, [SO2], [k]; name = :deposition,
-            metadata = Dict(:coupletype => DepositionCoupler))
+            metadata = Dict(CoupleType => DepositionCoupler))
     end
 
     rn = Chem()
@@ -352,14 +354,17 @@ end
     @parameters α=1 [unit = u"kg", description = "α description"]
     @parameters β=2 [unit = u"kg*s", description = "β description"]
     @variables x(t) [unit = u"m", description = "x description"]
+    @constants onex = 1 [unit = u"m", description = "unit x"]
     eq = D(x) ~ α * x / β
-    @named sys1 = System([eq], t; metadata = :metatest,
+    @named sys1 = System([eq], t;
         continuous_events = [x ~ 0],
-        discrete_events = (t == 1.0) => [x ~ x + 1]
+        discrete_events = (t == 1.0) => [x ~ x + onex]
     )
-    @named sys2 = System([eq], t; metadata = :metatest,
-        continuous_events = [(x ~ 1.0) => [x ~ x + 1], (x ~ 2.0) => [x ~ x - 1]],
-        discrete_events = [(t == 1.0) => [x ~ x + 1], (t == 2.0) => [x ~ x - 1]]
+    @named sys2 = System([eq], t;
+        continuous_events = [(x ~ 1.0) => [x ~ Pre(x) + onex],
+            (x ~ 2.0) => [x ~ Pre(x) - onex]],
+        discrete_events = [(t == 1.0) => [x ~ Pre(x) + onex],
+            (t == 2.0) => [x ~ Pre(x) - onex]]
     )
     sys3 = operator_compose(sys1, sys2)
     @test length(ModelingToolkit.get_continuous_events(sys3.from)) == 1
@@ -381,14 +386,14 @@ end
         function rate()
             return sys1.k
         end
-        rx_sys = @reaction_network rx begin
-            @species(A(t)=20,
-                B(t)=0,)
-            rate(), A --> B
+        @variables begin
+            A(t) = 20
+            B(t) = 0
         end
-        rxns = compose(rx_sys, sys1)
-        convert(System, complete(rxns); combinatoric_ratelaws = false, name = name,
-            metadata = Dict(:coupletype => ChemistryCoupler))
+        eqs = [D_nounits(A) ~ -rate() * A,
+            D_nounits(B) ~ rate() * A]
+        System(eqs, t_nounits; name = name,
+            metadata = Dict(CoupleType => ChemistryCoupler))
     end
     sys1 = Chemistry()
 
@@ -399,7 +404,7 @@ end
         @variables A(t_nounits)
         @parameters p
         System([D_nounits(A) ~ 2p], t_nounits; name = :Emis,
-            metadata = Dict(:coupletype => EmisCoupler))
+            metadata = Dict(CoupleType => EmisCoupler))
     end
 
     sys2 = Emis()
