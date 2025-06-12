@@ -35,7 +35,7 @@ A model component that represents the mean wind velocity, where
 """
 function MeanWind(t, domain::DomainInfo)
     uvars = meanwind_vars(t, domain)
-    ODESystem(Equation[], t, uvars, []; name = :MeanWind,
+    System(Equation[], t, uvars, []; name = :MeanWind,
         metadata = Dict(:coupletype => MeanWindCoupler))
 end
 
@@ -113,15 +113,15 @@ function ConstantWind(t, vals...; name = :ConstantWind)
         push!(uvals, c)
     end
     eqs = convert(Vector{Equation}, Symbolics.scalarize(uvars .~ uvals))
-    ODESystem(eqs, t, uvars, []; name,
+    System(eqs, t, uvars, []; name,
         metadata = Dict(:coupletype => ConstantWindCoupler))
 end
 
 function couple2(mw::MeanWindCoupler, w::ConstantWindCoupler)
     mw, w = mw.sys, w.sys
     # Create new systems so that the variables are correctly scoped.
-    @named a = ODESystem(Equation[], ModelingToolkit.get_iv(mw), [], [], systems = [mw])
-    @named b = ODESystem(Equation[], ModelingToolkit.get_iv(w), [], [], systems = [w])
+    @named a = System(Equation[], ModelingToolkit.get_iv(mw); systems = [mw])
+    @named b = System(Equation[], ModelingToolkit.get_iv(w); systems = [w])
     ConnectorSystem(
         Symbolics.scalarize(unknowns(a) .~ unknowns(b)),
         mw, w

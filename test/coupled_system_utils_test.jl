@@ -23,7 +23,7 @@ eqs = [D(u) ~ -α * √abs(v) + lon,
     y ~ 4α - 2p
 ]
 
-@named sys = ODESystem(eqs, t)
+@named sys = System(eqs, t)
 sys = structural_simplify(sys)
 p = MTKParameters(sys, [])
 
@@ -67,7 +67,7 @@ bcs = icbc(domain, vars)
            y ~ x
            a ~ x]
 
-    @named sys = ODESystem(eqs, t; metadata = :metatest,
+    @named sys = System(eqs, t;
         continuous_events = [[x ~ 0] => [x ~ 1], [x ~ 0.5, x ~ 2] => [x ~ 1.0]],
         discrete_events = (t == 1.0) => [x ~ x + 1]
     )
@@ -89,7 +89,7 @@ bcs = icbc(domain, vars)
     end
 
     @testset "nested system" begin
-        @named sysx = ODESystem([D(x) ~ x], t)
+        @named sysx = System([D(x) ~ x], t)
         sys_nested = compose(sysx, sys)
         sys_nested_simple = structural_simplify(sys_nested)
         #sys2 = prune_observed(sys_nested, sys_nested_simple, [])

@@ -33,7 +33,7 @@ eqs = [Dt(u) ~ -α * √abs(v) + lon,
     y ~ 1.0 / EarthSciMLBase.lat2meters,
     z ~ 1.0 / lev
 ]
-sys = ODESystem(eqs, t; name = :sys)
+sys = System(eqs, t; name = :sys)
 ```
 
 The equations above don't really have any physical meaning, but they include two state variables, some parameters, and a constant.
@@ -147,7 +147,7 @@ coordinates, which we set as 0.1π, 0.1π, and 1, respectively.
 
 ## Coupling and Running the Simulation
 
-Next, initialize our operator, giving the the `windspeed` observed variable, and we can couple our ODESystem, Operator, and Domain together into a single model:
+Next, initialize our operator, giving the the `windspeed` observed variable, and we can couple our System, Operator, and Domain together into a single model:
 
 ```@example sim
 op = ExampleOp()

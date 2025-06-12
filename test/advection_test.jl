@@ -16,7 +16,7 @@ using Dates, DomainSets
     function ExampleSys()
         @variables y(t) [unit = u"kg"]
         @parameters p=1.0 [unit = u"kg/s"]
-        ODESystem([D(y) ~ p], t, [y], [x, p]; name = :examplesys,
+        System([D(y) ~ p], t, [y], [x, p]; name = :examplesys,
             metadata = Dict(:coupletype => ExampleSysCoupler2))
     end
 
@@ -26,7 +26,7 @@ using Dates, DomainSets
     function ExampleSysCopy()
         @variables y(t) [unit = u"kg"]
         @parameters p=1.0 [unit = u"kg/s"]
-        ODESystem([D(y) ~ p], t; name = :examplesyscopy,
+        System([D(y) ~ p], t; name = :examplesyscopy,
             metadata = Dict(:coupletype => ExampleSysCopyCoupler2))
     end
 
@@ -71,8 +71,7 @@ end
 
     function Example(t)
         @variables c(t)=5.0 [unit = u"mol/m^3"]
-        D = Differential(t)
-        ODESystem([D(c) ~ (sin(lat / c_unit) + sin(lon / c_unit)) * c / t],
+        System([D(c) ~ (sin(lat / c_unit) + sin(lon / c_unit)) * c / t],
             t, name = :Test₊ExampleSys)
     end
     examplesys = Example(t)

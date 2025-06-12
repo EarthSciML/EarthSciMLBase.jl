@@ -24,7 +24,7 @@ $(SIGNATURES)
 Domain information for a ModelingToolkit.jl PDESystem.
 It can be used with the `+` operator to add initial and boundary conditions
 and coordinate transforms to a
-ModelingToolkit.jl ODESystem or Catalyst.jl ReactionSystem.
+ModelingToolkit.jl System or Catalyst.jl ReactionSystem.
 
 **NOTE**: The independent variable (usually time) must be first in the list of initial and boundary conditions.
 
@@ -292,7 +292,7 @@ $(TYPEDSIGNATURES)
 Return transform factor to multiply each partial derivative operator by,
 for example to convert from degrees to meters.
 """
-function partialderivative_transforms(mtk_sys::ODESystem, di::DomainInfo)
+function partialderivative_transforms(mtk_sys::System, di::DomainInfo)
     xs = coord_params(mtk_sys, di)
     partialderivative_transforms(xs, di)
 end
@@ -337,7 +337,7 @@ function partialderivative_transform_eqs(mtk_sys, di::DomainInfo)
     vs = partialderivative_transform_vars(mtk_sys, di)
     ts = partialderivative_transforms(mtk_sys, di)
     eqs = vs .~ ts
-    ODESystem(eqs, ivar(di); name = :transforms)
+    System(eqs, ivar(di); name = :transforms)
 end
 
 """
@@ -522,7 +522,7 @@ domains(icbc::BCcomponent) = icbc.partialdomains
 domains(di::DomainInfo) = unique(vcat(domains.(di.icbc)...))
 
 function Base.:(+)(
-        sys::ModelingToolkit.ODESystem, di::DomainInfo)::ModelingToolkit.PDESystem
+        sys::ModelingToolkit.System, di::DomainInfo)::ModelingToolkit.PDESystem
     dimensions = dims(di)
     allvars = unknowns(sys)
     statevars = unknowns(sys)
@@ -536,15 +536,9 @@ function Base.:(+)(
 end
 
 Base.:(+)(
-    di::DomainInfo, sys::ModelingToolkit.ODESystem)::ModelingToolkit.PDESystem = sys +
-                                                                                 di
+    di::DomainInfo, sys::ModelingToolkit.System)::ModelingToolkit.PDESystem = sys + di
 
-function Base.:(+)(sys::Catalyst.ReactionSystem, di::DomainInfo)::ModelingToolkit.PDESystem
-    convert(ODESystem, sys; combinatoric_ratelaws = false) + di
-end
 
-Base.:(+)(di::DomainInfo,
-    sys::Catalyst.ReactionSystem)::ModelingToolkit.PDESystem = sys + di
 
 # Match local parameters with the global parameters of the same name.
 function replacement_params(localcoords::AbstractVector, globalcoords::AbstractVector)
