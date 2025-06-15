@@ -148,19 +148,27 @@ Create a copy of an System with the given changes.
 function copy_with_change(sys::System;
         eqs = equations(sys),
         name = nameof(sys),
-        unknowns = unknowns(sys),
-        parameters = parameters(sys),
+        unknowns = nothing,
+        parameters = nothing,
         metadata = ModelingToolkit.get_metadata(sys),
         continuous_events = ModelingToolkit.get_continuous_events(sys),
         discrete_events = ModelingToolkit.get_discrete_events(sys),
         defaults = getfield(sys, :defaults)
 )
     try
-        System(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
-            name = name, metadata = metadata,
-            continuous_events = continuous_events, discrete_events = discrete_events,
-            defaults = defaults
-        )
+        if isnothing(unknowns) && isnothing(parameters)
+            return System(eqs, ModelingToolkit.get_iv(sys);
+                name = name, metadata = metadata,
+                continuous_events = continuous_events, discrete_events = discrete_events,
+                defaults = defaults
+            )
+        else
+            return System(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
+                name = name, metadata = metadata,
+                continuous_events = continuous_events, discrete_events = discrete_events,
+                defaults = defaults
+            )
+        end
     catch e
         if isa(e, ModelingToolkit.ValidationError)
             @warn "Equations:\n$(join(["  $i. $eq" for (i, eq) in enumerate(eqs)], "\n"))"
