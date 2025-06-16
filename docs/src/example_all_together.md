@@ -90,7 +90,7 @@ observed(simplified_sys)
 We can also run simulations using this system:
 
 ```@example ex1
-odeprob = ODEProblem(simplified_sys, [], (0.0, 10.0), [])
+odeprob = ODEProblem(simplified_sys, [], (0.0, 10.0))
 odesol = solve(odeprob)
 plot(odesol)
 ```

@@ -96,7 +96,7 @@ sys2 = System([y ~ b], t_nounits, [y], [b]; name = :sys2,
 
 model1 = couple(sys1, sys2)
 sys = convert(System, model1)
-sol = solve(ODEProblem(sys), tspan = (0, 10))
+sol = solve(ODEProblem(sys), [], tspan = (0, 10))
 ```
 
 If we plot the results, we can see that the system event did indeed update the parameter value for $a$, which changed the rate of change of $x$.

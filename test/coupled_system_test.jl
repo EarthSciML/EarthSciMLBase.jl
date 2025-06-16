@@ -250,7 +250,7 @@ end
     end
 
     sys2 = EarthSciMLBase.prune_observed(sys, mtkcompile(sys), [])
-    prob = ODEProblem(mtkcompile(sys2), [], (0, 100), [])
+    prob = ODEProblem(mtkcompile(sys2), [], (0, 100))
     sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
     @test sol.x[end] ≈ 3
     @test sol.x2[end] ≈ 3

@@ -147,7 +147,7 @@ integrators = let
     II = CartesianIndices(size(u)[2:4])
     IIchunks = collect(Iterators.partition(II, length(II) ÷ st.threads))
     start, finish = get_tspan(domain)
-    prob = ODEProblem(sys_mtk, [], (start, finish), [])
+    prob = ODEProblem(sys_mtk, [], (start, finish))
     integrators = [init(
                        remake(prob, u0 = zeros(length(unknowns(sys_mtk))), p = deepcopy(p)),
                        st.stiffalg, save_on = false,
