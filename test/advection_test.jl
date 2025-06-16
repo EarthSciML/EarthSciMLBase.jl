@@ -9,6 +9,7 @@ using Dates, DomainSets
 
 @testset "Composed System" begin
     @parameters x [unit = u"m"]
+    @constants czero=0 [unit = u"kg/s/m"]
 
     struct ExampleSysCoupler2
         sys::Any
@@ -16,8 +17,8 @@ using Dates, DomainSets
     function ExampleSys()
         @variables y(t) [unit = u"kg"]
         @parameters p=1.0 [unit = u"kg/s"]
-        System([D(y) ~ p], t, [y], [x, p]; name = :examplesys,
-            metadata = Dict(:coupletype => ExampleSysCoupler2))
+        System([D(y) ~ p + x*czero], t, [y], [x, p]; name = :examplesys,
+            metadata = Dict(CoupleType => ExampleSysCoupler2))
     end
 
     struct ExampleSysCopyCoupler2
@@ -27,7 +28,7 @@ using Dates, DomainSets
         @variables y(t) [unit = u"kg"]
         @parameters p=1.0 [unit = u"kg/s"]
         System([D(y) ~ p], t; name = :examplesyscopy,
-            metadata = Dict(:coupletype => ExampleSysCopyCoupler2))
+            metadata = Dict(CoupleType => ExampleSysCopyCoupler2))
     end
 
     sys1 = ExampleSys()

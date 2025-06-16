@@ -72,6 +72,9 @@ _coord2_tmp(t) = Inf
 @register_symbolic _coord2_tmp(t)
 _coord3_tmp(t) = Inf
 @register_symbolic _coord3_tmp(t)
+Symbolics.derivative(::typeof(_coord1_tmp), args::NTuple{1, Any}, ::Val{1}) = 0.0
+Symbolics.derivative(::typeof(_coord2_tmp), args::NTuple{1, Any}, ::Val{1}) = 0.0
+Symbolics.derivative(::typeof(_coord3_tmp), args::NTuple{1, Any}, ::Val{1}) = 0.0
 
 function _prepare_coord_sys(sys, domain)
     coords, coord_args = _get_coord_args(sys, domain)

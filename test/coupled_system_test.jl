@@ -267,10 +267,10 @@ end
         @variables x2(ModelingToolkit.t_nounits) = 0
         @variables x3(ModelingToolkit.t_nounits) = 0
 
-        event1 = [1.0, 2, 3] => (update_affect!, [], [p_1], [], nothing)
-        event2 = [1.0, 2, 3] => [p_2 ~ t]
-        event3 = [1.0, 2, 3] => (update_affect!, [], [p_3], [], nothing)
-        event4 = [1.0, 2, 3] => [p_4 ~ t]
+        event1 = [1.0, 2, 3] => (f=update_affect!, modified=(p_1 = p_1,))
+        event2 = [1.0, 2, 3] => [p_2 ~ Pre(t)]
+        event3 = [1.0, 2, 3] => (f=update_affect!, modified=(p_3 = p_3,))
+        event4 = [1.0, 2, 3] => [p_4 ~ Pre(t)]
 
         System(
             [
@@ -287,9 +287,7 @@ end
         System(Equation[], ModelingToolkit.t_nounits; name = :coupled),
         create_sys(name = :a), create_sys(name = :b))
     sys_flattened = ModelingToolkit.flatten(sys_composed)
-    sysc2 = sys_flattened
-    sysc3 = EarthSciMLBase.prune_observed(sysc2, structural_simplify(sysc2), [])
-    prob = ODEProblem(structural_simplify(sysc3), [], (0, 100), [])
+    prob = ODEProblem(structural_simplify(sys_flattened), [], (0, 100))
     sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
     @test length(sol.u[end]) == 4
     @test all(sol.u[end] .≈ 3)
@@ -312,10 +310,10 @@ end
         @variables x2(ModelingToolkit.t_nounits) = 0
         @variables x3(ModelingToolkit.t_nounits)
 
-        event1 = [1.0, 2, 3] => (update_affect!, [], [p_1], [], nothing)
-        event2 = [1.0, 2, 3] => [p_2 ~ t]
-        event3 = [1.0, 2, 3] => (update_affect!, [], [p_3], [], nothing)
-        event4 = [1.0, 2, 3] => [p_4 ~ t]
+        event1 = [1.0, 2, 3] => (f=update_affect!, modified=(p_1 = p_1,))
+        event2 = [1.0, 2, 3] => [p_2 ~ Pre(t)]
+        event3 = [1.0, 2, 3] => (f=update_affect!, modified=(p_3 = p_3,))
+        event4 = [1.0, 2, 3] => [p_4 ~ Pre(t)]
 
         System(
             [
@@ -341,7 +339,7 @@ end
     @test sys.a₊x2 in keys(ModelingToolkit.get_defaults(sys))
     @test occursin("a₊b_ddt_xˍt(t)", string(equations(sys)))
     @test occursin("a₊b_ddt_x2ˍt(t)", string(equations(sys)))
-    prob = ODEProblem(sys, [], (0, 100), [])
+    prob = ODEProblem(sys, [], (0, 100))
     sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
     @test length(sol.u[end]) == 2
     @test all(sol.u[end] .≈ 3)
@@ -434,7 +432,7 @@ end
                 integ.ps[p.sys1₊a] = 1
             end
         end
-        return [3.0] => (f1!, [], [sys.sys1₊a], [], nothing)
+        return [3.0] => (f=f1!, modified=(sys1₊a = sys.sys1₊a,))
     end
     runcount2 = 0
     function sysevent2(sys)
@@ -445,7 +443,7 @@ end
                 integ.ps[p.sys2₊b] = 1
             end
         end
-        return [5.0] => (f2!, [], [sys.sys2₊b], [], nothing)
+        return [5.0] => (f=f2!, modified=(sys2₊b = sys.sys2₊b,))
     end
 
     sys1 = System([D(x) ~ a], t_nounits, [x], [a]; name = :sys1,
@@ -458,7 +456,7 @@ end
 
     @test length(ModelingToolkit.get_discrete_events(sys)) == 2
 
-    sol = solve(ODEProblem(sys), Tsit5(), tspan = (0, 10))
+    sol = solve(ODEProblem(sys, [], (0, 10)), Tsit5())
 
     # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for
     # the rest of the simulation, so the final value of x should be 7.
@@ -498,7 +496,7 @@ end
 
     @test length(ModelingToolkit.get_discrete_events(sys)) == 2
 
-    sol = solve(ODEProblem(sys), Tsit5(), tspan = (0, 10))
+    sol = solve(ODEProblem(sys, [], (0, 10)), Tsit5())
 
     # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for
     # until t = 5, and then because of sysevent2 it become 2 for the rest of the simulation.

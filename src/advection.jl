@@ -31,12 +31,12 @@ end
 $(SIGNATURES)
 
 A model component that represents the mean wind velocity, where
-`pvars` is the partial dependent variables for the domain.
+`pvars` are the partial dependent variables for the domain.
 """
 function MeanWind(t, domain::DomainInfo)
     uvars = meanwind_vars(t, domain)
     System(Equation[], t, uvars, []; name = :MeanWind,
-        metadata = Dict(:coupletype => MeanWindCoupler))
+        metadata = Dict(CoupleType => MeanWindCoupler))
 end
 
 """
@@ -114,7 +114,7 @@ function ConstantWind(t, vals...; name = :ConstantWind)
     end
     eqs = convert(Vector{Equation}, Symbolics.scalarize(uvars .~ uvals))
     System(eqs, t, uvars, []; name,
-        metadata = Dict(:coupletype => ConstantWindCoupler))
+        metadata = Dict(CoupleType => ConstantWindCoupler))
 end
 
 function couple2(mw::MeanWindCoupler, w::ConstantWindCoupler)

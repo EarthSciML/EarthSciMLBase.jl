@@ -6,6 +6,8 @@ using ModelingToolkit: t, D
 @parameters α=1 [unit = u"kg", description = "α description"]
 @parameters β=2 [unit = u"kg*s", description = "β description"]
 @variables x(t) [unit = u"m", description = "x description"]
+@constants onex [unit = u"m", description = "unit x"]
+@constants zerox [unit = u"m"]
 eq = D(x) ~ α * x / β
 @named sys = System([eq], t; metadata = Dict(CoupleType => :metatest))
 
@@ -37,9 +39,9 @@ end
 end
 
 @testset "events" begin
-    @named sys = System([eq], t; metadata = :metatest,
-        continuous_events = [x ~ 0],
-        discrete_events = (t == 1.0) => [x ~ x + 1]
+    @named sys = System([eq], t;
+        continuous_events = [x ~ zerox],
+        discrete_events = (t == 1.0) => [x ~ Pre(x) + onex]
     )
 
     sys3 = param_to_var(sys, :β, :α)
