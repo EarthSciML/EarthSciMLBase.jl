@@ -92,7 +92,7 @@ function _prepare_coord_sys(sys, domain)
         discrete_events = ModelingToolkit.get_discrete_events(sys),
         continuous_events = ModelingToolkit.get_continuous_events(sys)
     )
-    return structural_simplify(sys_coord), coord_args
+    return mtkcompile(sys_coord), coord_args
 end
 
 RuntimeGeneratedFunctions.init(@__MODULE__)

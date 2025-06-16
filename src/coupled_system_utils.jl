@@ -97,7 +97,7 @@ end
 $(SIGNATURES)
 
 Return the system variables that the state variables of the final
-simplified system depend on. This should be done before running `structural_simplify`
+simplified system depend on. This should be done before running `mtkcompile`
 on the system.
 `extra_vars` is a list of additional variables that need to be kept.
 """
@@ -109,7 +109,7 @@ function get_needed_vars(original_sys::System, simplified_sys::System,
 
     # Move observed equations back into the simplified system.
     # This allows us to account for any changes to the equations that have been made
-    # by `structural_simplify`.
+    # by `mtkcompile`.
     simplified_sys_obs_reintegrated = copy_with_change(simplified_sys;
         eqs = vcat(equations(simplified_sys), observed(simplified_sys)),
         unknowns = unknowns(original_sys)
@@ -210,7 +210,7 @@ end
 
 # Return the discrete events that affect variables that are
 # needed to specify the state variables of the given system.
-# This function should be run after running `structural_simplify`.
+# This function should be run after running `mtkcompile`.
 function filter_discrete_events(simplified_sys, obs_eqs)
     Base.depwarn(
         "EarthSciMLBase.filter_discrete_events is deprecated",

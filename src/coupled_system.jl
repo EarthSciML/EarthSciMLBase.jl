@@ -174,14 +174,14 @@ Get the ODE ModelingToolkit System representation of a [`CoupledSystem`](@ref).
 kwargs:
 
   - name: The desired name for the resulting System
-  - simplify: Whether to run `structural_simplify` on the resulting System
+  - compile: Whether to run `mtkcompile` on the resulting System
   - prune: Whether to prune the extra observed equations to improve performance
 
 Return values:
 
   - The ModelingToolkit System representation of the CoupledSystem
 """
-function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, simplify = true,
+function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compile = true,
         prune = false, extra_vars = [], kwargs...)
     connector_eqs = Equation[]
     discrete_event_fs = []
@@ -213,7 +213,7 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, simpl
     if length(discrete_event_fs) > 0
         temp_connectors = System(connector_eqs, iv; name = name,
             defaults = defaults, kwargs...)
-        temp_sys = structural_simplify(ModelingToolkit.flatten(compose(
+        temp_sys = mtkcompile(ModelingToolkit.flatten(compose(
             temp_connectors, systems...)))
         de = filter(!isnothing, [f(temp_sys) for f in discrete_event_fs])
 
@@ -234,17 +234,17 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, simpl
     end
     o = ModelingToolkit.flatten(o)
     if prune
-        o_simplified = structural_simplify(o)
+        o_simplified = mtkcompile(o)
         extra_vars2 = []
         if !isnothing(sys.domaininfo)
             extra_vars2 = operator_vars(sys, o_simplified, sys.domaininfo)
         end
         o = prune_observed(o, o_simplified, vcat(extra_vars, extra_vars2))
     end
-    #o_simplified = structural_simplify(o)
+    #o_simplified = mtkcompile(o)
     #o = remove_extra_defaults(o, o_simplified)
-    if simplify
-        o = structural_simplify(o)
+    if compile
+        o = mtkcompile(o)
     end
     return o
 end
@@ -256,7 +256,7 @@ Get the ModelingToolkit PDESystem representation of a [`CoupledSystem`](@ref).
 """
 function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
         kwargs...)::ModelingToolkit.AbstractSystem
-    o = convert(System, sys; name = name, simplify = false, prune = false, kwargs...)
+    o = convert(System, sys; name = name, compile = false, prune = false, kwargs...)
 
     if sys.domaininfo !== nothing
         o += sys.domaininfo

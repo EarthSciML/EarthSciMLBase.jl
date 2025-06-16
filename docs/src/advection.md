@@ -49,10 +49,9 @@ discretization = MOLFiniteDifference([x => 10], t, approx_order = 2)
 @time sol = solve(prob, Tsit5(), saveat = 0.1)
 
 # Plot the solution.
-discrete_x = sol[x]
-discrete_t = sol[t]
-yvar = only(sys_mtk.dvs[[occursin("ExampleSys₊y", string(dv)) for dv in sys_mtk.dvs]])
-soly = sol[yvar]
+discrete_x = sol.x
+discrete_t = sol.t
+soly = sol.ExampleSys₊y
 anim = @animate for k in 1:length(discrete_t)
     plot(discrete_x, soly[k, 1:end], title = "t=\$(discrete_t[k])",
         ylim = (0, 2.5), lab = :none)

@@ -213,10 +213,10 @@ end
         discrete_events = [event1, event2, event3, event4]
     )
 
-    prob = ODEProblem(structural_simplify(sys), [], (0, 100))
+    prob = ODEProblem(mtkcompile(sys), [], (0, 100))
     sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
-    @test sol[x][end] ≈ 3
-    @test sol[x2][end] ≈ 3
+    @test sol.x[end] ≈ 3
+    @test sol.x2[end] ≈ 3
 
     @testset "affected vars" begin
         de = ModelingToolkit.get_discrete_events(sys)
@@ -227,7 +227,7 @@ end
     end
 
     @testset "variable in equations" begin
-        sys2 = structural_simplify(sys)
+        sys2 = mtkcompile(sys)
         @test EarthSciMLBase.var_in_eqs(p_1, equations(sys2)) == true
         @test EarthSciMLBase.var_in_eqs(p_2, equations(sys2)) == true
         @test EarthSciMLBase.var_in_eqs(p_3, equations(sys2)) == false
@@ -235,7 +235,7 @@ end
     end
 
     @testset "filter events" begin
-        kept_events = EarthSciMLBase.filter_discrete_events(structural_simplify(sys), [])
+        kept_events = EarthSciMLBase.filter_discrete_events(mtkcompile(sys), [])
         @test length(kept_events) == 2
         @test EarthSciMLBase.var2symbol(only(EarthSciMLBase.get_affected_vars(kept_events[1]))) ==
               :p_1
@@ -244,16 +244,16 @@ end
     end
 
     @testset "prune observed" begin
-        sys2 = EarthSciMLBase.prune_observed(sys, structural_simplify(sys), [])
+        sys2 = EarthSciMLBase.prune_observed(sys, mtkcompile(sys), [])
         @test length(equations(sys2)) == 2
         @test length(ModelingToolkit.get_discrete_events(sys2)) == 2
     end
 
-    sys2 = EarthSciMLBase.prune_observed(sys, structural_simplify(sys), [])
-    prob = ODEProblem(structural_simplify(sys2), [], (0, 100), [])
+    sys2 = EarthSciMLBase.prune_observed(sys, mtkcompile(sys), [])
+    prob = ODEProblem(mtkcompile(sys2), [], (0, 100), [])
     sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
-    @test sol[x][end] ≈ 3
-    @test sol[x2][end] ≈ 3
+    @test sol.x[end] ≈ 3
+    @test sol.x2[end] ≈ 3
 end
 
 @testset "Composed System with Events" begin
@@ -287,7 +287,7 @@ end
         System(Equation[], ModelingToolkit.t_nounits; name = :coupled),
         create_sys(name = :a), create_sys(name = :b))
     sys_flattened = ModelingToolkit.flatten(sys_composed)
-    prob = ODEProblem(structural_simplify(sys_flattened), [], (0, 100))
+    prob = ODEProblem(mtkcompile(sys_flattened), [], (0, 100))
     sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
     @test length(sol.u[end]) == 4
     @test all(sol.u[end] .≈ 3)
@@ -500,7 +500,7 @@ end
 
     # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for
     # until t = 5, and then because of sysevent2 it become 2 for the rest of the simulation.
-    @test sol[sys.sys1₊x][end] ≈ 12
+    @test sol.sys1₊x[end] ≈ 12
     @test runcount1 == 1
     @test runcount2 == 1
 end

@@ -22,7 +22,7 @@ eqs = [D(u) ~ -α * √abs(v) + lon,
 ]
 
 @named sys = System(eqs, t)
-sys = structural_simplify(sys)
+sys = mtkcompile(sys)
 p = MTKParameters(sys, [])
 
 xf = ModelingToolkit.build_explicit_observed_function(sys, x)

@@ -34,7 +34,7 @@ eqs = [D(u) ~ -α * √abs(v) + u + lon + β,
 ]
 sys = System(eqs, t, name = :sys)
 
-sys_simplified = structural_simplify(sys)
+sys_simplified = mtkcompile(sys)
 prob = ODEProblem(sys_simplified, [], (0.0, 1); jac = true, tgrad = true)
 solve(prob, Tsit5())
 
@@ -76,13 +76,13 @@ u0 = EarthSciMLBase.init_u(sys_coord, domain)
     @testset "in place" begin
         prob = ODEProblem(f, reshape(u0, :), (0.0, 1.0), p)
         sol1 = solve(prob, Tsit5())
-        @test sum(sol1[end]) ≈ -3029.442918648946
+        @test sum(sol1.u[end]) ≈ -3029.442918648946
     end
 
     @testset "out of place" begin
         prob = ODEProblem{false}(f, reshape(u0, :), (0.0, 1.0), p)
         sol2 = solve(prob, Tsit5())
-        @test sum(sol2[end]) ≈ -3029.442918648946
+        @test sum(sol2.u[end]) ≈ -3029.442918648946
     end
 
     @testset "In place GPU" begin

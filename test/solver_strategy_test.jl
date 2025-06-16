@@ -130,7 +130,7 @@ du2 = scimlop(reshape(u, :), p, 0.0)
 setp! = EarthSciMLBase.coord_setter(sys_mtk, domain)
 
 grid = EarthSciMLBase.grid(domain)
-prob = ODEProblem(structural_simplify(sys), [], (0.0, 1.0),
+prob = ODEProblem(mtkcompile(sys), [], (0.0, 1.0),
     [
         lon => grid[1][1], lat => grid[2][1], lev => grid[3][1]
     ])
