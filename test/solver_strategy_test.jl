@@ -2,7 +2,6 @@ using EarthSciMLBase
 using Test
 using ModelingToolkit, DomainSets
 using OrdinaryDiffEqTsit5, OrdinaryDiffEqSDIRK, OrdinaryDiffEqLowOrderRK
-using SciMLOperators
 using DynamicQuantities
 using SciMLBase: DiscreteCallback, ReturnCode
 using LinearSolve
@@ -12,7 +11,7 @@ D = ModelingToolkit.D_nounits
 struct ExampleOp <: Operator
 end
 
-function EarthSciMLBase.get_scimlop(
+function EarthSciMLBase.get_odefunction(
         op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args,
         domain::DomainInfo, u0, p, alg::MapAlgorithm)
     α, trans1, trans2, trans3 = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
@@ -52,7 +51,7 @@ function EarthSciMLBase.get_scimlop(
                    for ix in 1:size(u, 1), I in II]...)
         reshape(du, :)
     end
-    FunctionOperator(run, reshape(u0, :), p = p)
+    return run
 end
 
 function EarthSciMLBase.get_needed_vars(::ExampleOp, csys, mtk_sys, domain::DomainInfo)

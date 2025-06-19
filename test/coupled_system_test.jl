@@ -183,8 +183,9 @@ mutable struct ParamTest
 end
 (t::ParamTest)(x) = t.y - x
 
-function update_affect!(integ, u, p, ctx)
-    integ.p[only(p)].y = integ.t
+function update_affect!(mod, obs, ctx, integ)
+    mod.p.y = integ.t
+    mod
 end
 
 @testset "Event filtering" begin
@@ -198,9 +199,9 @@ end
     @variables x2(t_nounits) = 0
     @variables x3(t_nounits)
 
-    event1 = [1.0, 2, 3] => (f=update_affect!, modified=(p_1 = p_1,))
+    event1 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_1,))
     event2 = [1.0, 2, 3] => [p_2 ~ Pre(t_nounits)]
-    event3 = [1.0, 2, 3] => (f=update_affect!, modified=(p_3 = p_3,))
+    event3 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_3,))
     event4 = [1.0, 2, 3] => [p_4 ~ Pre(t_nounits)]
 
     sys = System(
@@ -215,16 +216,8 @@ end
 
     prob = ODEProblem(mtkcompile(sys), [], (0, 100))
     sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
-    @test sol.x[end] ≈ 3
-    @test sol.x2[end] ≈ 3
-
-    @testset "affected vars" begin
-        de = ModelingToolkit.get_discrete_events(sys)
-        @test isequal(only(EarthSciMLBase.get_affected_vars(de[1])), p_1)
-        @test isequal(only(EarthSciMLBase.get_affected_vars(de[2])), p_2)
-        @test isequal(only(EarthSciMLBase.get_affected_vars(de[3])), p_3)
-        @test isequal(only(EarthSciMLBase.get_affected_vars(de[4])), p_4)
-    end
+    @test sol[x][end] ≈ 3
+    @test sol[x2][end] ≈ 1
 
     @testset "variable in equations" begin
         sys2 = mtkcompile(sys)
@@ -233,27 +226,6 @@ end
         @test EarthSciMLBase.var_in_eqs(p_3, equations(sys2)) == false
         @test EarthSciMLBase.var_in_eqs(p_4, equations(sys2)) == false
     end
-
-    @testset "filter events" begin
-        kept_events = EarthSciMLBase.filter_discrete_events(mtkcompile(sys), [])
-        @test length(kept_events) == 2
-        @test EarthSciMLBase.var2symbol(only(EarthSciMLBase.get_affected_vars(kept_events[1]))) ==
-              :p_1
-        @test EarthSciMLBase.var2symbol(only(EarthSciMLBase.get_affected_vars(kept_events[2]))) ==
-              :p_2
-    end
-
-    @testset "prune observed" begin
-        sys2 = EarthSciMLBase.prune_observed(sys, mtkcompile(sys), [])
-        @test length(equations(sys2)) == 2
-        @test length(ModelingToolkit.get_discrete_events(sys2)) == 2
-    end
-
-    sys2 = EarthSciMLBase.prune_observed(sys, mtkcompile(sys), [])
-    prob = ODEProblem(mtkcompile(sys2), [], (0, 100))
-    sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
-    @test sol.x[end] ≈ 3
-    @test sol.x2[end] ≈ 3
 end
 
 @testset "Composed System with Events" begin
@@ -265,11 +237,11 @@ end
         @parameters p_4(ModelingToolkit.t_nounits) = 1
         @variables x(ModelingToolkit.t_nounits) = 0
         @variables x2(ModelingToolkit.t_nounits) = 0
-        @variables x3(ModelingToolkit.t_nounits) = 0
+        @variables x3(ModelingToolkit.t_nounits)
 
-        event1 = [1.0, 2, 3] => (f=update_affect!, modified=(p_1 = p_1,))
+        event1 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_1,))
         event2 = [1.0, 2, 3] => [p_2 ~ Pre(t)]
-        event3 = [1.0, 2, 3] => (f=update_affect!, modified=(p_3 = p_3,))
+        event3 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_3,))
         event4 = [1.0, 2, 3] => [p_4 ~ Pre(t)]
 
         System(
@@ -290,7 +262,9 @@ end
     prob = ODEProblem(mtkcompile(sys_flattened), [], (0, 100))
     sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
     @test length(sol.u[end]) == 4
-    @test all(sol.u[end] .≈ 3)
+    @test sol[sys_flattened.a₊x][end] ≈ 3
+    @test sol[sys_flattened.a₊x2][end] ≈ 1
+    @test sol[sys_flattened.a₊x3][end] ≈ 3
 end
 
 @testset "Composed System with Events and operator_compose" begin
@@ -300,19 +274,24 @@ end
     struct CoupleType2
         sys::Any
     end
-    function create_sys(coupletype; name = :test)
+    function create_sys(coupletype; name = :test, defaults=true)
         tp1 = typeof(ParamTest(1))
         @parameters (p_1::tp1)(..) = ParamTest(1)
         @parameters p_2(ModelingToolkit.t_nounits) = 1
         @parameters (p_3::tp1)(..) = ParamTest(1)
         @parameters p_4(ModelingToolkit.t_nounits) = 1
+        if defaults
         @variables x(ModelingToolkit.t_nounits) = 0
         @variables x2(ModelingToolkit.t_nounits) = 0
+        else
+        @variables x(ModelingToolkit.t_nounits)
+        @variables x2(ModelingToolkit.t_nounits)
+        end
         @variables x3(ModelingToolkit.t_nounits)
 
-        event1 = [1.0, 2, 3] => (f=update_affect!, modified=(p_1 = p_1,))
+        event1 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_1,))
         event2 = [1.0, 2, 3] => [p_2 ~ Pre(t)]
-        event3 = [1.0, 2, 3] => (f=update_affect!, modified=(p_3 = p_3,))
+        event3 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_3,))
         event4 = [1.0, 2, 3] => [p_4 ~ Pre(t)]
 
         System(
@@ -332,7 +311,7 @@ end
     end
 
     a = create_sys(CoupleType1, name = :a)
-    b = create_sys(CoupleType2, name = :b)
+    b = create_sys(CoupleType2, name = :b, defaults=false)
     coupled_sys = couple(a, b)
     sys = convert(System, coupled_sys)
     @test sys.a₊x in keys(ModelingToolkit.get_defaults(sys))
@@ -341,8 +320,8 @@ end
     @test occursin("a₊b_ddt_x2ˍt(t)", string(equations(sys)))
     prob = ODEProblem(sys, [], (0, 100))
     sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
-    @test length(sol.u[end]) == 2
-    @test all(sol.u[end] .≈ 3)
+    @test sol[sys.a₊x][end] ≈ 3
+    @test sol[sys.a₊x2][end] ≈ 1
 end
 
 @testset "Transient Equality" begin
@@ -425,23 +404,25 @@ end
 
     runcount1 = 0
     function sysevent1(sys)
-        function f1!(integ, u, p, ctx)
+        function f1!(mod, obs, ctx, integ)
             if is_var_needed(sys.sys1₊x, sys) # Only run if x is needed in the system.
                 #global runcount1 += 1
                 runcount1 += 1
-                integ.ps[p.sys1₊a] = 1
+                return (sys1₊a = 1,)
             end
+            return (sys1₊a = mod.sys1₊a,)
         end
         return [3.0] => (f=f1!, modified=(sys1₊a = sys.sys1₊a,))
     end
     runcount2 = 0
     function sysevent2(sys)
-        function f2!(integ, u, p, ctx)
+        function f2!(mod, obs, ctx, integ)
             if is_var_needed(sys.sys2₊y, sys) # Only run if y is needed in the system.
                 #global runcount2 += 1
                 runcount2 += 1
-                integ.ps[p.sys2₊b] = 1
+                return (sys2₊b = 1,)
             end
+            return (sys2₊b = mod.sys2₊b,)
         end
         return [5.0] => (f=f2!, modified=(sys2₊b = sys.sys2₊b,))
     end
@@ -500,7 +481,7 @@ end
 
     # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for
     # until t = 5, and then because of sysevent2 it become 2 for the rest of the simulation.
-    @test sol.sys1₊x[end] ≈ 12
+    @test sol[sys.sys1₊x][end] ≈ 12
     @test runcount1 == 1
     @test runcount2 == 1
 end

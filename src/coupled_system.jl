@@ -191,8 +191,8 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
             a_t, b_t = get_coupletype(a), get_coupletype(b)
             if hasmethod(couple2, (a_t, b_t))
                 cs = couple2(a_t(a), b_t(b))
-                @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
-                                               "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
+                @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. "*
+                "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
                 systems[i], a = cs.from, cs.from
                 systems[j], b = cs.to, cs.to
                 for eq in cs.eqs
@@ -285,11 +285,39 @@ end
 # Combine the non-stiff operators into a single operator.
 # This works because SciMLOperators can be added together.
 function nonstiff_ops(sys::CoupledSystem, sys_mtk, coord_args, domain, u0, p, alg)
-    nonstiff_op = length(sys.ops) > 0 ?
-                  sum([get_scimlop(op, sys, sys_mtk, coord_args, domain, u0, p, alg)
-                       for op in sys.ops]) :
-                  NullOperator(length(u0))
-    nonstiff_op = cache_operator(nonstiff_op, u0)
+    fs = [get_odefunction(op, sys, sys_mtk, coord_args, domain, u0, p, alg)
+          for op in sys.ops]
+    if length(fs) == 0
+        return let
+            f(u, p, t) = zeros(size(u))
+            f(du, u, p, t) = du .= 0.0
+            f
+        end
+    elseif length(fs) == 1
+        return only(fs)
+    else
+        fs = tuple(fs...)
+        return let
+            function f(u, p, t)
+                du = zeros(size(u))
+                for op in fs
+                    du .+= op(u, p, t)
+                end
+                du
+            end
+            dusum = zeros(size(u0))
+            function f(du, u, p, t)
+                dusum .= 0.0
+                du .= 0.0
+                for op in fs
+                    op(du, u, p, t)
+                    dusum .+= du
+                end
+                du
+            end
+            f
+        end
+    end
 end
 
 function operator_vars(sys::CoupledSystem, mtk_sys, domain::DomainInfo)
