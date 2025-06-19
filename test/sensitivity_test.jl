@@ -1,7 +1,6 @@
 using EarthSciMLBase
 using SciMLSensitivity, ForwardDiff, Zygote
 using ModelingToolkit, DomainSets, OrdinaryDiffEqSDIRK, SymbolicIndexingInterface
-using SciMLOperators
 using DynamicQuantities
 using LinearSolve
 using Test
@@ -9,7 +8,7 @@ using Test
 struct ExampleOp <: Operator
 end
 
-function EarthSciMLBase.get_scimlop(
+function EarthSciMLBase.get_odefunction(
         op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args,
         domain::DomainInfo, u0, p, alg::MapAlgorithm)
     α, x, y, z = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
@@ -49,7 +48,7 @@ function EarthSciMLBase.get_scimlop(
               for ix in 1:size(u, 1), I in II]
         reshape(du, :)
     end
-    FunctionOperator(run, reshape(u0, :), p = p)
+    return run
 end
 
 function EarthSciMLBase.get_needed_vars(::ExampleOp, csys, mtk_sys, domain::DomainInfo)
@@ -85,12 +84,12 @@ eqs = [Dt(u) ~ -α * √abs(v) + lon + β,
     y ~ 1.0 / EarthSciMLBase.lat2meters,
     z ~ 1.0 / lev
 ]
-sys = ODESystem(eqs, t, name = :sys)
+sys = System(eqs, t, name = :sys)
 
 op = ExampleOp()
 
 csys = EarthSciMLBase.couple(sys, op, domain)
-model_sys = convert(ODESystem, csys)
+model_sys = convert(System, csys)
 model_sys, = EarthSciMLBase._prepare_coord_sys(model_sys, domain)
 
 st = SolverIMEX(stiff_sparse = false)

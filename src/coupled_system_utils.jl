@@ -97,11 +97,11 @@ end
 $(SIGNATURES)
 
 Return the system variables that the state variables of the final
-simplified system depend on. This should be done before running `structural_simplify`
+simplified system depend on. This should be done before running `mtkcompile`
 on the system.
 `extra_vars` is a list of additional variables that need to be kept.
 """
-function get_needed_vars(original_sys::ODESystem, simplified_sys::ODESystem,
+function get_needed_vars(original_sys::System, simplified_sys::System,
         extra_vars = [])
     Base.depwarn(
         "EarthSciMLBase.get_needed_vars is deprecated",
@@ -109,7 +109,7 @@ function get_needed_vars(original_sys::ODESystem, simplified_sys::ODESystem,
 
     # Move observed equations back into the simplified system.
     # This allows us to account for any changes to the equations that have been made
-    # by `structural_simplify`.
+    # by `mtkcompile`.
     simplified_sys_obs_reintegrated = copy_with_change(simplified_sys;
         eqs = vcat(equations(simplified_sys), observed(simplified_sys)),
         unknowns = unknowns(original_sys)
@@ -143,24 +143,32 @@ end
 """
 $(SIGNATURES)
 
-Create a copy of an ODESystem with the given changes.
+Create a copy of an System with the given changes.
 """
-function copy_with_change(sys::ODESystem;
+function copy_with_change(sys::System;
         eqs = equations(sys),
         name = nameof(sys),
-        unknowns = unknowns(sys),
-        parameters = parameters(sys),
+        unknowns = nothing,
+        parameters = nothing,
         metadata = ModelingToolkit.get_metadata(sys),
         continuous_events = ModelingToolkit.get_continuous_events(sys),
         discrete_events = ModelingToolkit.get_discrete_events(sys),
-        defaults = sys.defaults
+        defaults = getfield(sys, :defaults)
 )
     try
-        ODESystem(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
-            name = name, metadata = metadata,
-            continuous_events = continuous_events, discrete_events = discrete_events,
-            defaults = defaults
-        )
+        if isnothing(unknowns) && isnothing(parameters)
+            return System(eqs, ModelingToolkit.get_iv(sys);
+                name = name, metadata = metadata,
+                continuous_events = continuous_events, discrete_events = discrete_events,
+                defaults = defaults
+            )
+        else
+            return System(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
+                name = name, metadata = metadata,
+                continuous_events = continuous_events, discrete_events = discrete_events,
+                defaults = defaults
+            )
+        end
     catch e
         if isa(e, ModelingToolkit.ValidationError)
             @warn "Equations:\n$(join(["  $i. $eq" for (i, eq) in enumerate(eqs)], "\n"))"
@@ -202,7 +210,7 @@ end
 
 # Return the discrete events that affect variables that are
 # needed to specify the state variables of the given system.
-# This function should be run after running `structural_simplify`.
+# This function should be run after running `mtkcompile`.
 function filter_discrete_events(simplified_sys, obs_eqs)
     Base.depwarn(
         "EarthSciMLBase.filter_discrete_events is deprecated",
@@ -222,11 +230,11 @@ end
 """
 $(SIGNATURES)
 
-Remove equations from an ODESystem where the variable in the LHS is not
+Remove equations from an System where the variable in the LHS is not
 present in any of the equations for the state variables. This can be used to
 remove computationally intensive equations that are not used in the final model.
 """
-function prune_observed(original_sys::ODESystem, simplified_sys, extra_vars)
+function prune_observed(original_sys::System, simplified_sys, extra_vars)
     Base.depwarn(
         "EarthSciMLBase.prune_observed is deprecated",
         :prune_observed)
@@ -308,7 +316,7 @@ end
 """
 Initialize the state variables.
 """
-function init_u(mtk_sys::ODESystem, d::DomainInfo{ET, AT}) where {ET, AT}
+function init_u(mtk_sys::System, d::DomainInfo{ET, AT}) where {ET, AT}
     vars = unknowns(mtk_sys)
     dflts = ModelingToolkit.get_defaults(mtk_sys)
     u0 = [dflts[u] for u in vars]
@@ -353,7 +361,7 @@ function coord_params(mtk_sys::AbstractSystem, domain::DomainInfo)
 end
 
 # Create a function to set the coordinates in a parameter vector for a given grid cell
-function coord_setter(sys_mtk::ODESystem, domain::DomainInfo)
+function coord_setter(sys_mtk::System, domain::DomainInfo)
     coords = coord_params(sys_mtk, domain)
     coord_setter = setp(sys_mtk, coords)
     II = CartesianIndices(tuple(size(domain)...))

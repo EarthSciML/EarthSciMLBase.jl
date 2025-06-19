@@ -3,7 +3,6 @@ using ModelingToolkit
 using ModelingToolkit: t, D
 using ModelingToolkit: t_nounits, D_nounits
 using Test
-using Catalyst
 using DynamicQuantities
 using OrdinaryDiffEqTsit5
 
@@ -15,8 +14,8 @@ using OrdinaryDiffEqTsit5
         @variables S(t), I(t), R(t)
         N = S + I + R
         @parameters β [unit = u"s^-1"]
-        @named seqn = ODESystem([D(S) ~ -β * S * I / N], t,
-            metadata = Dict(:coupletype => SEqnCoupler))
+        System([D(S) ~ -β * S * I / N], t; name=:seqn,
+            metadata = Dict(CoupleType => SEqnCoupler))
     end
 
     struct IEqnCoupler
@@ -27,8 +26,8 @@ using OrdinaryDiffEqTsit5
         N = S + I + R
         @parameters β [unit = u"s^-1"]
         @parameters γ [unit = u"s^-1"]
-        @named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I], t,
-            metadata = Dict(:coupletype => IEqnCoupler))
+        System([D(I) ~ β * S * I / N - γ * I], t; name=:ieqn,
+            metadata = Dict(CoupleType => IEqnCoupler))
     end
 
     struct REqnCoupler
@@ -37,8 +36,8 @@ using OrdinaryDiffEqTsit5
     function REqn()
         @variables I(t), R(t)
         @parameters γ [unit = u"s^-1"]
-        @named reqn = ODESystem([D(R) ~ γ * I], t,
-            metadata = Dict(:coupletype => REqnCoupler))
+        System([D(R) ~ γ * I], t; name = :reqn,
+            metadata = Dict(CoupleType => REqnCoupler))
     end
 
     function EarthSciMLBase.couple2(s::SEqnCoupler, i::IEqnCoupler)
@@ -64,7 +63,7 @@ using OrdinaryDiffEqTsit5
 
     sir = couple(seqn, ieqn, reqn)
 
-    sirfinal = convert(ODESystem, sir)
+    sirfinal = convert(System, sir)
 
     want_eqs = [
         D(reqn.R) ~ reqn.γ * reqn.I,
@@ -75,7 +74,7 @@ using OrdinaryDiffEqTsit5
     ]
 
     have_eqs = equations(sirfinal)
-    obs = observed(sirfinal)
+    obs = ModelingToolkit.observed(sirfinal)
     for eq in want_eqs
         @test eq in have_eqs
     end
@@ -108,8 +107,8 @@ end
         eqs = [
             j_NO2 ~ j_unit
         ]
-        ODESystem(eqs, t, [j_NO2], [j_unit]; name = :a,
-            metadata = Dict(:coupletype => ACoupler))
+        System(eqs, t, [j_NO2], [j_unit]; name = :a,
+            metadata = Dict(CoupleType => ACoupler))
     end
 
     struct BCoupler
@@ -117,12 +116,11 @@ end
     end
     function B()
         @parameters jNO2=0.0149 [unit = u"s^-1"]
-        @species NO2(t) = 10.0
-        rxs = [
-            Reaction(jNO2, [NO2], [], [1], [])
+        @variables NO2(t) = 10.0
+        eqs = [
+            D(NO2) ~ -jNO2 * NO2
         ]
-        rs = complete(ReactionSystem(rxs, t; combinatoric_ratelaws = false, name = :b))
-        convert(ODESystem, rs; metadata = Dict(:coupletype => BCoupler))
+        System(eqs, t; name = :b, metadata = Dict(CoupleType => BCoupler))
     end
 
     function EarthSciMLBase.couple2(b::BCoupler, a::ACoupler)
@@ -138,15 +136,13 @@ end
         @parameters emis=1 [unit = u"s^-1"]
         @variables NO2(t)=0.00014 [unit = u"s^-1"]
         eqs = [NO2 ~ emis]
-        ODESystem(
-            eqs, t, [NO2], [emis]; name = :c, metadata = Dict(:coupletype => CCoupler))
+        System(eqs, t, [NO2], [emis]; name = :c, metadata = Dict(CoupleType => CCoupler))
     end
 
     function EarthSciMLBase.couple2(b::BCoupler, c::CCoupler)
         b, c = b.sys, c.sys
-        @constants uu = 1
         operator_compose(b, c, Dict(
-            b.NO2 => c.NO2 => uu,
+            b.NO2 => c.NO2,
         ))
     end
 
@@ -158,12 +154,12 @@ end
               couple(B(), C(), A())]
     for (i, model) in enumerate(models)
         @testset "permutation $i" begin
-            m = convert(ODESystem, model)
+            m = convert(System, model)
             eqstr = string(equations(m))
             @test occursin("b₊c_NO2(t)", eqstr)
             @test occursin("b₊jNO2(t)", eqstr)
             @test occursin("b₊NO2(t)", string(unknowns(m)))
-            obstr = string(observed(m))
+            obstr = string(ModelingToolkit.observed(m))
             @test occursin("a₊j_NO2(t) ~ a₊j_unit", obstr)
             @test occursin("c₊NO2(t) ~ c₊emis", obstr)
             @test occursin("b₊jNO2(t) ~ a₊j_NO2(t)", obstr)
@@ -173,7 +169,7 @@ end
 
     @testset "Stable evaluation" begin
         sys = couple(A(), B(), C())
-        s = convert(ODESystem, sys)
+        s = convert(System, sys)
         eqs1 = string(equations(s))
         @test occursin("b₊c_NO2(t)", eqs1)
         eqs2 = string(equations(s))
@@ -187,78 +183,49 @@ mutable struct ParamTest
 end
 (t::ParamTest)(x) = t.y - x
 
-function update_affect!(integ, u, p, ctx)
-    integ.p[only(p)].y = integ.t
+function update_affect!(mod, obs, ctx, integ)
+    mod.p.y = integ.t
+    mod
 end
 
 @testset "Event filtering" begin
     p1 = ParamTest(1)
     tp1 = typeof(p1)
     @parameters (p_1::tp1)(..) = p1
-    @parameters p_2(ModelingToolkit.t_nounits) = 1
+    @parameters p_2(t_nounits) = 1
     @parameters (p_3::tp1)(..) = ParamTest(1)
-    @parameters p_4(ModelingToolkit.t_nounits) = 1
-    @variables x(ModelingToolkit.t_nounits) = 0
-    @variables x2(ModelingToolkit.t_nounits) = 0
-    @variables x3(ModelingToolkit.t_nounits)
+    @parameters p_4(t_nounits) = 1
+    @variables x(t_nounits) = 0
+    @variables x2(t_nounits) = 0
+    @variables x3(t_nounits)
 
-    event1 = [1.0, 2, 3] => (update_affect!, [], [p_1], [], p1)
-    event2 = [1.0, 2, 3] => [p_2 ~ t]
-    event3 = [1.0, 2, 3] => (update_affect!, [], [p_3], [], nothing)
-    event4 = [1.0, 2, 3] => [p_4 ~ t]
+    event1 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_1,))
+    event2 = [1.0, 2, 3] => [p_2 ~ Pre(t_nounits)]
+    event3 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_3,))
+    event4 = [1.0, 2, 3] => [p_4 ~ Pre(t_nounits)]
 
-    sys = ODESystem(
+    sys = System(
         [
-            ModelingToolkit.D_nounits(x) ~ p_1(x),
-            ModelingToolkit.D_nounits(x2) ~ p_2 - x2,
+            D_nounits(x) ~ p_1(x),
+            D_nounits(x2) ~ p_2 - x2,
             x3 ~ p_3(x2) + p_4
         ],
-        ModelingToolkit.t_nounits; name = :test,
+        t_nounits; name = :test,
         discrete_events = [event1, event2, event3, event4]
     )
-    #sys = EarthSciMLBase.remove_extra_defaults(sys, structural_simplify(sys))
 
-    prob = ODEProblem(structural_simplify(sys), [], (0, 100), [])
+    prob = ODEProblem(mtkcompile(sys), [], (0, 100))
     sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
     @test sol[x][end] ≈ 3
-    @test sol[x2][end] ≈ 3
-
-    @testset "affected vars" begin
-        de = ModelingToolkit.get_discrete_events(sys)
-        @test isequal(only(EarthSciMLBase.get_affected_vars(de[1])), p_1)
-        @test isequal(only(EarthSciMLBase.get_affected_vars(de[2])), p_2)
-        @test isequal(only(EarthSciMLBase.get_affected_vars(de[3])), p_3)
-        @test isequal(only(EarthSciMLBase.get_affected_vars(de[4])), p_4)
-    end
+    @test sol[x2][end] ≈ 1
 
     @testset "variable in equations" begin
-        sys2 = structural_simplify(sys)
+        sys2 = mtkcompile(sys)
         @test EarthSciMLBase.var_in_eqs(p_1, equations(sys2)) == true
         @test EarthSciMLBase.var_in_eqs(p_2, equations(sys2)) == true
         @test EarthSciMLBase.var_in_eqs(p_3, equations(sys2)) == false
         @test EarthSciMLBase.var_in_eqs(p_4, equations(sys2)) == false
     end
-
-    @testset "filter events" begin
-        kept_events = EarthSciMLBase.filter_discrete_events(structural_simplify(sys), [])
-        @test length(kept_events) == 2
-        @test EarthSciMLBase.var2symbol(only(EarthSciMLBase.get_affected_vars(kept_events[1]))) ==
-              :p_1
-        @test EarthSciMLBase.var2symbol(only(EarthSciMLBase.get_affected_vars(kept_events[2]))) ==
-              :p_2
-    end
-
-    @testset "prune observed" begin
-        sys2 = EarthSciMLBase.prune_observed(sys, structural_simplify(sys), [])
-        @test length(equations(sys2)) == 2
-        @test length(ModelingToolkit.get_discrete_events(sys2)) == 2
-    end
-
-    sys2 = EarthSciMLBase.prune_observed(sys, structural_simplify(sys), [])
-    prob = ODEProblem(structural_simplify(sys2), [], (0, 100), [])
-    sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
-    @test sol[x][end] ≈ 3
-    @test sol[x2][end] ≈ 3
 end
 
 @testset "Composed System with Events" begin
@@ -270,14 +237,14 @@ end
         @parameters p_4(ModelingToolkit.t_nounits) = 1
         @variables x(ModelingToolkit.t_nounits) = 0
         @variables x2(ModelingToolkit.t_nounits) = 0
-        @variables x3(ModelingToolkit.t_nounits) = 0
+        @variables x3(ModelingToolkit.t_nounits)
 
-        event1 = [1.0, 2, 3] => (update_affect!, [], [p_1], [], nothing)
-        event2 = [1.0, 2, 3] => [p_2 ~ t]
-        event3 = [1.0, 2, 3] => (update_affect!, [], [p_3], [], nothing)
-        event4 = [1.0, 2, 3] => [p_4 ~ t]
+        event1 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_1,))
+        event2 = [1.0, 2, 3] => [p_2 ~ Pre(t)]
+        event3 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_3,))
+        event4 = [1.0, 2, 3] => [p_4 ~ Pre(t)]
 
-        ODESystem(
+        System(
             [
                 ModelingToolkit.D_nounits(x) ~ p_1(x),
                 ModelingToolkit.D_nounits(x2) ~ p_2 - x2,
@@ -289,17 +256,15 @@ end
     end
 
     sys_composed = compose(
-        ODESystem(Equation[], ModelingToolkit.t_nounits; name = :coupled),
+        System(Equation[], ModelingToolkit.t_nounits; name = :coupled),
         create_sys(name = :a), create_sys(name = :b))
     sys_flattened = ModelingToolkit.flatten(sys_composed)
-    #sysc2 = EarthSciMLBase.remove_extra_defaults(
-    #    sys_flattened, structural_simplify(sys_flattened))
-    sysc2 = sys_flattened
-    sysc3 = EarthSciMLBase.prune_observed(sysc2, structural_simplify(sysc2), [])
-    prob = ODEProblem(structural_simplify(sysc3), [], (0, 100), [])
+    prob = ODEProblem(mtkcompile(sys_flattened), [], (0, 100))
     sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
     @test length(sol.u[end]) == 4
-    @test all(sol.u[end] .≈ 3)
+    @test sol[sys_flattened.a₊x][end] ≈ 3
+    @test sol[sys_flattened.a₊x2][end] ≈ 1
+    @test sol[sys_flattened.a₊x3][end] ≈ 3
 end
 
 @testset "Composed System with Events and operator_compose" begin
@@ -309,22 +274,27 @@ end
     struct CoupleType2
         sys::Any
     end
-    function create_sys(coupletype; name = :test)
+    function create_sys(coupletype; name = :test, defaults=true)
         tp1 = typeof(ParamTest(1))
         @parameters (p_1::tp1)(..) = ParamTest(1)
         @parameters p_2(ModelingToolkit.t_nounits) = 1
         @parameters (p_3::tp1)(..) = ParamTest(1)
         @parameters p_4(ModelingToolkit.t_nounits) = 1
+        if defaults
         @variables x(ModelingToolkit.t_nounits) = 0
         @variables x2(ModelingToolkit.t_nounits) = 0
+        else
+        @variables x(ModelingToolkit.t_nounits)
+        @variables x2(ModelingToolkit.t_nounits)
+        end
         @variables x3(ModelingToolkit.t_nounits)
 
-        event1 = [1.0, 2, 3] => (update_affect!, [], [p_1], [], nothing)
-        event2 = [1.0, 2, 3] => [p_2 ~ t]
-        event3 = [1.0, 2, 3] => (update_affect!, [], [p_3], [], nothing)
-        event4 = [1.0, 2, 3] => [p_4 ~ t]
+        event1 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_1,))
+        event2 = [1.0, 2, 3] => [p_2 ~ Pre(t)]
+        event3 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_3,))
+        event4 = [1.0, 2, 3] => [p_4 ~ Pre(t)]
 
-        ODESystem(
+        System(
             [
                 ModelingToolkit.D_nounits(x) ~ p_1(x),
                 ModelingToolkit.D_nounits(x2) ~ p_2 - x2,
@@ -332,7 +302,7 @@ end
             ],
             ModelingToolkit.t_nounits; name = name,
             discrete_events = [event1, event2, event3, event4],
-            metadata = Dict(:coupletype => coupletype)
+            metadata = Dict(CoupleType => coupletype)
         )
     end
     function EarthSciMLBase.couple2(a::CoupleType1, b::CoupleType2)
@@ -341,17 +311,17 @@ end
     end
 
     a = create_sys(CoupleType1, name = :a)
-    b = create_sys(CoupleType2, name = :b)
+    b = create_sys(CoupleType2, name = :b, defaults=false)
     coupled_sys = couple(a, b)
-    sys = convert(ODESystem, coupled_sys)
+    sys = convert(System, coupled_sys)
     @test sys.a₊x in keys(ModelingToolkit.get_defaults(sys))
     @test sys.a₊x2 in keys(ModelingToolkit.get_defaults(sys))
     @test occursin("a₊b_ddt_xˍt(t)", string(equations(sys)))
     @test occursin("a₊b_ddt_x2ˍt(t)", string(equations(sys)))
-    prob = ODEProblem(sys, [], (0, 100), [])
+    prob = ODEProblem(sys, [], (0, 100))
     sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
-    @test length(sol.u[end]) == 2
-    @test all(sol.u[end] .≈ 3)
+    @test sol[sys.a₊x][end] ≈ 3
+    @test sol[sys.a₊x2][end] ≈ 1
 end
 
 @testset "Transient Equality" begin
@@ -361,8 +331,8 @@ end
     function Source(; name = :Source)
         @parameters T_0 = 300
         @variables T(t)
-        ODESystem([T ~ T_0], t_nounits, [T], [T_0]; name = name,
-            metadata = Dict(:coupletype => SourceCoupler))
+        System([T ~ T_0], t_nounits, [T], [T_0]; name = name,
+            metadata = Dict(CoupleType => SourceCoupler))
     end
 
     struct DestCoupler
@@ -371,8 +341,8 @@ end
     function Dest(; name = :Dest)
         @parameters T = 400
         @variables x(t)
-        ODESystem([D_nounits(x) ~ T], t_nounits, [x], [T]; name = name,
-            metadata = Dict(:coupletype => DestCoupler))
+        System([D_nounits(x) ~ T], t_nounits, [x], [T]; name = name,
+            metadata = Dict(CoupleType => DestCoupler))
     end
     struct DestCoupler
         sys::Any
@@ -380,8 +350,8 @@ end
     function Dest2(; name = :Dest2)
         @parameters T = 400
         @variables x(t)
-        ODESystem([x ~ T], t_nounits, [x], [T]; name = name,
-            metadata = Dict(:coupletype => DestCoupler))
+        System([x ~ T], t_nounits, [x], [T]; name = name,
+            metadata = Dict(CoupleType => DestCoupler))
     end
 
     function EarthSciMLBase.couple2(s::SourceCoupler, d::DestCoupler)
@@ -402,7 +372,7 @@ end
         (dst2, dst1, src)]
         coupled_sys = couple(systems...)
 
-        sys = convert(ODESystem, coupled_sys)
+        sys = convert(System, coupled_sys)
         equations(sys)
         observed(sys)
 
@@ -434,38 +404,40 @@ end
 
     runcount1 = 0
     function sysevent1(sys)
-        function f1!(integ, u, p, ctx)
+        function f1!(mod, obs, ctx, integ)
             if is_var_needed(sys.sys1₊x, sys) # Only run if x is needed in the system.
                 #global runcount1 += 1
                 runcount1 += 1
-                integ.ps[p.sys1₊a] = 1
+                return (sys1₊a = 1,)
             end
+            return (sys1₊a = mod.sys1₊a,)
         end
-        return [3.0] => (f1!, [], [sys.sys1₊a], [], nothing)
+        return [3.0] => (f=f1!, modified=(sys1₊a = sys.sys1₊a,))
     end
     runcount2 = 0
     function sysevent2(sys)
-        function f2!(integ, u, p, ctx)
+        function f2!(mod, obs, ctx, integ)
             if is_var_needed(sys.sys2₊y, sys) # Only run if y is needed in the system.
                 #global runcount2 += 1
                 runcount2 += 1
-                integ.ps[p.sys2₊b] = 1
+                return (sys2₊b = 1,)
             end
+            return (sys2₊b = mod.sys2₊b,)
         end
-        return [5.0] => (f2!, [], [sys.sys2₊b], [], nothing)
+        return [5.0] => (f=f2!, modified=(sys2₊b = sys.sys2₊b,))
     end
 
-    sys1 = ODESystem([D(x) ~ a], t_nounits, [x], [a]; name = :sys1,
-        metadata = Dict(:sys_discrete_event => sysevent1))
-    sys2 = ODESystem([y ~ b], t_nounits, [y], [b]; name = :sys2,
-        metadata = Dict(:sys_discrete_event => sysevent2))
+    sys1 = System([D(x) ~ a], t_nounits, [x], [a]; name = :sys1,
+        metadata = Dict(SysDiscreteEvent => sysevent1))
+    sys2 = System([y ~ b], t_nounits, [y], [b]; name = :sys2,
+        metadata = Dict(SysDiscreteEvent => sysevent2))
 
     model1 = couple(sys1, sys2)
-    sys = convert(ODESystem, model1)
+    sys = convert(System, model1)
 
     @test length(ModelingToolkit.get_discrete_events(sys)) == 2
 
-    sol = solve(ODEProblem(sys), Tsit5(), tspan = (0, 10))
+    sol = solve(ODEProblem(sys, [], (0, 10)), Tsit5())
 
     # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for
     # the rest of the simulation, so the final value of x should be 7.
@@ -486,12 +458,12 @@ end
         sys::Any
     end
 
-    sys1 = ODESystem([D(x) ~ a], t_nounits, [x], [a]; name = :sys1,
-        metadata = Dict(:sys_discrete_event => sysevent1,
-            :coupletype => Couple1))
-    sys2 = ODESystem([y ~ b], t_nounits, [y], [b]; name = :sys2,
-        metadata = Dict(:sys_discrete_event => sysevent2,
-            :coupletype => Couple2))
+    sys1 = System([D(x) ~ a], t_nounits, [x], [a]; name = :sys1,
+        metadata = Dict(SysDiscreteEvent => sysevent1,
+            CoupleType => Couple1))
+    sys2 = System([y ~ b], t_nounits, [y], [b]; name = :sys2,
+        metadata = Dict(SysDiscreteEvent => sysevent2,
+            CoupleType => Couple2))
 
     function EarthSciMLBase.couple2(s1::Couple1, s2::Couple2)
         s1, s2 = s1.sys, s2.sys
@@ -501,11 +473,11 @@ end
     end
 
     model1 = couple(sys1, sys2)
-    sys = convert(ODESystem, model1)
+    sys = convert(System, model1)
 
     @test length(ModelingToolkit.get_discrete_events(sys)) == 2
 
-    sol = solve(ODEProblem(sys), Tsit5(), tspan = (0, 10))
+    sol = solve(ODEProblem(sys, [], (0, 10)), Tsit5())
 
     # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for
     # until t = 5, and then because of sysevent2 it become 2 for the rest of the simulation.

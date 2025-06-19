@@ -90,7 +90,7 @@ nthreads(st::SolverStrangSerial) = 1
 
 function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = nothing,
         name = :model, extra_vars = [], kwargs...)
-    sys_mtk = convert(ODESystem, s; name = name, extra_vars = extra_vars)
+    sys_mtk = convert(System, s; name = name, extra_vars = extra_vars)
 
     dom = domain(s)
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
@@ -100,7 +100,7 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = no
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
     tspan = isnothing(tspan) ? get_tspan(dom) : tspan
     start, finish = tspan
-    prob = ODEProblem(sys_mtk, [], (start, start + typeof(start)(st.timestep)), [];
+    prob = ODEProblem(sys_mtk, [], (start, start + typeof(start)(st.timestep));
         st.stiff_kwargs...)
     stiff_integrators = [init(
                              remake(

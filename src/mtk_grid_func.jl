@@ -28,9 +28,13 @@ function rewrite_coord_func(x, coord_args)
         return :(function ($(args...), $(coord_args...))
             $body
         end)
-    elseif @capture(x, a_=b_)
-        if (a in coord_args) && (b == 1)
-            return nothing
+    elseif @capture(x, (a_)(b_))
+        if (a == _coord1_tmp) && (b == :t)
+            return :($(coord_args[1]))
+        elseif (a == _coord2_tmp) && (b == :t)
+            return :($(coord_args[2]))
+        elseif (a == _coord3_tmp) && (b == :t)
+            return :($(coord_args[3]))
         end
     end
     return x
@@ -61,22 +65,34 @@ function _get_coord_args(sys, domain)
     coords, coord_args
 end
 
+# Dummy functions for temporarily replacing coordinate variables.
+_coord1_tmp(t) = Inf
+@register_symbolic _coord1_tmp(t)
+_coord2_tmp(t) = Inf
+@register_symbolic _coord2_tmp(t)
+_coord3_tmp(t) = Inf
+@register_symbolic _coord3_tmp(t)
+Symbolics.derivative(::typeof(_coord1_tmp), args::NTuple{1, Any}, ::Val{1}) = 0.0
+Symbolics.derivative(::typeof(_coord2_tmp), args::NTuple{1, Any}, ::Val{1}) = 0.0
+Symbolics.derivative(::typeof(_coord3_tmp), args::NTuple{1, Any}, ::Val{1}) = 0.0
+
 function _prepare_coord_sys(sys, domain)
     coords, coord_args = _get_coord_args(sys, domain)
-    coord_arg_consts = [only(@constants $(ca) = 1) for ca in coord_args]
-    coord_arg_consts = add_metadata.(coord_arg_consts, coords; exclude_default = true)
-    sys_coord = substitute(sys, Dict(coords .=> coord_arg_consts))
-    @named obs = ODESystem(
-        substitute(ModelingToolkit.observed(sys),
-            Dict(coords .=> coord_arg_consts)),
+    @assert length(coords)==3 "Only 3D systems are currently supported"
+    t = ModelingToolkit.get_iv(sys)
+    @assert var2symbol(t) == :t "The independent variable must be named `:t`"
+    coord_tmps = [_coord1_tmp(t), _coord2_tmp(t), _coord3_tmp(t)]
+    sys_coord = substitute(sys, Dict(coords .=> coord_tmps))
+    @named obs = System(
+        Vector{ModelingToolkit.Equation}(substitute(ModelingToolkit.observed(sys),
+            Dict(coords .=> coord_tmps))),
         ModelingToolkit.get_iv(sys_coord))
     sys_coord = copy_with_change(sys_coord,
         eqs = [equations(sys_coord); equations(obs)],
-        unknowns = unique([unknowns(sys_coord); unknowns(obs)]),
         discrete_events = ModelingToolkit.get_discrete_events(sys),
-        continuous_events = ModelingToolkit.get_continuous_events(sys),
-        parameters = parameters(sys))
-    return structural_simplify(sys_coord), coord_args
+        continuous_events = ModelingToolkit.get_continuous_events(sys)
+    )
+    return mtkcompile(sys_coord), coord_args
 end
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
@@ -134,7 +150,7 @@ end
 
 # Return a function to apply the MTK system to each column of u after reshaping to a matrix.
 function mtk_grid_func(
-        sys_mtk::ODESystem, domain::DomainInfo{T}, u0, alg::MA = MapBroadcast();
+        sys_mtk::System, domain::DomainInfo{T}, u0, alg::MA = MapBroadcast();
         sparse = false, tgrad = false, vjp = true) where {T, MA <: MapAlgorithm}
     sys_mtk, coord_args = _prepare_coord_sys(sys_mtk, domain)
 

@@ -13,7 +13,7 @@ As an example, let's first define a system of ODEs:
 ```@example sim
 using EarthSciMLBase
 using ModelingToolkit, DifferentialEquations
-using SciMLOperators, Plots
+using Plots
 using DomainSets
 using DynamicQuantities
 using ModelingToolkit: t_nounits, D_nounits
@@ -33,7 +33,7 @@ eqs = [Dt(u) ~ -α * √abs(v) + lon,
     y ~ 1.0 / EarthSciMLBase.lat2meters,
     z ~ 1.0 / lev
 ]
-sys = ODESystem(eqs, t; name = :sys)
+sys = System(eqs, t; name = :sys)
 ```
 
 The equations above don't really have any physical meaning, but they include two state variables, some parameters, and a constant.
@@ -48,10 +48,13 @@ struct ExampleOp <: Operator
 end
 ```
 
-Next, we need to define a method of `EarthSciMLBase.get_scimlop` for our operator. This method will be called to get a [`SciMLOperators.AbstractSciMLOperator`](https://docs.sciml.ai/SciMLOperators/stable/interface/) that will be used conjunction with the ModelingToolkit system above to integrate the simulation forward in time.
+Next, we need to define a method of `EarthSciMLBase.get_odefunction` for our operator. This method will be called to get a function that can be used as an ODE function, i.e. it should have
+methods `f(u, p, t)` and optionally `f(du, u, p, t)` where `u` is a state vector, `p` is parameters,
+`t` is time, and `du` is a cache for the result of the function.
+For more information, see [here](https://docs.sciml.ai/DiffEqDocs/stable/getting_started/).
 
 ```@example sim
-function EarthSciMLBase.get_scimlop(
+function EarthSciMLBase.get_odefunction(
         op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args,
         domain::DomainInfo, u0, p, alg::MapAlgorithm)
     α, trans1, trans2, trans3 = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
@@ -90,7 +93,7 @@ function EarthSciMLBase.get_scimlop(
                    for ix in 1:size(u, 1), I in II]...)
         reshape(du, :)
     end
-    FunctionOperator(run, reshape(u0, :), p = p)
+    return run
 end
 nothing
 ```
@@ -147,7 +150,7 @@ coordinates, which we set as 0.1π, 0.1π, and 1, respectively.
 
 ## Coupling and Running the Simulation
 
-Next, initialize our operator, giving the the `windspeed` observed variable, and we can couple our ODESystem, Operator, and Domain together into a single model:
+Next, initialize our operator, giving the the `windspeed` observed variable, and we can couple our System, Operator, and Domain together into a single model:
 
 ```@example sim
 op = ExampleOp()
