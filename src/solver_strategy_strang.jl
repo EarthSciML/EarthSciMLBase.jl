@@ -102,15 +102,7 @@ function _strang_ode_func(sys_mtk, coord_args, tspan, grd; sparse = false)
         coords = (g[p.ii[j]] for (j, g) in enumerate(grd))
         mtkf_coord(du, u, p.p, t, coords...)
     end
-    function f_stiff(u, p, t)
-        coords = (g[p.ii[j]] for (j, g) in enumerate(grd))
-        mtkf_coord(du, u, p.p, t, coords...)
-    end
     function jac_stiff(du, u, p, t)
-        coords = (g[p.ii[j]] for (j, g) in enumerate(grd))
-        jac_coord(du, u, p.p, t, coords...)
-    end
-    function jac_stiff(u, p, t)
         coords = (g[p.ii[j]] for (j, g) in enumerate(grd))
         jac_coord(du, u, p.p, t, coords...)
     end
