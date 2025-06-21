@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>System Events · EarthSciMLBase.jl</title><meta name="title" content="System Events · EarthSciMLBase.jl"/><meta property="og:title" content="System Events · EarthSciMLBase.jl"/><meta property="twitter:title" content="System Events · EarthSciMLBase.jl"/><meta name="description" content="Documentation for EarthSciMLBase.jl."/><meta property="og:description" content="Documentation for EarthSciMLBase.jl."/><meta property="twitter:description" content="Documentation for EarthSciMLBase.jl."/><meta property="og:url" content="https://EarthSciML.github.io/EarthSciMLBase.jl/system_events/"/><meta property="twitter:url" content="https://EarthSciML.github.io/EarthSciMLBase.jl/system_events/"/><link rel="canonical" href="https://EarthSciML.github.io/EarthSciMLBase.jl/system_events/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">EarthSciMLBase.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../composition/">Composition</a></li><li><a class="tocitem" href="../operator_compose/">Operator Composition</a></li><li><a class="tocitem" href="../param_to_var/">Parameter Replacement</a></li><li class="is-active"><a class="tocitem" href>System Events</a></li><li><a class="tocitem" href="../icbc/">Initial and Boundary Conditions</a></li><li><a class="tocitem" href="../advection/">Advection</a></li><li><a class="tocitem" href="../coord_transforms/">Coordinate Transforms</a></li><li><a class="tocitem" href="../operator/">Operators</a></li><li><span class="tocitem">Examples</span><ul><li><a class="tocitem" href="../example_all_together/">All Together</a></li></ul></li><li><a class="tocitem" href="../api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>System Events</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>System Events</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/EarthSciML/EarthSciMLBase.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/EarthSciML/EarthSciMLBase.jl/blob/main/docs/src/system_events.md#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Events-that-depend-on-the-fully-coupled-system"><a class="docs-heading-anchor" href="#Events-that-depend-on-the-fully-coupled-system">Events that depend on the fully coupled system</a><a id="Events-that-depend-on-the-fully-coupled-system-1"></a><a class="docs-heading-anchor-permalink" href="#Events-that-depend-on-the-fully-coupled-system" title="Permalink"></a></h1><p>Sometimes, something needs to happen to a component process in system which depends information about the fully coupled system. For example, the data in data loaders may need to be periodically updated as the simulation runs, but we would want to avoid updating any data loaders that are included in the data component of the model but are not needed for updating any of the state variables in the full model that is running.</p><p>Take, for example, the model below, which has two variables, but only one of them (<span>$x$</span>) is associated with a differential equation. As you see, when we create the system, only <span>$x$</span> shows up in the equations that the model needs to run to solve the system:</p><pre><code class="language-julia hljs">using EarthSciMLBase
+using ModelingToolkit
+using ModelingToolkit: t_nounits, D_nounits
+t, D = t_nounits, D_nounits
+using DifferentialEquations
+using Plots
+
+@parameters a=0 b=0
+@variables begin
+    x(t_nounits) = 0
+    y(t_nounits)
+end
+
+@named sys1 = ODESystem([D(x) ~ a], t_nounits, [x], [a])
+@named sys2 = ODESystem([y ~ b], t_nounits, [y], [b])
+
+model1 = couple(sys1, sys2)
+sys = convert(ODESystem, model1)</code></pre><p class="math-container">\[ \begin{align}
+\frac{\mathrm{d} \mathtt{sys1.x}\left( t \right)}{\mathrm{d}t} &amp;= \mathtt{sys1.a}
+\end{align}
+ \]</p><p>The equation for <span>$y$</span> shows up in the &quot;observed&quot; equations:</p><pre><code class="language-julia hljs">observed(sys)</code></pre><p class="math-container">\[ \begin{align}
+\mathtt{sys2.y}\left( t \right) &amp;= \mathtt{sys2.b}
+\end{align}
+ \]</p><p>If we pretend that the parameters <span>$a$</span> and <span>$b$</span> are actually data that needs to be updated over time, and that the data updating process is computationally expensive, then we find ourselves in a situation where we need to update the data for <span>$a$</span> as the simulation runs, but we don&#39;t want to update the data for <span>$b$</span> because it is not needed for solving the differential equation system. However, the systems for <span>$x$</span> and <span>$y$</span> could be used in different ways, so we don&#39;t necessarily know ahead of time that we don&#39;t need to update <span>$b$</span>.</p><p>To handle this type of situation, <code>EarthSciML</code> includes the idea of &quot;system events&quot; which are associated with individual system components, but are configured after the fully coupled system is created.</p><p>To create a system event, we need to create a function that takes a ModelingToolkit system as the argument and returns a ModelingToolkit event, and then associate that function with the <code>:sys_discrete_event</code> key in the metadata dictionary of the system component in question.</p><p>The code below does several things. First, it creates a function to determine wether a given variable is needed to solve the system or not. Then, it creates &quot;system event functions&quot; for our two component systems, directing each system to increment its parameter value during the simulation, but only if the corresponding variable is needed for the simulation. Finally, it includes two &quot;runcount&quot; variables to keep track of how many times each system event is called.</p><pre><code class="language-julia hljs"># Utility function to check if a variable is needed in the system,
+# i.e., if one of the state variables depends on it.
+function is_var_needed(var, sys)
+    var = EarthSciMLBase.var2symbol(var)
+    if var in EarthSciMLBase.var2symbol.(unknowns(sys))
+        return true
+    end
+    exprs = [eq.rhs for eq in equations(sys)]
+    needed_obs = ModelingToolkit.observed_equations_used_by(sys, exprs)
+    needed_vars = getproperty.(observed(sys)[needed_obs], :lhs)
+    return var in EarthSciMLBase.var2symbol.(needed_vars)
+end
+
+runcount1 = 0
+function sysevent1(sys)
+    function f1!(integ, u, p, ctx)
+        if is_var_needed(sys.sys1₊x, sys) # Only run if x is needed in the system.
+            global runcount1 += 1
+            #runcount1 += 1
+            integ.ps[p.sys1₊a] = 1
+        end
+    end
+    return [3.0] =&gt; (f1!, [], [sys.sys1₊a], [], nothing)
+end
+runcount2 = 0
+function sysevent2(sys)
+    function f2!(integ, u, p, ctx)
+        if is_var_needed(sys.sys2₊y, sys) # Only run if y is needed in the system.
+            global runcount2 += 1
+            #runcount2 += 1
+            integ.ps[p.sys2₊b] = 1
+        end
+    end
+    return [5.0] =&gt; (f2!, [], [sys.sys2₊b], [], nothing)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">sysevent2 (generic function with 1 method)</code></pre><p>Now, we need to recreate our systems, but this time we will add the system event functions to the metadata of the systems. Then, we can run the simulation:</p><pre><code class="language-julia hljs">sys1 = ODESystem([D(x) ~ a], t_nounits, [x], [a]; name = :sys1,
+    metadata = Dict(:sys_discrete_event =&gt; sysevent1))
+sys2 = ODESystem([y ~ b], t_nounits, [y], [b]; name = :sys2,
+    metadata = Dict(:sys_discrete_event =&gt; sysevent2))
+
+model1 = couple(sys1, sys2)
+sys = convert(ODESystem, model1)
+sol = solve(ODEProblem(sys), tspan = (0, 10))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
+Interpolation: 3rd order Hermite
+t: 11-element Vector{Float64}:
+  0.0
+  9.999999999999999e-5
+  0.0010999999999999998
+  0.011099999999999997
+  0.11109999999999996
+  1.1110999999999995
+  3.0
+  3.0
+  5.0
+  5.0
+ 10.0
+u: 11-element Vector{Vector{Float64}}:
+ [0.0]
+ [0.0]
+ [0.0]
+ [0.0]
+ [0.0]
+ [0.0]
+ [0.0]
+ [0.0]
+ [1.9999999999999996]
+ [1.9999999999999996]
+ [6.999999999999998]</code></pre><p>If we plot the results, we can see that the system event did indeed update the parameter value for <span>$a$</span>, which changed the rate of change of <span>$x$</span>.</p><pre><code class="language-julia hljs">plot(sol)</code></pre><img src="e78f5565.svg" alt="Example block output"/><p>Finally, we can look at our &quot;run counters&quot; to confirm that the first data updater did run, but the second one never did, thus saving us some computational time.</p><pre><code class="language-julia hljs">runcount1, runcount2</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(1, 0)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../param_to_var/">« Parameter Replacement</a><a class="docs-footer-nextpage" href="../icbc/">Initial and Boundary Conditions »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.13.0 on <span class="colophon-date" title="Saturday 21 June 2025 08:31">Saturday 21 June 2025</span>. Using Julia version 1.11.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
