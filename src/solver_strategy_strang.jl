@@ -93,22 +93,11 @@ end
 nthreads(st::SolverStrangThreads) = st.threads
 nthreads(st::SolverStrangSerial) = 1
 
-function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = nothing,
-        name = :model, extra_vars = [], kwargs...)
-    sys_mtk = convert(ODESystem, s; name = name, extra_vars = extra_vars)
-    dom = domain(s)
-    sys_mtk, coord_args = _prepare_coord_sys(sys_mtk, dom)
-
-    start, finish = isnothing(tspan) ? get_tspan(dom) : tspan
-    _prob = ODEProblem(sys_mtk, [], (start, finish); st.stiff_kwargs...)
-    p = _prob.p
-
-    u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
-
+function _strang_ode_func(sys_mtk, coord_args, tspan, grd; sparse = false)
     mtkf_coord = build_coord_ode_function(sys_mtk, coord_args)
-    jac_coord = build_coord_jac_function(sys_mtk, coord_args, sparse = false)
+    jac_coord = build_coord_jac_function(sys_mtk, coord_args, sparse = sparse)
+    _prob = ODEProblem(sys_mtk, [], tspan; sparse = sparse)
 
-    grd = grid(dom)
     function f_stiff(du, u, p, t)
         coords = (g[p.ii[j]] for (j, g) in enumerate(grd))
         mtkf_coord(du, u, p.p, t, coords...)
@@ -125,26 +114,42 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = no
         coords = (g[p.ii[j]] for (j, g) in enumerate(grd))
         jac_coord(du, u, p.p, t, coords...)
     end
-    f_ode = ODEFunction(f_stiff, jac = jac_stiff)
+    ode_f = ODEFunction(f_stiff, jac = jac_stiff, jac_prototype = _prob.f.jac_prototype)
+    return ode_f, _prob.u0, _prob.p
+end
 
+function _strang_integrators(st::SolverStrang, dom::DomainInfo, f_ode, u0_single, start, p)
     II = CartesianIndices(tuple(size(dom)...))
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
-    prob = ODEProblem(f_ode, zeros(eltype(u0), length(unknowns(sys_mtk))),
-        (start, start + typeof(start)(st.timestep)),
-        IIP{typeof(II[1]), typeof(p)}(II[1], p);
+    iip = IIP{typeof(II[1]), typeof(p)}(II[1], p)
+    prob = ODEProblem(f_ode, u0_single, (start, start + typeof(start)(st.timestep)), iip;
         st.stiff_kwargs...)
     stiff_integrators = [init(
-                             remake(
-                                 prob, u0 = _prob.u0,
-                                 p = IIP{typeof(II[1]), typeof(p)}(II[1], p)
-                             ),
+                             remake(prob, u0 = u0_single,
+                                p = IIP{typeof(II[1]), typeof(p)}(II[1], p)),
                              st.stiffalg,
-                             save_on = false,
-                             save_start = false,
-                             save_end = false,
-                             initialize_save = false;
+                             save_on = false, save_start = false,
+                             save_end = false, initialize_save = false;
                              st.stiff_kwargs...) for _ in 1:length(IIchunks)]
+    return IIchunks, stiff_integrators
+end
 
+function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = nothing,
+        name = :model, extra_vars = [], kwargs...)
+    sys_mtk = convert(ODESystem, s; name = name, extra_vars = extra_vars)
+    dom = domain(s)
+    sys_mtk, coord_args = _prepare_coord_sys(sys_mtk, dom)
+
+    start, finish = isnothing(tspan) ? get_tspan(dom) : tspan
+
+    u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
+
+    grd = grid(dom)
+    sparse = :sparse in keys(st.stiff_kwargs) ? st.stiff_kwargs[:sparse] : false
+    f_ode, u0_single, p = _strang_ode_func(sys_mtk, coord_args, (start, finish), grd;
+        sparse = sparse)
+
+    IIchunks, stiff_integrators = _strang_integrators(st, dom, f_ode, u0_single, start, p)
     nonstiff_op = nonstiff_ops(s, sys_mtk, coord_args, dom, u0, p, st.alg)
 
     cb = []
