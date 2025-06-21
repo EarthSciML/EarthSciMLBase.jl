@@ -1,7 +1,7 @@
 name = "EarthSciMLBase"
 uuid = "e53f1632-a13c-4728-9402-0c66d48804b0"
 authors = ["EarthSciML Authors and Contributors"]
-version = "0.23.0"
+version = "0.23.1"
 
 [deps]
 Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
