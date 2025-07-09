@@ -39,7 +39,7 @@ prob = ODEProblem(sys_simplified, [], (0.0, 1); jac = true, tgrad = true)
 solve(prob, Tsit5())
 
 sys_coord, coord_args = EarthSciMLBase._prepare_coord_sys(sys_simplified, domain)
-@test occursin("EarthSciMLBase._coord1_tmp(t)", string(ModelingToolkit.observed(sys_coord)))
+@test occursin("EarthSciMLBase._CoordTmpF(lon, 1)(t)", string(ModelingToolkit.observed(sys_coord)))
 f = EarthSciMLBase.build_coord_ode_function(
     sys_coord, coord_args; eval_module = ModelingToolkit)
 p = MTKParameters(sys_coord, defaults(sys_coord))

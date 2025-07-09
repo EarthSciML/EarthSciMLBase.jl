@@ -21,7 +21,7 @@ map_closure_to_range(f, range, ::MapThreads) = ThreadsX.map(f, range)
 
 # Move coordinate variables from the parameter list of a function to the argument list.
 # This is useful for creating functions that take coordinates as arguments.
-function rewrite_coord_func(x, coord_args)
+function rewrite_coord_func(x, coord_args, idv::Symbol)
     if @capture(x, function (args__)
         body_
     end)
@@ -29,30 +29,27 @@ function rewrite_coord_func(x, coord_args)
             $body
         end)
     elseif @capture(x, (a_)(b_))
-        if (a == _coord1_tmp) && (b == :t)
-            return :($(coord_args[1]))
-        elseif (a == _coord2_tmp) && (b == :t)
-            return :($(coord_args[2]))
-        elseif (a == _coord3_tmp) && (b == :t)
-            return :($(coord_args[3]))
+        if (a isa _CoordTmpF) && (b == idv)
+            return :($(coord_args[a.idx]))
         end
     end
     return x
 end
 
-function _add_coord_args(ex, coord_args)
-    ex = MacroTools.postwalk(x -> rewrite_coord_func(x, coord_args), ex)
+function _add_coord_args(ex, coord_args, idv::Symbol)
+    ex = MacroTools.postwalk(x -> rewrite_coord_func(x, coord_args, idv), ex)
 end
 
 function gen_coord_func(
         sys, expr, coord_args; eval_expression = false, eval_module = @__MODULE__)
+    idv = var2symbol(ModelingToolkit.get_iv(sys))
     fexpr = ModelingToolkit.generate_custom_function(sys, expr, expression = Val{true})
     if fexpr isa Tuple
-        fexpr = EarthSciMLBase._add_coord_args.(fexpr, (coord_args,))
+        fexpr = EarthSciMLBase._add_coord_args.(fexpr, (coord_args,), (idv,))
         f = ModelingToolkit.eval_or_rgf.(fexpr; eval_expression, eval_module)
         f = ModelingToolkit.GeneratedFunctionWrapper{(2, 6, true)}(f[1], f[2])
     else
-        fexpr = EarthSciMLBase._add_coord_args(fexpr, coord_args)
+        fexpr = EarthSciMLBase._add_coord_args(fexpr, coord_args, idv)
         f = ModelingToolkit.eval_or_rgf(fexpr; eval_expression, eval_module)
     end
     return f
@@ -65,23 +62,21 @@ function _get_coord_args(sys, domain)
     coords, coord_args
 end
 
-# Dummy functions for temporarily replacing coordinate variables.
-_coord1_tmp(t) = Inf
-@register_symbolic _coord1_tmp(t)
-_coord2_tmp(t) = Inf
-@register_symbolic _coord2_tmp(t)
-_coord3_tmp(t) = Inf
-@register_symbolic _coord3_tmp(t)
-Symbolics.derivative(::typeof(_coord1_tmp), args::NTuple{1, Any}, ::Val{1}) = 0.0
-Symbolics.derivative(::typeof(_coord2_tmp), args::NTuple{1, Any}, ::Val{1}) = 0.0
-Symbolics.derivative(::typeof(_coord3_tmp), args::NTuple{1, Any}, ::Val{1}) = 0.0
+# Dummy function for temporarily replacing coordinate variables.
+struct _CoordTmpF
+    coord::Any
+    idx::Int
+end
+(::_CoordTmpF)(t) = Inf
+(x::_CoordTmpF)(u::DynamicQuantities.AbstractQuantity) = ModelingToolkit.get_unit(x.coord)
+@register_symbolic (coordtmpf::_CoordTmpF)(t)
+Base.nameof(x::_CoordTmpF) = Symbol(:coord, x.idx)
+Symbolics.derivative(::_CoordTmpF, args::NTuple{1, Any}, ::Val{1}) = 0.0
 
 function _prepare_coord_sys(sys, domain)
     coords, coord_args = _get_coord_args(sys, domain)
-    @assert length(coords)==3 "Only 3D systems are currently supported"
     t = ModelingToolkit.get_iv(sys)
-    @assert var2symbol(t) == :t "The independent variable must be named `:t`"
-    coord_tmps = [_coord1_tmp(t), _coord2_tmp(t), _coord3_tmp(t)]
+    coord_tmps = [_CoordTmpF(coords[i], i)(t) for i in eachindex(coords)]
     sys_coord = substitute(sys, Dict(coords .=> coord_tmps))
     @named obs = System(
         Vector{ModelingToolkit.Equation}(substitute(ModelingToolkit.observed(sys),
