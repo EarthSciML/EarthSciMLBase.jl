@@ -118,7 +118,7 @@ function _strang_integrators(st::SolverStrang, dom::DomainInfo, f_ode, u0_single
         st.stiff_kwargs...)
     stiff_integrators = [init(
                              remake(prob, u0 = u0_single,
-                                p = IIP{typeof(II[1]), typeof(p)}(II[1], p)),
+                                 p = IIP{typeof(II[1]), typeof(p)}(II[1], p)),
                              st.stiffalg,
                              save_on = false, save_start = false,
                              save_end = false, initialize_save = false;

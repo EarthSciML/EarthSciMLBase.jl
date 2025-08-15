@@ -76,8 +76,8 @@ partialdomains = [lon ∈ Interval(lon_min, lon_max),
 
 domain = DomainInfo(
     partialderivatives_δxyδlonlat,
-    constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
-        grid_spacing = [0.1, 0.1, 1.0])
+    constIC(16.0, indepdomain), constBC(16.0, partialdomains...); grid_spacing = [
+        0.1, 0.1, 1.0])
 
 eqs = [D(u) ~ -α * √abs(v) + lon,
     D(v) ~ -α * √abs(u) + lat + lev * 1e-14,
@@ -135,14 +135,16 @@ prob = ODEProblem(sys1, [], (0.0, 1.0),
 sol1 = solve(prob, Tsit5(); abstol = 1e-12, reltol = 1e-12)
 @test sol1.retcode == ReturnCode.Success
 @test sol1.u[end] ≈ [-27.15156429366082, -26.264264199779465] ||
-    sol1.u[end] ≈ [-26.264264199779465, -27.15156429366082]
+      sol1.u[end] ≈ [-26.264264199779465, -27.15156429366082]
 
 st = SolverStrangThreads(Tsit5(), 1.0; abstol = 1e-12, reltol = 1e-12)
 p = EarthSciMLBase.default_params(sys_mtk)
 
-f_ode, u0_single, p = EarthSciMLBase._strang_ode_func(sys_coords, coord_args,
+f_ode, u0_single,
+p = EarthSciMLBase._strang_ode_func(sys_coords, coord_args,
     get_tspan(domain), grid; sparse = false)
-IIchunks, integrators = EarthSciMLBase._strang_integrators(st, domain, f_ode, u0_single,
+IIchunks,
+integrators = EarthSciMLBase._strang_integrators(st, domain, f_ode, u0_single,
     get_tspan(domain)[1], p)
 
 EarthSciMLBase.threaded_ode_step!(u, IIchunks, integrators, 0.0, 1.0)
@@ -157,7 +159,8 @@ end
 
 @testset "mtk_func" begin
     ucopy = copy(u)
-    f, sys_coords, coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy;
+    f, sys_coords,
+    coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy;
         sparse = true, tgrad = true)
     fthreads, = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy,
         MapThreads(); sparse = false, tgrad = false)
@@ -166,7 +169,8 @@ end
     prob = ODEProblem(f, uu[:], (0.0, 1.0), p)
     sol = solve(prob, Tsit5())
     varsyms = [Symbol("sys₊", v) for v in EarthSciMLBase.var2symbol.(unknowns(sys1))]
-    u_perm = [findfirst(isequal(u), varsyms) for u in EarthSciMLBase.var2symbol.(unknowns(sys_mtk))]
+    u_perm = [findfirst(isequal(u), varsyms)
+              for u in EarthSciMLBase.var2symbol.(unknowns(sys_mtk))]
     uu = reshape(sol.u[end], size(ucopy)...)[u_perm, :, :, :]
     @test uu[:]≈u[:] rtol=0.01
 

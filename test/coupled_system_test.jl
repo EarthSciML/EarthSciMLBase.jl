@@ -14,7 +14,7 @@ using OrdinaryDiffEqTsit5
         @variables S(t), I(t), R(t)
         N = S + I + R
         @parameters β [unit = u"s^-1"]
-        System([D(S) ~ -β * S * I / N], t; name=:seqn,
+        System([D(S) ~ -β * S * I / N], t; name = :seqn,
             metadata = Dict(CoupleType => SEqnCoupler))
     end
 
@@ -26,7 +26,7 @@ using OrdinaryDiffEqTsit5
         N = S + I + R
         @parameters β [unit = u"s^-1"]
         @parameters γ [unit = u"s^-1"]
-        System([D(I) ~ β * S * I / N - γ * I], t; name=:ieqn,
+        System([D(I) ~ β * S * I / N - γ * I], t; name = :ieqn,
             metadata = Dict(CoupleType => IEqnCoupler))
     end
 
@@ -199,9 +199,9 @@ end
     @variables x2(t_nounits) = 0
     @variables x3(t_nounits)
 
-    event1 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_1,))
+    event1 = [1.0, 2, 3] => (f = update_affect!, modified = (p = p_1,))
     event2 = [1.0, 2, 3] => [p_2 ~ Pre(t_nounits)]
-    event3 = [1.0, 2, 3] => (f=update_affect!, modified=(p = p_3,))
+    event3 = [1.0, 2, 3] => (f = update_affect!, modified = (p = p_3,))
     event4 = [1.0, 2, 3] => [p_4 ~ Pre(t_nounits)]
 
     sys = System(
@@ -316,7 +316,7 @@ end
             end
             return (sys1₊a = mod.sys1₊a,)
         end
-        return [3.0] => (f=f1!, modified=(sys1₊a = sys.sys1₊a,))
+        return [3.0] => (f = f1!, modified = (sys1₊a = sys.sys1₊a,))
     end
     runcount2 = 0
     function sysevent2(sys)
@@ -328,7 +328,7 @@ end
             end
             return (sys2₊b = mod.sys2₊b,)
         end
-        return [5.0] => (f=f2!, modified=(sys2₊b = sys.sys2₊b,))
+        return [5.0] => (f = f2!, modified = (sys2₊b = sys.sys2₊b,))
     end
 
     sys1 = System([D(x) ~ a], t_nounits, [x], [a]; name = :sys1,

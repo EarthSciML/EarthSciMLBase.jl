@@ -185,7 +185,7 @@ function grid(d::DomainInfo{T}, staggering) where {T}
     endpts = endpoints(d)
     @assert length(staggering)==length(endpts) "The number of staggering values $(length(staggering)) must match the number of partial independent variables $(length(endpts))."
     @assert all(isa.(staggering, (Bool,))) "Staggering must be a vector of booleans."
-    [stag ? range(start=s-d/2, step=d, length=length(s:d:e)+1) : s:d:e
+    [stag ? range(start = s-d/2, step = d, length = length(s:d:e)+1) : s:d:e
      for (stag, (s, e), d) in zip(staggering, endpts, d.grid_spacing)]
 end
 
@@ -537,8 +537,6 @@ end
 
 Base.:(+)(
     di::DomainInfo, sys::ModelingToolkit.System)::ModelingToolkit.PDESystem = sys + di
-
-
 
 # Match local parameters with the global parameters of the same name.
 function replacement_params(localcoords::AbstractVector, globalcoords::AbstractVector)
