@@ -27,7 +27,7 @@ function ExampleSys1()
     rs = ReactionSystem(
         [Reaction(2.0, [c₁], [c₂])],
         t; name = :Sys1, combinatoric_ratelaws = false)
-    convert(System, complete(rs), metadata = Dict(:coupletype => ExampleSys1Coupler))
+    convert(System, complete(rs), metadata = Dict(CoupleType => ExampleSys1Coupler))
 end
 
 ExampleSys1()
@@ -45,7 +45,7 @@ function ExampleSys2()
     System(
         [D(c₁) ~ -p₁, D(c₂) ~ p₂],
         t, [c₁, c₂], [p₁, p₂, x, y]; name = :Sys2,
-        metadata = Dict(:coupletype => ExampleSys2Coupler))
+        metadata = Dict(CoupleType => ExampleSys2Coupler))
 end
 
 ExampleSys2()

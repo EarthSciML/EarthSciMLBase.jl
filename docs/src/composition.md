@@ -19,7 +19,7 @@ function Photolysis(; name = :Photolysis)
         j_NO2 ~ max(sin(t / 86400), 0)
     ]
     System(eqs, t, [j_NO2], [], name = name,
-        metadata = Dict(:coupletype => PhotolysisCoupler))
+        metadata = Dict(CoupleType => PhotolysisCoupler))
 end
 
 Photolysis()
@@ -44,7 +44,7 @@ The second unique part is that we define some metadata for our System to tell it
 type to use:
 
 ```julia
-metadata = Dict(:coupletype => PhotolysisCoupler)
+metadata = Dict(CoupleType => PhotolysisCoupler)
 ```
 
 Again, when making your own components, just copy the code above but change `PhotolysisCoupler` to something else.
@@ -63,7 +63,7 @@ function Chemistry(; name = :Chemistry)
     ]
     rsys = ReactionSystem(rxs, t, [NO2], [jNO2];
         combinatoric_ratelaws = false, name = name)
-    convert(System, complete(rsys), metadata = Dict(:coupletype => ChemistryCoupler))
+    convert(System, complete(rsys), metadata = Dict(CoupleType => ChemistryCoupler))
 end
 
 Chemistry()
@@ -80,7 +80,7 @@ function Emissions(; name = :Emissions)
     @parameters emis = 1
     @variables NO2(t)
     eqs = [NO2 ~ emis]
-    System(eqs, t; name = name, metadata = Dict(:coupletype => EmissionsCoupler))
+    System(eqs, t; name = name, metadata = Dict(CoupleType => EmissionsCoupler))
 end
 
 Emissions()

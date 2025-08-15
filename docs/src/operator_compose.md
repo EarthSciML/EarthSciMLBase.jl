@@ -36,7 +36,7 @@ function ExampleSys()
     @variables x(t)
     @parameters p
     System([D(x) ~ p], t; name = :ExampleSys,
-        metadata = Dict(:coupletype => ExampleSysCoupler))
+        metadata = Dict(CoupleType => ExampleSysCoupler))
 end
 
 ExampleSys()
@@ -50,7 +50,7 @@ function ExampleSys2()
     @variables x(t)
     @parameters p
     System([D(x) ~ 2p], t; name = :ExampleSys2,
-        metadata = Dict(:coupletype => ExampleSys2Coupler))
+        metadata = Dict(CoupleType => ExampleSys2Coupler))
 end
 
 ExampleSys2()
@@ -90,7 +90,7 @@ function ExampleSys3()
     @variables y(t)
     @parameters p
     System([D(y) ~ p], t; name = :ExampleSys3,
-        metadata = Dict(:coupletype => ExampleSys3Coupler))
+        metadata = Dict(CoupleType => ExampleSys3Coupler))
 end
 
 sys1 = ExampleSys()
@@ -123,7 +123,7 @@ function ExampleSysNonODE()
     @variables y(t)
     @parameters p
     System([y ~ p], t; name = :ExampleSysNonODE,
-        metadata = Dict(:coupletype => ExampleSysNonODECoupler))
+        metadata = Dict(CoupleType => ExampleSysNonODECoupler))
 end
 
 sys1 = ExampleSys()
@@ -154,7 +154,7 @@ function ExampleSysNonODE2()
     @variables y(t)
     @parameters p
     System([y ~ p], t; name = :ExampleSysNonODE2,
-        metadata = Dict(:coupletype => ExampleSysNonODE2Coupler))
+        metadata = Dict(CoupleType => ExampleSysNonODE2Coupler))
 end
 
 sys1 = ExampleSys()

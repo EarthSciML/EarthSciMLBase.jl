@@ -22,7 +22,7 @@ function Loss()
     @parameters T=300 [unit = u"K"]
     @constants T₀=300 [unit = u"K"]
     eq = D(A) ~ -k * exp(T / T₀) * A
-    System([eq], t; name = :Loss, metadata = Dict(:coupletype => LossCoupler))
+    System([eq], t; name = :Loss, metadata = Dict(CoupleType => LossCoupler))
 end
 
 Loss()
@@ -40,7 +40,7 @@ function Temperature()
     @constants tc=1.0 [unit = u"s"]
     eq = D(T) ~ sin(t / tc) * Tc
     System(
-        [eq], t; name = :Temperature, metadata = Dict(:coupletype => TemperatureCoupler))
+        [eq], t; name = :Temperature, metadata = Dict(CoupleType => TemperatureCoupler))
 end
 
 Temperature()
