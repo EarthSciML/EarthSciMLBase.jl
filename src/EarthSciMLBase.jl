@@ -7,7 +7,6 @@ using DynamicQuantities, Dates
 using DomainSets
 using SciMLBase: DECallback, CallbackSet, ODEProblem, SplitODEProblem, reinit!, solve!,
                  init, remake
-using SciMLOperators: cache_operator, NullOperator, FunctionOperator, TensorProductOperator
 using Statistics
 using DiffEqCallbacks
 using LinearAlgebra
