@@ -77,8 +77,8 @@ The left hand sides of two equations will be considered matching if:
  3. There is an entry in the optional `translate` dictionary that maps the dependent variable in the first system to the dependent variable in the second system, e.g. `Dict(sys1.sys.x => sys2.sys.y)`.
  4. There is an entry in the optional `translate` dictionary that maps the dependent variable in the first system to the dependent variable in the second system, with a conversion factor, e.g. `Dict(sys1.sys.x => sys2.sys.y => 6)`.
 """
-function operator_compose(
-        a::ModelingToolkit.ODESystem, b::ModelingToolkit.ODESystem, translate = Dict())
+function operator_compose(a::ModelingToolkit.System, b::ModelingToolkit.System,
+        translate = Dict())
     translate = normalize_translate(translate)
     a_eqs = deepcopy(equations(a))
     b_eqs = deepcopy(equations(b))
@@ -89,6 +89,9 @@ function operator_compose(
     all_matches = []
     all_beq_matches = []
     taken_names = Dict()
+    extra_params = Set()
+    extra_avars = Set()
+    extra_bvars = Set()
     for a_eq in a_eqs
         if isequal(a_eq.lhs, 0)
             # If the LHS == 0 (i.e. everything has already been shifted to the RHS),
@@ -118,6 +121,9 @@ function operator_compose(
         b_eq_matches = all_beq_matches[i]
         for (ii, match) in enumerate(matches)
             adv, bdv, conv = match[1].first, match[1].second, match[2]
+            if ModelingToolkit.isparameter(conv)
+                push!(extra_params, conv)
+            end
             js = (1:length(b_eqs))[b_eq_matches[ii]]
             for j in js
                 bdv = add_scope(b, get_dv(b_eqs[j].lhs, iv), iv) # Make sure the units are correct.
@@ -133,6 +139,7 @@ function operator_compose(
                     term1 = (@variables $var1(iv))[1]
                     term1 = add_metadata(term1, b_eqs[j].lhs; exclude_default = true)
                     b_eqs[j] = term1 ~ b_eqs[j].rhs
+                    push!(extra_bvars, term1)
 
                     var2 = Symbol("$(aname)₊", var1)
                     term2 = (@variables $var2(iv))[1]
@@ -142,6 +149,7 @@ function operator_compose(
                     term3 = add_metadata(term3, b_eqs[j].lhs; exclude_default = true)
                     push!(connections, term2 ~ term3)
                     a_eqs[i] = a_eqs[i].lhs ~ a_eqs[i].rhs + term1 * conv
+                    push!(extra_avars, term1)
                     # Now set the dependent variables in the two systems to be equal.
                     push!(connections, adv ~ bdv * conv)
                 else # The LHS of this equation is the dependent variable of interest.
@@ -152,13 +160,16 @@ function operator_compose(
                     term2 = (@variables $var2(iv))[1]
                     term2 = add_metadata(term2, b_eqs[j].lhs * conv; exclude_default = true)
                     a_eqs[i] = a_eqs[i].lhs ~ a_eqs[i].rhs + term1
+                    push!(extra_avars, term1)
                     push!(connections, term2 ~ bdv * conv)
                 end
             end
         end
     end
-    aa = copy_with_change(a; eqs = a_eqs)
-    bb = copy_with_change(b; eqs = b_eqs)
+    aa = copy_with_change(a; eqs = a_eqs, unknowns = [unknowns(a); extra_avars...],
+        parameters = [full_parameters(a); extra_params...])
+    bb = copy_with_change(b; eqs = b_eqs, unknowns = [unknowns(b); extra_bvars...],
+        parameters = [full_parameters(b); extra_params...])
     ConnectorSystem(connections, aa, bb)
 end
 

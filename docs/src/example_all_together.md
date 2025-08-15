@@ -27,7 +27,7 @@ function ExampleSys1()
     rs = ReactionSystem(
         [Reaction(2.0, [c₁], [c₂])],
         t; name = :Sys1, combinatoric_ratelaws = false)
-    convert(ODESystem, complete(rs), metadata = Dict(:coupletype => ExampleSys1Coupler))
+    convert(System, complete(rs), metadata = Dict(:coupletype => ExampleSys1Coupler))
 end
 
 ExampleSys1()
@@ -42,7 +42,7 @@ end
 function ExampleSys2()
     @variables c₁(t)=5.0 c₂(t)=5.0
     @parameters p₁=1.0 p₂=0.5 x=1 y=1
-    ODESystem(
+    System(
         [D(c₁) ~ -p₁, D(c₂) ~ p₂],
         t, [c₁, c₂], [p₁, p₂, x, y]; name = :Sys2,
         metadata = Dict(:coupletype => ExampleSys2Coupler))
@@ -60,7 +60,7 @@ from this package.
 ```@example ex1
 function EarthSciMLBase.couple2(sys1::ExampleSys1Coupler, sys2::ExampleSys2Coupler)
     sys1, sys2 = sys1.sys, sys2.sys
-    sys1 = convert(ODESystem, sys1)
+    sys1 = convert(System, sys1)
     operator_compose(sys1, sys2)
 end
 nothing # hide
@@ -73,14 +73,14 @@ sys1 = ExampleSys1()
 sys2 = ExampleSys2()
 sys = couple(sys1, sys2)
 
-convert(ODESystem, sys)
+convert(System, sys)
 ```
 
 At this point we have an ODE system that is composed of two other ODE systems.
 We can inspect its observed variables using the `observed` function.
 
 ```@example ex1
-simplified_sys = convert(ODESystem, sys)
+simplified_sys = convert(System, sys)
 ```
 
 ```@example ex1
@@ -90,7 +90,7 @@ observed(simplified_sys)
 We can also run simulations using this system:
 
 ```@example ex1
-odeprob = ODEProblem(simplified_sys, [], (0.0, 10.0), [])
+odeprob = ODEProblem(simplified_sys, [], (0.0, 10.0))
 odesol = solve(odeprob)
 plot(odesol)
 ```

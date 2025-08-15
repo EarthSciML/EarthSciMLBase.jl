@@ -35,7 +35,7 @@ end
         @variables c(t)=5.0 [unit = u"kg"]
         @constants t_c=1.0 [unit = u"s"] # constant to make `sin` unitless
         @constants c_c=1.0 [unit = u"kg/s"] # constant to make equation units work out
-        ODESystem([D(c) ~ sin(t / t_c) * c_c], t, [c], [lon, lat, lev], name = :examplesys)
+        System([D(c) ~ sin(t / t_c) * c_c], t, [c], [lon, lat, lev], name = :examplesys)
     end
     examplesys = Example()
 

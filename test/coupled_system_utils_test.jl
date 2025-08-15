@@ -8,8 +8,6 @@ t = t_nounits;
 using ModelingToolkit: D_nounits;
 D = D_nounits;
 using DynamicQuantities
-using OrdinaryDiffEqTsit5
-using SciMLBase: ReturnCode
 
 @test steplength([0, 0.1, 0.2]) == 0.1
 
@@ -23,8 +21,8 @@ eqs = [D(u) ~ -α * √abs(v) + lon,
     y ~ 4α - 2p
 ]
 
-@named sys = ODESystem(eqs, t)
-sys = structural_simplify(sys)
+@named sys = System(eqs, t)
+sys = mtkcompile(sys)
 p = MTKParameters(sys, [])
 
 xf = ModelingToolkit.build_explicit_observed_function(sys, x)
@@ -59,50 +57,3 @@ bcs = icbc(domain, vars)
       [0.0, 0.1, 0.15, 0.2, 0.3, 0.4, 0.45, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1.0]
 
 @test timesteps(0:0.1:0.3, 0:0.1000000000001:0.3) == [0.0, 0.1, 0.2, 0.3]
-
-@testset "prune observed" begin
-    @variables(x(t)=0.25, y(t), z(t), a(t))
-    eqs = [D(x) ~ -z
-           z ~ x
-           y ~ x
-           a ~ x]
-
-    @named sys = ODESystem(eqs, t; metadata = :metatest,
-        continuous_events = [[x ~ 0] => [x ~ 1], [x ~ 0.5, x ~ 2] => [x ~ 1.0]],
-        discrete_events = (t == 1.0) => [x ~ x + 1]
-    )
-
-    @testset "single system" begin
-        sys_simple = structural_simplify(sys)
-        sys2 = prune_observed(sys, sys_simple, [])
-        sys2 = structural_simplify(sys2)
-
-        @test occursin("Differential(t)(x(t)) ~ -x(t)", string(equations(sys2))) ||
-              occursin("Differential(t)(x(t)) ~ -z(t)", string(equations(sys2)))
-
-        prob = ODEProblem(sys2, [], (0.0, 2.0))
-        sol = solve(prob, Tsit5(), saveat = 0.05)
-        @test sol.retcode == ReturnCode.Success
-
-        @test length(ModelingToolkit.get_continuous_events(sys2)) == 2
-        @test length(ModelingToolkit.get_discrete_events(sys2)) == 1
-    end
-
-    @testset "nested system" begin
-        @named sysx = ODESystem([D(x) ~ x], t)
-        sys_nested = compose(sysx, sys)
-        sys_nested_simple = structural_simplify(sys_nested)
-        #sys2 = prune_observed(sys_nested, sys_nested_simple, [])
-        sys2 = sys_nested_simple
-        #sys2 = structural_simplify(sys2)
-
-        @test length(equations(sys2)) == 2
-
-        prob = ODEProblem(sys2, [], (0.0, 2.0))
-        sol = solve(prob, Tsit5(), saveat = 0.05)
-        @test sol.retcode == ReturnCode.Success
-
-        @test length(ModelingToolkit.get_continuous_events(sys2)) == 2
-        @test length(ModelingToolkit.get_discrete_events(sys2)) == 1
-    end
-end

@@ -35,7 +35,7 @@ end
 function ExampleSys()
     @variables x(t)
     @parameters p
-    ODESystem([D(x) ~ p], t; name = :ExampleSys,
+    System([D(x) ~ p], t; name = :ExampleSys,
         metadata = Dict(:coupletype => ExampleSysCoupler))
 end
 
@@ -49,7 +49,7 @@ end
 function ExampleSys2()
     @variables x(t)
     @parameters p
-    ODESystem([D(x) ~ 2p], t; name = :ExampleSys2,
+    System([D(x) ~ 2p], t; name = :ExampleSys2,
         metadata = Dict(:coupletype => ExampleSys2Coupler))
 end
 
@@ -67,7 +67,7 @@ end
 
 combined = couple(sys1, sys2)
 
-combined_mtk = convert(ODESystem, combined)
+combined_mtk = convert(System, combined)
 ```
 
 The simplified equation should be D(x) = p + sys2_xˍt:
@@ -89,7 +89,7 @@ end
 function ExampleSys3()
     @variables y(t)
     @parameters p
-    ODESystem([D(y) ~ p], t; name = :ExampleSys3,
+    System([D(y) ~ p], t; name = :ExampleSys3,
         metadata = Dict(:coupletype => ExampleSys3Coupler))
 end
 
@@ -102,7 +102,7 @@ function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSys3Couple
 end
 
 combined = couple(sys1, sys2)
-combined_simplified = convert(ODESystem, combined)
+combined_simplified = convert(System, combined)
 ```
 
 ```@example operator_compose
@@ -122,7 +122,7 @@ end
 function ExampleSysNonODE()
     @variables y(t)
     @parameters p
-    ODESystem([y ~ p], t; name = :ExampleSysNonODE,
+    System([y ~ p], t; name = :ExampleSysNonODE,
         metadata = Dict(:coupletype => ExampleSysNonODECoupler))
 end
 
@@ -135,7 +135,7 @@ function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODEC
 end
 
 combined = couple(sys1, sys2)
-sys_combined = convert(ODESystem, combined)
+sys_combined = convert(System, combined)
 ```
 
 ```@example operator_compose
@@ -153,7 +153,7 @@ end
 function ExampleSysNonODE2()
     @variables y(t)
     @parameters p
-    ODESystem([y ~ p], t; name = :Docs₊ExampleSysNonODE2,
+    System([y ~ p], t; name = :ExampleSysNonODE2,
         metadata = Dict(:coupletype => ExampleSysNonODE2Coupler))
 end
 
@@ -166,7 +166,7 @@ function EarthSciMLBase.couple2(sys1::ExampleSysCoupler, sys2::ExampleSysNonODE2
 end
 
 combined = couple(sys1, sys2)
-combined_simplified = convert(ODESystem, combined)
+combined_simplified = convert(System, combined)
 ```
 
 ```@example operator_compose
@@ -175,7 +175,7 @@ observed(combined_simplified)
 
 !warning
 The `operator_compose` function will not work correctly if any of the variables to be
-composed are part of a `NonlinearSystem` rather than an `ODESystem`. The reason for this
+composed are part of a `NonlinearSystem` rather than a ModelingToolkit `System`. The reason for this
 is because `operator_compose` works by matching the left-hand sides of the equations in
 the two systems, but `NonlinearSystem`s move all of the terms to the right-hand side of
 the equation when they are created.

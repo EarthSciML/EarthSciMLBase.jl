@@ -7,7 +7,7 @@ function graph(sys::CoupledSystem)::MetaGraphsNext.MetaGraph
     g = MetaGraphsNext.MetaGraph(
         Graphs.Graph();
         label_type = Symbol,
-        vertex_data_type = ModelingToolkit.ODESystem,
+        vertex_data_type = ModelingToolkit.System,
         edge_data_type = ConnectorSystem
     )
     systems = copy(sys.systems)

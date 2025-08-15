@@ -32,7 +32,7 @@ end
 
 function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0 = nothing,
         name = :model, extra_vars = [], kwargs...) where {iip}
-    sys_mtk = convert(ODESystem, sys; name = name, extra_vars = extra_vars)
+    sys_mtk = convert(System, sys; name = name, extra_vars = extra_vars)
     dom = domain(sys)
 
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0

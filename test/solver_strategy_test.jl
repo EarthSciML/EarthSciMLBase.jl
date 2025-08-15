@@ -2,15 +2,16 @@ using EarthSciMLBase
 using Test
 using ModelingToolkit, DomainSets
 using OrdinaryDiffEqTsit5, OrdinaryDiffEqSDIRK, OrdinaryDiffEqLowOrderRK
-using SciMLOperators
 using DynamicQuantities
 using SciMLBase: DiscreteCallback, ReturnCode
 using LinearSolve
+t = ModelingToolkit.t_nounits
+D = ModelingToolkit.D_nounits
 
 struct ExampleOp <: Operator
 end
 
-function EarthSciMLBase.get_scimlop(
+function EarthSciMLBase.get_odefunction(
         op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args,
         domain::DomainInfo, u0, p, alg::MapAlgorithm)
     α, trans1, trans2, trans3 = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
@@ -50,7 +51,7 @@ function EarthSciMLBase.get_scimlop(
                    for ix in 1:size(u, 1), I in II]...)
         reshape(du, :)
     end
-    FunctionOperator(run, reshape(u0, :), p = p)
+    return run
 end
 
 function EarthSciMLBase.get_needed_vars(::ExampleOp, csys, mtk_sys, domain::DomainInfo)
@@ -62,11 +63,10 @@ lon_min, lon_max = -π, π
 lat_min, lat_max = -0.45π, 0.45π
 t_max = 11.5
 
-@parameters y lon=0.0 lat=0.0 lev=1.0 t α=10.0
+@parameters y lon=0.0 lat=0.0 lev=1.0 α=10.0
 @constants p = 1.0
 @variables(u(t)=1.0, v(t)=1.0, x(t), [unit=u"1/m"], y(t), [unit=u"1/m"], z(t),
     windspeed(t))
-Dt = Differential(t)
 
 indepdomain = t ∈ Interval(t_min, t_max)
 
@@ -79,20 +79,20 @@ domain = DomainInfo(
     constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
         grid_spacing = [0.1, 0.1, 1.0])
 
-eqs = [Dt(u) ~ -α * √abs(v) + lon,
-    Dt(v) ~ -α * √abs(u) + lat + lev * 1e-14,
+eqs = [D(u) ~ -α * √abs(v) + lon,
+    D(v) ~ -α * √abs(u) + lat + lev * 1e-14,
     windspeed ~ lat + lon + lev,
     x ~ 1.0 / EarthSciMLBase.lon2meters(lat),
     y ~ 1.0 / EarthSciMLBase.lat2meters,
     z ~ 1.0 / lev
 ]
-sys = ODESystem(eqs, t, name = :sys)
+sys = System(eqs, t, name = :sys)
 
 op = ExampleOp()
 
 csys = EarthSciMLBase.couple(sys, op, domain)
 
-sys_mtk = convert(ODESystem, csys)
+sys_mtk = convert(System, csys)
 
 @test Symbol.(EarthSciMLBase.partialderivative_transform_vars(sys_mtk, domain)) == [
     Symbol("δsys₊lon_transform(t)"),
@@ -127,13 +127,14 @@ du2 = scimlop(reshape(u, :), p, 0.0)
 @test du2 ≈ reshape(du, :)
 
 grid = EarthSciMLBase.grid(domain)
-prob = ODEProblem(structural_simplify(sys), [], (0.0, 1.0),
+prob = ODEProblem(mtkcompile(sys), [], (0.0, 1.0),
     [
         lon => grid[1][1], lat => grid[2][1], lev => grid[3][1]
     ])
 sol1 = solve(prob, Tsit5(); abstol = 1e-12, reltol = 1e-12)
 @test sol1.retcode == ReturnCode.Success
-@test sol1.u[end] ≈ [-27.15156429366082, -26.264264199779465]
+@test sol1.u[end] ≈ [-27.15156429366082, -26.264264199779465] ||
+    sol1.u[end] ≈ [-26.264264199779465, -27.15156429366082]
 
 st = SolverStrangThreads(Tsit5(), 1.0; abstol = 1e-12, reltol = 1e-12)
 p = EarthSciMLBase.default_params(sys_mtk)
@@ -142,7 +143,6 @@ f_ode, u0_single, p = EarthSciMLBase._strang_ode_func(sys_coords, coord_args,
     get_tspan(domain), grid; sparse = false)
 IIchunks, integrators = EarthSciMLBase._strang_integrators(st, domain, f_ode, u0_single,
     get_tspan(domain)[1], p)
-
 
 EarthSciMLBase.threaded_ode_step!(u, IIchunks, integrators, 0.0, 1.0)
 
@@ -153,16 +153,16 @@ EarthSciMLBase.threaded_ode_step!(u, IIchunks, integrators, 0.0, 1.0)
 
 @testset "mtk_func" begin
     ucopy = copy(u)
-    f, sys_coords,
-    coord_args = EarthSciMLBase.mtk_grid_func(
-        sys_mtk, domain, ucopy; sparse = true, tgrad = true)
+    f, sys_coords, coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy;
+        sparse = true, tgrad = true)
     fthreads, = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy,
         MapThreads(); sparse = false, tgrad = false)
     p = EarthSciMLBase.default_params(sys_coords)
     uu = EarthSciMLBase.init_u(sys_coords, domain)
     prob = ODEProblem(f, uu[:], (0.0, 1.0), p)
     sol = solve(prob, Tsit5())
-    uu = reshape(sol.u[end], size(ucopy)...)
+    u_perm = [findfirst(isequal(u), unknowns(sys_coords)) for u in unknowns(sys_mtk)]
+    uu = reshape(sol.u[end], size(ucopy)...)[u_perm, :, :, :]
     @test uu[:]≈u[:] rtol=0.01
 
     @testset "In-place vs. out of place" begin

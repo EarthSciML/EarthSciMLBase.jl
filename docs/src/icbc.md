@@ -21,7 +21,7 @@ function ExampleSys()
         D(u) ~ √abs(v),
         D(v) ~ √abs(u)
     ]
-    ODESystem(eqs, t, [u, v], [x, y]; name = :Docs₊Example)
+    System(eqs, t, [u, v], [x, y]; name = :Docs₊Example)
 end
 
 ExampleSys()

@@ -22,11 +22,11 @@ using Plots
     y(t_nounits)
 end
 
-@named sys1 = ODESystem([D(x) ~ a], t_nounits, [x], [a])
-@named sys2 = ODESystem([y ~ b], t_nounits, [y], [b])
+@named sys1 = System([D(x) ~ a], t_nounits, [x, a])
+@named sys2 = System([y ~ b], t_nounits, [y, b])
 
 model1 = couple(sys1, sys2)
-sys = convert(ODESystem, model1)
+sys = convert(System, model1)
 ```
 
 The equation for $y$ shows up in the "observed" equations:
@@ -89,14 +89,14 @@ Now, we need to recreate our systems, but this time we will add the system event
 Then, we can run the simulation:
 
 ```@example system_events
-sys1 = ODESystem([D(x) ~ a], t_nounits, [x], [a]; name = :sys1,
+sys1 = System([D(x) ~ a], t_nounits, [x], [a]; name = :sys1,
     metadata = Dict(:sys_discrete_event => sysevent1))
-sys2 = ODESystem([y ~ b], t_nounits, [y], [b]; name = :sys2,
+sys2 = System([y ~ b], t_nounits, [y], [b]; name = :sys2,
     metadata = Dict(:sys_discrete_event => sysevent2))
 
 model1 = couple(sys1, sys2)
-sys = convert(ODESystem, model1)
-sol = solve(ODEProblem(sys), tspan = (0, 10))
+sys = convert(System, model1)
+sol = solve(ODEProblem(sys), [], tspan = (0, 10))
 ```
 
 If we plot the results, we can see that the system event did indeed update the parameter value for $a$, which changed the rate of change of $x$.

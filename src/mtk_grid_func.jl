@@ -21,34 +21,35 @@ map_closure_to_range(f, range, ::MapThreads) = ThreadsX.map(f, range)
 
 # Move coordinate variables from the parameter list of a function to the argument list.
 # This is useful for creating functions that take coordinates as arguments.
-function rewrite_coord_func(x, coord_args)
+function rewrite_coord_func(x, coord_args, idv::Symbol)
     if @capture(x, function (args__)
         body_
     end)
         return :(function ($(args...), $(coord_args...))
             $body
         end)
-    elseif @capture(x, a_=b_)
-        if (a in coord_args) && (b == 1)
-            return nothing
+    elseif @capture(x, (a_)(b_))
+        if (a isa _CoordTmpF) && (b == idv)
+            return :($(coord_args[a.idx]))
         end
     end
     return x
 end
 
-function _add_coord_args(ex, coord_args)
-    ex = MacroTools.postwalk(x -> rewrite_coord_func(x, coord_args), ex)
+function _add_coord_args(ex, coord_args, idv::Symbol)
+    ex = MacroTools.postwalk(x -> rewrite_coord_func(x, coord_args, idv), ex)
 end
 
 function gen_coord_func(
         sys, expr, coord_args; eval_expression = false, eval_module = @__MODULE__)
+    idv = var2symbol(ModelingToolkit.get_iv(sys))
     fexpr = ModelingToolkit.generate_custom_function(sys, expr, expression = Val{true})
     if fexpr isa Tuple
-        fexpr = EarthSciMLBase._add_coord_args.(fexpr, (coord_args,))
+        fexpr = EarthSciMLBase._add_coord_args.(fexpr, (coord_args,), (idv,))
         f = ModelingToolkit.eval_or_rgf.(fexpr; eval_expression, eval_module)
         f = ModelingToolkit.GeneratedFunctionWrapper{(2, 6, true)}(f[1], f[2])
     else
-        fexpr = EarthSciMLBase._add_coord_args(fexpr, coord_args)
+        fexpr = EarthSciMLBase._add_coord_args(fexpr, coord_args, idv)
         f = ModelingToolkit.eval_or_rgf(fexpr; eval_expression, eval_module)
     end
     return f
@@ -61,22 +62,32 @@ function _get_coord_args(sys, domain)
     coords, coord_args
 end
 
+# Dummy function for temporarily replacing coordinate variables.
+struct _CoordTmpF
+    coord::Any
+    idx::Int
+end
+(::_CoordTmpF)(t) = Inf
+(x::_CoordTmpF)(u::DynamicQuantities.AbstractQuantity) = ModelingToolkit.get_unit(x.coord)
+@register_symbolic (coordtmpf::_CoordTmpF)(t)
+Base.nameof(x::_CoordTmpF) = Symbol(:coord, x.idx)
+Symbolics.derivative(::_CoordTmpF, args::NTuple{1, Any}, ::Val{1}) = 0.0
+
 function _prepare_coord_sys(sys, domain)
     coords, coord_args = _get_coord_args(sys, domain)
-    coord_arg_consts = [only(@constants $(ca) = 1) for ca in coord_args]
-    coord_arg_consts = add_metadata.(coord_arg_consts, coords; exclude_default = true)
-    sys_coord = substitute(sys, Dict(coords .=> coord_arg_consts))
-    @named obs = ODESystem(
-        substitute(ModelingToolkit.observed(sys),
-            Dict(coords .=> coord_arg_consts)),
+    t = ModelingToolkit.get_iv(sys)
+    coord_tmps = [_CoordTmpF(coords[i], i)(t) for i in eachindex(coords)]
+    sys_coord = substitute(sys, Dict(coords .=> coord_tmps))
+    @named obs = System(
+        Vector{ModelingToolkit.Equation}(substitute(ModelingToolkit.observed(sys),
+            Dict(coords .=> coord_tmps))),
         ModelingToolkit.get_iv(sys_coord))
     sys_coord = copy_with_change(sys_coord,
         eqs = [equations(sys_coord); equations(obs)],
-        unknowns = unique([unknowns(sys_coord); unknowns(obs)]),
         discrete_events = ModelingToolkit.get_discrete_events(sys),
-        continuous_events = ModelingToolkit.get_continuous_events(sys),
-        parameters = parameters(sys))
-    return structural_simplify(sys_coord), coord_args
+        continuous_events = ModelingToolkit.get_continuous_events(sys)
+    )
+    return mtkcompile(sys_coord), coord_args
 end
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
@@ -134,7 +145,7 @@ end
 
 # Return a function to apply the MTK system to each column of u after reshaping to a matrix.
 function mtk_grid_func(
-        sys_mtk::ODESystem, domain::DomainInfo{T}, u0, alg::MA = MapBroadcast();
+        sys_mtk::System, domain::DomainInfo{T}, u0, alg::MA = MapBroadcast();
         sparse = false, tgrad = false, vjp = true) where {T, MA <: MapAlgorithm}
     sys_mtk, coord_args = _prepare_coord_sys(sys_mtk, domain)
 

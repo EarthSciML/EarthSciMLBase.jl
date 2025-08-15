@@ -128,7 +128,7 @@ end
 
 function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = nothing,
         name = :model, extra_vars = [], kwargs...)
-    sys_mtk = convert(ODESystem, s; name = name, extra_vars = extra_vars)
+    sys_mtk = convert(System, s; name = name, extra_vars = extra_vars)
     dom = domain(s)
     sys_mtk, coord_args = _prepare_coord_sys(sys_mtk, dom)
 

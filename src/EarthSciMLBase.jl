@@ -1,5 +1,5 @@
 module EarthSciMLBase
-using ModelingToolkit, Symbolics, Catalyst
+using ModelingToolkit, Symbolics
 using ModelingToolkit: AbstractSystem
 using Graphs, MetaGraphsNext
 using DocStringExtensions

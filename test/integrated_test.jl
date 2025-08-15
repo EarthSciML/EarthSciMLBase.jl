@@ -1,5 +1,5 @@
 using Test
-using ModelingToolkit, Catalyst, EarthSciMLBase
+using ModelingToolkit, EarthSciMLBase
 using ModelingToolkit: t_nounits, D_nounits
 using OrdinaryDiffEqTsit5
 using SciMLBase: ReturnCode
@@ -14,8 +14,8 @@ function Photolysis(; name = :Photolysis)
     eqs = [
         j_NO2 ~ max(sin(t / 86400), 0)
     ]
-    ODESystem(eqs, t, [j_NO2], [], name = name,
-        metadata = Dict(:coupletype => PhotolysisCoupler))
+    System(eqs, t, [j_NO2], [], name = name,
+        metadata = Dict(CoupleType => PhotolysisCoupler))
 end
 
 struct ChemistryCoupler
@@ -23,13 +23,12 @@ struct ChemistryCoupler
 end
 function Chemistry(; name = :Chemistry)
     @parameters jNO2 = 1
-    @species NO2(t) = 2
-    rxs = [
-        Reaction(jNO2, [NO2], [], [1], [])
+    @variables NO2(t) = 2
+    eqs = [
+        D(NO2) ~ -jNO2 * NO2,
     ]
-    rsys = ReactionSystem(rxs, t, [NO2], [jNO2];
-        combinatoric_ratelaws = false, name = name)
-    convert(ODESystem, complete(rsys), metadata = Dict(:coupletype => ChemistryCoupler))
+    System(eqs, t, [NO2], [jNO2]; name = name,
+        metadata = Dict(CoupleType => ChemistryCoupler))
 end
 
 struct EmissionsCoupler
@@ -39,40 +38,40 @@ function Emissions(; name = :Emissions)
     @parameters emis = 1
     @variables NO2(t)
     eqs = [D(NO2) ~ emis]
-    ODESystem(eqs, t; name = name,
-        metadata = Dict(:coupletype => EmissionsCoupler))
+    System(eqs, t; name = name,
+        metadata = Dict(CoupleType => EmissionsCoupler))
 end
 
 function EarthSciMLBase.couple2(c::ChemistryCoupler, p::PhotolysisCoupler)
     c, p = c.sys, p.sys
-    c = param_to_var(convert(ODESystem, c), :jNO2)
+    c = param_to_var(convert(System, c), :jNO2)
     ConnectorSystem([c.jNO2 ~ p.j_NO2], c, p)
 end
 
 function EarthSciMLBase.couple2(c::ChemistryCoupler, emis::EmissionsCoupler)
     c, emis = c.sys, emis.sys
-    operator_compose(convert(ODESystem, c), emis, Dict(
+    operator_compose(convert(System, c), emis, Dict(
         c.NO2 => emis.NO2,
     ))
 end
 
 p = Photolysis()
 @testset "Photolysis single" begin
-    prob = ODEProblem(structural_simplify(p), [], (0.0, 1.0))
+    prob = ODEProblem(mtkcompile(p), [], (0.0, 1.0))
     sol = solve(prob, Tsit5())
     @test sol.retcode == ReturnCode.Success
 end
 
 c = Chemistry()
 @testset "Chemistry single" begin
-    prob = ODEProblem(structural_simplify(c), [], (0.0, 1.0))
+    prob = ODEProblem(mtkcompile(c), [], (0.0, 1.0))
     sol = solve(prob, Tsit5())
     @test sol.retcode == ReturnCode.Success
 end
 
 e = Emissions()
 @testset "Emissions single" begin
-    ee = structural_simplify(e)
+    ee = mtkcompile(e)
     prob = ODEProblem(ee, [ee.NO2=>0], (0.0, 1.0))
     sol = solve(prob, Tsit5())
     @test sol.retcode == ReturnCode.Success
@@ -80,7 +79,7 @@ end
 
 @testset "Coupled model" begin
     model = couple(c, p, e)
-    sys = convert(ODESystem, model)
+    sys = convert(System, model)
 
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob, Tsit5(), u0 = [1.0])
