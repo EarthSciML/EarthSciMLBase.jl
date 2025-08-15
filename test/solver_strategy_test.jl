@@ -76,8 +76,8 @@ partialdomains = [lon ∈ Interval(lon_min, lon_max),
 
 domain = DomainInfo(
     partialderivatives_δxyδlonlat,
-    constIC(16.0, indepdomain), constBC(16.0, partialdomains...); grid_spacing = [
-        0.1, 0.1, 1.0])
+    constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
+        grid_spacing = [0.1, 0.1, 1.0])
 
 eqs = [D(u) ~ -α * √abs(v) + lon,
     D(v) ~ -α * √abs(u) + lat + lev * 1e-14,
@@ -126,8 +126,6 @@ du .= 0
 du2 = scimlop(reshape(u, :), p, 0.0)
 @test du2 ≈ reshape(du, :)
 
-setp! = EarthSciMLBase.coord_setter(sys_mtk, domain)
-
 grid = EarthSciMLBase.grid(domain)
 prob = ODEProblem(mtkcompile(sys), [], (0.0, 1.0),
     [
@@ -138,25 +136,15 @@ sol1 = solve(prob, Tsit5(); abstol = 1e-12, reltol = 1e-12)
 @test sol1.u[end] ≈ [-27.15156429366082, -26.264264199779465] ||
     sol1.u[end] ≈ [-26.264264199779465, -27.15156429366082]
 
-st = SolverStrangThreads(Tsit5(), 1.0)
+st = SolverStrangThreads(Tsit5(), 1.0; abstol = 1e-12, reltol = 1e-12)
 p = EarthSciMLBase.default_params(sys_mtk)
 
-IIchunks,
-integrators = let
-    II = CartesianIndices(size(u)[2:4])
-    IIchunks = collect(Iterators.partition(II, length(II) ÷ st.threads))
-    start, finish = get_tspan(domain)
-    prob = ODEProblem(sys_mtk, [], (start, finish))
-    integrators = [init(
-                       remake(prob, u0 = zeros(length(unknowns(sys_mtk))), p = deepcopy(p)),
-                       st.stiffalg, save_on = false,
-                       save_start = false, save_end = false, initialize_save = false;
-                       abstol = 1e-12, reltol = 1e-12)
-                   for _ in 1:length(IIchunks)]
-    (IIchunks, integrators)
-end
+f_ode, u0_single, p = EarthSciMLBase._strang_ode_func(sys_coords, coord_args,
+    get_tspan(domain), grid; sparse = false)
+IIchunks, integrators = EarthSciMLBase._strang_integrators(st, domain, f_ode, u0_single,
+    get_tspan(domain)[1], p)
 
-EarthSciMLBase.threaded_ode_step!(setp!, u, IIchunks, integrators, 0.0, 1.0)
+EarthSciMLBase.threaded_ode_step!(u, IIchunks, integrators, 0.0, 1.0)
 
 @test u[1, 1, 1, 1] ≈ sol1.u[end][1]
 @test u[2, 1, 1, 1] ≈ sol1.u[end][2]
@@ -227,6 +215,8 @@ prob = ODEProblem(csys, st)
 sol = solve(prob, Euler(); dt = 1.0, abstol = 1e-12, reltol = 1e-12)
 
 @test sum(abs.(sol.u[end]))≈3.820642384890682e7 rtol=1e-3
+
+st = SolverStrangThreads(Tsit5(), 1.0)
 
 @testset "Float32" begin
     domain = DomainInfo(
