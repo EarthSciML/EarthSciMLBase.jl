@@ -100,7 +100,7 @@ nothing
 
 The function above also doesn't have any physical meaning, but it demonstrates some functionality of the `Operator` "`s`".
 First, it retrieves a function to get the current value of an observed variable in our
-ODE system using the `obs_functions` argement, and it demonstrates how to call the resulting
+ODE system using the `obs_functions` argument, and it demonstrates how to call the resulting
 function to get that value.
 It also demonstrates how to get coordinate transforms using the `coordinate_transform_functions` argument.
 Coordinate transforms are discussed in more detail in the documentation for the [`DomainInfo`](@ref) type.

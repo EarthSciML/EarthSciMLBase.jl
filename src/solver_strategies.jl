@@ -17,7 +17,7 @@ kwargs:
 
 Additional kwargs for ODEProblem constructor:
 
-  - u0: initial condtions; if "nothing", default values will be used.
+  - u0: initial conditions; if "nothing", default values will be used.
   - p: parameters; if "nothing", default values will be used.
   - name: name of the model.
 """

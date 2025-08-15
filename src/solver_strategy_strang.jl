@@ -6,7 +6,7 @@ Choose either `SimulatorStrangThreads` or `SimulatorStrangSerial` to run the sim
 
 kwargs for ODEProblem constructor:
 
-  - u0: initial condtions; if "nothing", default values will be used.
+  - u0: initial conditions; if "nothing", default values will be used.
   - p: parameters; if "nothing", default values will be used.
   - nonstiff_params: parameters for the non-stiff ODE system.
   - name: name of the system.
@@ -43,7 +43,7 @@ struct SolverStrangThreads <: SolverStrang
     timestep::AbstractFloat
     "Keyword arguments for the stiff ODEProblem constructor and solver."
     stiff_kwargs::Any
-    "Algoritm for performing gridded computations."
+    "Algorithm for performing gridded computations."
     alg::MapAlgorithm
 
     function SolverStrangThreads(
@@ -68,7 +68,7 @@ The solution will be calculated in serial.
 
 Additional kwargs for ODEProblem constructor:
 
-  - u0: initial condtions; if "nothing", default values will be used.
+  - u0: initial conditions; if "nothing", default values will be used.
   - p: parameters; if "nothing", default values will be used.
 
 $(FIELDS)
@@ -82,7 +82,7 @@ struct SolverStrangSerial <: SolverStrang
     timestep::AbstractFloat
     "Keyword arguments for the stiff ODEProblem constructor and solver."
     stiff_kwargs::Any
-    "Algoritm for performing gridded computations."
+    "Algorithm for performing gridded computations."
     alg::MapAlgorithm
     function SolverStrangSerial(
             stiffalg, timestep, alg::MapAlgorithm = MapBroadcast(); stiff_kwargs...)
@@ -202,7 +202,7 @@ function threaded_ode_step!(u, IIchunks, integrators, time, step_length)
 end
 
 """
-Take a step using the ODE solver with the given IIchunk (grid cell interator) and integrator.
+Take a step using the ODE solver with the given IIchunk (grid cell iterator) and integrator.
 """
 function single_ode_step!(u, IIchunk, integrator, time, step_length)
     for ii in IIchunk
