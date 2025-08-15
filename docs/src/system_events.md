@@ -43,7 +43,7 @@ To handle this type of situation, `EarthSciML` includes the idea of "system even
 To create a system event, we need to create a function that takes a ModelingToolkit system as the argument and returns a ModelingToolkit event,
 and then associate that function with the `:sys_discrete_event` key in the metadata dictionary of the system component in question.
 
-The code below does several things. First, it creates a function to determine wether a given variable is needed to solve the system or not.
+The code below does several things. First, it creates a function to determine whether a given variable is needed to solve the system or not.
 Then, it creates "system event functions" for our two component systems, directing each system to increment its parameter value during the simulation, but only if the corresponding variable is needed for the simulation.
 Finally, it includes two "runcount" variables to keep track of how many times each system event is called.
 

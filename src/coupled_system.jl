@@ -126,7 +126,7 @@ metadata for specifying a discrete system event.
 struct SysDiscreteEvent end
 
 """
-Retuns the `sys_discrete_event` function associated with the given system, which
+Returns the `sys_discrete_event` function associated with the given system, which
 is meant to be a function that takes the fully coupled ModelingToolkit System and returns
 a discrete event that should be applied to it.
 """

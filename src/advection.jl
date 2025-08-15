@@ -89,11 +89,10 @@ Construct a constant wind velocity model component with the given wind speed(s),
 should include units. For example, `ConstantWind(t, 1u"m/s", 2u"m/s")`.
 """
 function ConstantWind(t, vals...; name = :ConstantWind)
-    counts = ["st", "nd", "rd", "th", "th", "th", "th"]
     uvars = Num[]
     for (i, val) in enumerate(vals)
         sym = Symbol("v_$i")
-        desc = "Constant wind speed in the $(i)$(counts[i]) direction."
+        desc = "Constant wind speed."
         if val isa DynamicQuantities.AbstractQuantity
             uv = only(@variables $sym(t), [unit = val / ustrip(val), description = desc])
         else
