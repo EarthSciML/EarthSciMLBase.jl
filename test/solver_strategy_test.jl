@@ -127,7 +127,8 @@ du2 = scimlop(reshape(u, :), p, 0.0)
 @test du2 ≈ reshape(du, :)
 
 grid = EarthSciMLBase.grid(domain)
-prob = ODEProblem(mtkcompile(sys), [], (0.0, 1.0),
+sys1 = mtkcompile(sys)
+prob = ODEProblem(sys1, [], (0.0, 1.0),
     [
         lon => grid[1][1], lat => grid[2][1], lev => grid[3][1]
     ])
@@ -146,8 +147,11 @@ IIchunks, integrators = EarthSciMLBase._strang_integrators(st, domain, f_ode, u0
 
 EarthSciMLBase.threaded_ode_step!(u, IIchunks, integrators, 0.0, 1.0)
 
-@test u[1, 1, 1, 1] ≈ sol1.u[end][1]
-@test u[2, 1, 1, 1] ≈ sol1.u[end][2]
+let
+    varsyms = EarthSciMLBase.var2symbol.(unknowns(sys_coords))
+    @test u[1, 1, 1, 1] ≈ sol1[varsyms[1]][end]
+    @test u[2, 1, 1, 1] ≈ sol1[varsyms[2]][end]
+end
 
 @test sum(abs.(u)) ≈ 212733.04492722102
 
@@ -161,7 +165,8 @@ EarthSciMLBase.threaded_ode_step!(u, IIchunks, integrators, 0.0, 1.0)
     uu = EarthSciMLBase.init_u(sys_coords, domain)
     prob = ODEProblem(f, uu[:], (0.0, 1.0), p)
     sol = solve(prob, Tsit5())
-    u_perm = [findfirst(isequal(u), unknowns(sys_coords)) for u in unknowns(sys_mtk)]
+    varsyms = [Symbol("sys₊", v) for v in EarthSciMLBase.var2symbol.(unknowns(sys1))]
+    u_perm = [findfirst(isequal(u), varsyms) for u in EarthSciMLBase.var2symbol.(unknowns(sys_mtk))]
     uu = reshape(sol.u[end], size(ucopy)...)[u_perm, :, :, :]
     @test uu[:]≈u[:] rtol=0.01
 
