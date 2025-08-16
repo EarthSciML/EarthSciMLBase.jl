@@ -22,6 +22,7 @@ function EarthSciMLBase.get_odefunction(
     II = CartesianIndices(tuple(size(domain)...))
     c1, c2, c3 = EarthSciMLBase.grid(domain)
     obscache = zeros(EarthSciMLBase.dtype(domain), 4)
+    T = eltype(domain)
     sz = length.(EarthSciMLBase.grid(domain))
 
     function run(du, u, p, t) # In-place
@@ -42,13 +43,12 @@ function EarthSciMLBase.get_odefunction(
     function run(u, p, t) # Out-of-place
         u = reshape(u, :, sz...)
         II = CartesianIndices(size(u)[2:end])
-        du = vcat([begin
-                       t1, t2,
-                       t3, fv = obs_f(view(u, :, I), p, t,
-                           c1[I[1]], c2[I[2]], c3[I[3]])
-                       (t1 + t2 + t3) * fv
-                   end
-                   for ix in 1:size(u, 1), I in II]...)
+        du = [begin
+                  t1, t2, t3, fv = obs_f(view(u, :, I), p, t,
+                      T(c1[I[1]]), T(c2[I[2]]), T(c3[I[3]]))
+                  (t1 + t2 + t3) * fv
+              end
+              for ix in 1:size(u, 1), I in II]
         reshape(du, :)
     end
     return run
@@ -65,7 +65,7 @@ t_max = 11.5
 
 @parameters y lon=0.0 lat=0.0 lev=1.0 α=10.0
 @constants p = 1.0
-@variables(u(t)=1.0, v(t)=1.0, x(t), [unit=u"1/m"], y(t), [unit=u"1/m"], z(t),
+@variables(u(t)=1.0, v(t)=1.0, x(t), [unit = u"1/m"], y(t), [unit = u"1/m"], z(t),
     windspeed(t))
 
 indepdomain = t ∈ Interval(t_min, t_max)
@@ -80,11 +80,11 @@ domain = DomainInfo(
         0.1, 0.1, 1.0])
 
 eqs = [D(u) ~ -α * √abs(v) + lon,
-    D(v) ~ -α * √abs(u) + lat + lev * 1e-14,
+    D(v) ~ -α * √abs(u) + lat + lev * 1.0f-14,
     windspeed ~ lat + lon + lev,
-    x ~ 1.0 / EarthSciMLBase.lon2meters(lat),
-    y ~ 1.0 / EarthSciMLBase.lat2meters,
-    z ~ 1.0 / lev
+    x ~ 1 / EarthSciMLBase.lon2meters(lat),
+    y ~ 1 / EarthSciMLBase.lat2meters,
+    z ~ 1 / lev
 ]
 sys = System(eqs, t, name = :sys)
 
@@ -229,16 +229,23 @@ st = SolverStrangThreads(Tsit5(), 1.0)
 
 @testset "Float32" begin
     domain = DomainInfo(
-        partialderivatives_δxyδlonlat,
         constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
         u_proto = zeros(Float32, 1, 1, 1, 1), grid_spacing = [0.1, 0.1, 1])
 
     csys = couple(sys, op, domain)
 
     prob = ODEProblem(csys, st)
+    @test eltype(prob.f(prob.u0[:], prob.p, prob.tspan[1])) == Float32
     sol = solve(prob, Euler(); dt = 1.0)
 
     @test sum(abs.(sol.u[end])) ≈ 3.820642384890682e7
+
+    @testset "Split problem" begin
+        prob = ODEProblem(csys, SolverIMEX())
+        @test eltype(prob.f(prob.u0[:], prob.p, prob.tspan[1])) == Float32
+        @test eltype(prob.f.f1(prob.u0[:], prob.p, prob.tspan[1])) == Float32
+        @test eltype(prob.f.f2(prob.u0[:], prob.p, prob.tspan[1])) == Float32
+    end
 end
 
 @testset "No operator" begin

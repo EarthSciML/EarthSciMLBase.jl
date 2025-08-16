@@ -313,7 +313,7 @@ function partialderivative_transforms(xs, di::DomainInfo)
         if i in keys(fs)
             push!(ts, fs[i])
         else
-            push!(ts, 1.0)
+            push!(ts, 1)
         end
     end
     ts

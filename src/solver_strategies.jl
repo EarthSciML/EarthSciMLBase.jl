@@ -43,6 +43,7 @@ function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0 = nothing,
         st.alg; sparse = st.stiff_sparse,
         tgrad = st.stiff_tgrad)
 
+    type_convert_params(sys_mtk, u0)
     p = MTKParameters(sys_mtk, defaults(sys_mtk))
 
     f2 = nonstiff_ops(sys, sys_mtk, coord_args, dom, u0, p, st.alg)
@@ -64,4 +65,20 @@ function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0 = nothing,
 end
 function ODEProblem(sys::CoupledSystem, st::SolverIMEX; kwargs...)
     ODEProblem{true}(sys, st; kwargs...)
+end
+
+"""
+Convert the floating point parameters in `sys` to the element type of `u`.
+
+This is only needed until https://github.com/SciML/ModelingToolkit.jl/issues/3709
+is resolved.
+"""
+function type_convert_params(sys::System, u::AbstractArray)
+    T = eltype(u)
+    dflt = defaults(sys)
+    for p in keys(dflt)
+        if dflt[p] isa AbstractFloat
+            dflt[p] = T(dflt[p])
+        end
+    end
 end

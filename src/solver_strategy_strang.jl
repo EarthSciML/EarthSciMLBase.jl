@@ -136,6 +136,8 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = no
 
     u0 = isnothing(u0) ? init_u(sys_mtk, dom) : u0
 
+    type_convert_params(sys_mtk, u0)
+
     grd = grid(dom)
     sparse = :sparse in keys(st.stiff_kwargs) ? st.stiff_kwargs[:sparse] : false
     f_ode, u0_single, p = _strang_ode_func(sys_mtk, coord_args, (start, finish), grd;
