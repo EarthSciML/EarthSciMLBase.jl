@@ -4,7 +4,6 @@ using DomainSets
 using Test
 using SymbolicIndexingInterface
 using OrdinaryDiffEqTsit5
-using JLArrays
 t = ModelingToolkit.t_nounits
 D = ModelingToolkit.D_nounits
 
