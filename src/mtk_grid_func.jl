@@ -26,7 +26,7 @@ struct MapKernel <: MapAlgorithm
     end
 end
 
-function map_closure_to_range(f, range, ::MapAlgorithm=MapThreads(), args...)
+function map_closure_to_range(f, range, ::MapAlgorithm = MapThreads(), args...)
     ThreadsX.map(range) do i
         f(i, args...)
     end

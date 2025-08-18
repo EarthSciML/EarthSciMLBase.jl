@@ -140,7 +140,8 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = no
 
     grd = grid(dom)
     sparse = :sparse in keys(st.stiff_kwargs) ? st.stiff_kwargs[:sparse] : false
-    f_ode, u0_single, p = _strang_ode_func(sys_mtk, coord_args, (start, finish), grd;
+    f_ode, u0_single,
+    p = _strang_ode_func(sys_mtk, coord_args, (start, finish), grd;
         sparse = sparse)
 
     IIchunks, stiff_integrators = _strang_integrators(st, dom, f_ode, u0_single, start, p)

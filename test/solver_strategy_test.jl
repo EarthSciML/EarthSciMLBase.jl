@@ -44,8 +44,7 @@ function EarthSciMLBase.get_odefunction(
         u = reshape(u, :, sz...)
         II = CartesianIndices(size(u)[2:end])
         du = [begin
-                  t1, t2, t3, fv = obs_f(view(u, :, I), p, t,
-                      T(c1[I[1]]), T(c2[I[2]]), T(c3[I[3]]))
+                  t1, t2, t3, fv = obs_f(view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
                   (t1 + t2 + t3) * fv
               end
               for ix in 1:size(u, 1), I in II]
@@ -65,7 +64,7 @@ t_max = 11.5
 
 @parameters y lon=0.0 lat=0.0 lev=1.0 α=10.0
 @constants p = 1.0
-@variables(u(t)=1.0, v(t)=1.0, x(t), [unit = u"1/m"], y(t), [unit = u"1/m"], z(t),
+@variables(u(t)=1.0, v(t)=1.0, x(t), [unit=u"1/m"], y(t), [unit=u"1/m"], z(t),
     windspeed(t))
 
 indepdomain = t ∈ Interval(t_min, t_max)
