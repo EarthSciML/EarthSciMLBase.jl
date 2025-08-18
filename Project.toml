@@ -4,6 +4,7 @@ authors = ["EarthSciML Authors and Contributors"]
 version = "0.24.0"
 
 [deps]
+AcceleratedKernels = "6a4ca0a5-0e36-4168-a932-d9be78d558f1"
 Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -24,6 +25,7 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 ThreadsX = "ac1d9e8a-700a-412c-b207-f0111f4b6c0d"
 
 [compat]
+AcceleratedKernels = "0.4.3"
 Accessors = "0.1.42"
 ArrayInterface = "7.18.0"
 DiffEqCallbacks = "4.3"
@@ -36,6 +38,7 @@ JLArrays = "0.2.0"
 LinearSolve = "3.7.2"
 MacroTools = "0.5.15"
 MetaGraphsNext = "0.5, 0.6, 0.7"
+Metal = "1.7.0"
 MethodOfLines = "0.11.7"
 ModelingToolkit = "10.4"
 OrdinaryDiffEqLowOrderRK = "1.2.0"
@@ -58,6 +61,7 @@ DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 JLArrays = "27aeb0d3-9eb9-45fb-866b-73c2ecf80fcb"
 LinearSolve = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
+Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
 MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 OrdinaryDiffEqLowOrderRK = "1344f307-1e59-4825-a18e-ace9aa3fa4c6"
 OrdinaryDiffEqSDIRK = "2d112036-d095-4a1e-ab9a-08536f3ecdbf"
@@ -69,4 +73,4 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [targets]
-test = ["Documenter", "Test", "SafeTestsets", "ForwardDiff", "JLArrays", "LinearSolve", "MethodOfLines", "Dates", "DomainSets", "OrdinaryDiffEqLowOrderRK", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqTsit5", "SciMLBase", "SciMLSensitivity", "Zygote"]
+test = ["Documenter", "Test", "SafeTestsets", "ForwardDiff", "Metal", "LinearSolve", "MethodOfLines", "Dates", "DomainSets", "OrdinaryDiffEqLowOrderRK", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqTsit5", "SciMLBase", "SciMLSensitivity", "Zygote"]

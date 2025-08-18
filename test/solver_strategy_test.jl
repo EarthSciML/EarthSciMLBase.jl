@@ -274,19 +274,21 @@ end
     @test du[1] ≈ -13.141593f0
 end
 
-@testset "Metal GPU" begin
-    using Metal
-    ucopy = MtlArray(Float32.(u))
-    domain = DomainInfo(
-        constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
-        u_proto = ucopy, grid_spacing = [0.1, 0.1, 1])
+if Sys.isapple()
+    @testset "Metal GPU" begin
+        using Metal
+        ucopy = MtlArray(Float32.(u))
+        domain = DomainInfo(
+            constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
+            u_proto = ucopy, grid_spacing = [0.1, 0.1, 1])
 
-    csys = couple(sys, domain)
+        csys = couple(sys, domain)
 
-    prob = ODEProblem(csys, SolverIMEX(MapKernel()))
-    du = similar(prob.u0)
-    prob.f(du, prob.u0, prob.p, prob.tspan[1])
-    @test Array(du)[1] ≈ -13.141593f0
+        prob = ODEProblem(csys, SolverIMEX(MapKernel()))
+        du = similar(prob.u0)
+        prob.f(du, prob.u0, prob.p, prob.tspan[1])
+        @test Array(du)[1] ≈ -13.141593f0
+    end
 end
 
 @testset "SimulatorStrategies" begin
