@@ -115,6 +115,7 @@ struct DomainInfo{ET, AT}
 
         boundaries = [] # Boundary conditions
         grid_spacing = []
+        gridT = Float64 # Grid spacing is always Float64 to avoid precision issues.
         if !isnothing(latrange)
             @assert maximum(abs.(latrange))<=π "Latitude must be in radians."
             @assert maximum(abs.(lonrange))<=2π "Longitude must be in radians."
@@ -124,7 +125,7 @@ struct DomainInfo{ET, AT}
                 unit = u"rad", description = "Latitude"])
             push!(boundaries, lon ∈ Interval(et.([first(lonrange), last(lonrange)])...))
             push!(boundaries, lat ∈ Interval(et.([first(latrange), last(latrange)])...))
-            push!(grid_spacing, et.([step(lonrange), step(latrange)])...)
+            push!(grid_spacing, gridT.([step(lonrange), step(latrange)])...)
         else
             x = only(@parameters x=mean(xrange) [
                 unit = u"m", description = "East-West Distance"])
@@ -132,12 +133,12 @@ struct DomainInfo{ET, AT}
                 unit = u"m", description = "North-South Distance"])
             push!(boundaries, x ∈ Interval(et.([first(xrange), last(xrange)])...))
             push!(boundaries, y ∈ Interval(et.([first(yrange), last(yrange)])...))
-            push!(grid_spacing, et.([step(xrange), step(yrange)])...)
+            push!(grid_spacing, gridT.([step(xrange), step(yrange)])...)
         end
         if !isnothing(levrange)
             lev = only(@parameters lev=mean(levrange) [description = "Level Index"])
             push!(boundaries, lev ∈ Interval(et.([first(levrange), last(levrange)])...))
-            push!(grid_spacing, et(step(levrange)))
+            push!(grid_spacing, gridT(step(levrange)))
         end
         bcs = constBC(et(0.0), boundaries...)
         new{et, at}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, tref)
@@ -195,7 +196,8 @@ $(SIGNATURES)
 Return the endpoints of the partial independent
 variables for this domain.
 """
-function endpoints(d::DomainInfo{T}) where {T}
+function endpoints(d::DomainInfo)
+    T = Float64 # Enpoints are always Float64 to avoid rounding issues.
     bcs = filter((icbc) -> icbc isa BCcomponent, d.icbc)
     rngs = NTuple{2, T}[]
     for bc in bcs
