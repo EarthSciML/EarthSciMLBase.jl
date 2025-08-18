@@ -1,4 +1,4 @@
-export MapAlgorithm, MapBroadcast, MapThreads, map_closure_to_range
+export MapAlgorithm, MapBroadcast, MapThreads, MapKernel, map_closure_to_range
 
 """
 A type to specify the algorithm used for performing a computation
@@ -14,10 +14,37 @@ struct MapBroadcast <: MapAlgorithm end
 Perform computations in parallel using multi-threading.
 """
 struct MapThreads <: MapAlgorithm end
+"""
+Perform computations on CPU or GPU using AcceleratedKernels.jl.
 
-map_closure_to_range(f, range) = ThreadsX.map(f, range)
-map_closure_to_range(f, range, ::MapBroadcast) = f.(range)
-map_closure_to_range(f, range, ::MapThreads) = ThreadsX.map(f, range)
+kwargs are passed to the AcceleratedKernels.jl `foreachindex` function.
+"""
+struct MapKernel <: MapAlgorithm
+    kwargs::Dict{Symbol, Any}
+    function MapKernel(; kwargs...)
+        new(kwargs)
+    end
+end
+
+function map_closure_to_range(f, range, ::MapAlgorithm=MapThreads(), args...)
+    ThreadsX.map(range) do i
+        f(i, args...)
+    end
+end
+function map_closure_to_range(f, range, ::MapBroadcast, args...)
+    f2(i) = f(i, args...)
+    f2.(range)
+end
+function map_closure_to_range(f, range, mk::MapKernel, args...)
+    bknd = if (length(args) > 0) && (args[1] isa AbstractArray)
+        AK.get_backend(args[1])
+    else
+        error("No backend specified for MapKernel. Please provide an array as the first argument.")
+    end
+    AK.foreachindex(range, bknd; mk.kwargs...) do i
+        f(i, args...)
+    end
+end
 
 # Move coordinate variables from the parameter list of a function to the argument list.
 # This is useful for creating functions that take coordinates as arguments.
@@ -118,26 +145,28 @@ function build_coord_observed_function(sys_coord, coord_args, vars; kwargs...)
     gen_coord_func(sys_coord, exprs, coord_args; kwargs...)
 end
 
-function _mtk_grid_func(sys_mtk, mtkf, domain, alg::MA) where {MA <: MapAlgorithm}
+function _mtk_grid_func(sys_mtk, mtkf, domain::DomainInfo{ET, AT},
+        alg::MA) where {ET, AT, MA <: MapAlgorithm}
     nrows = length(unknowns(sys_mtk))
     II = CartesianIndices(tuple(size(domain)...))
-    c1, c2, c3 = grid(domain)
+    ATvec = typeof(reshape(AT(zeros(ET, 1, 1, 1, 1)), :))
+    c1, c2, c3 = map(zip(grid(domain), 1:3)) do (c, j)
+        ATvec([c[II[i][j]] for i in 1:length(II)])
+    end
     function f(du::AbstractVector, u::AbstractVector, p, t) # In-place
         u = reshape(u, nrows, :)
         du = reshape(du, nrows, :)
-        function f(j)
-            mtkf(view(du, :, j), view(u, :, j), p, t,
-                c1[II[j][1]], c2[II[j][2]], c3[II[j][3]])
+        function f(j, du, u, p, t, c1, c2, c3)
+            mtkf(view(du, :, j), view(u, :, j), p, t, c1[j], c2[j], c3[j])
         end
-        map_closure_to_range(f, 1:size(u, 2), alg)
+        map_closure_to_range(f, 1:size(u, 2), alg, du, u, p, t, c1, c2, c3)
         nothing
     end
     function f(u, p, t) # Out-of-place
         u = reshape(u, nrows, :)
         du = Vector{Vector{eltype(u)}}(undef, size(u, 2))
-        f(j) = du[j] = mtkf(view(u, :, j), p, t,
-            c1[II[j][1]], c2[II[j][2]], c3[II[j][3]])
-        map_closure_to_range(f, 1:size(u, 2), alg)
+        f(j, u, p, t, c1, c2, c3) = du[j] = mtkf(view(u, :, j), p, t, c1[j], c2[j], c3[j])
+        map_closure_to_range(f, 1:size(u, 2), alg, u, p, t, c1, c2, c3)
         reshape(hcat(du...), :)
     end
     return f

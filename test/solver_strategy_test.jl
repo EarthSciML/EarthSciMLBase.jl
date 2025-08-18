@@ -262,6 +262,33 @@ end
     @test sum(abs.(sol.u[end])) ≈ 3.8660308f7
 end
 
+@testset "MapKernel" begin
+    ucopy = Float32.(u)
+    domain = DomainInfo(
+        constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
+        u_proto = ucopy, grid_spacing = [0.1, 0.1, 1])
+    csys = couple(sys, domain)
+    prob = ODEProblem(csys, SolverIMEX(MapKernel()))
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, prob.tspan[1])
+    @test du[1] ≈ -13.141593f0
+end
+
+@testset "Metal GPU" begin
+    using Metal
+    ucopy = MtlArray(Float32.(u))
+    domain = DomainInfo(
+        constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
+        u_proto = ucopy, grid_spacing = [0.1, 0.1, 1])
+
+    csys = couple(sys, domain)
+
+    prob = ODEProblem(csys, SolverIMEX(MapKernel()))
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, prob.tspan[1])
+    @test Array(du)[1] ≈ -13.141593f0
+end
+
 @testset "SimulatorStrategies" begin
     @testset "Strang Threads" begin
         st = SolverStrangThreads(Tsit5(), 1.0)

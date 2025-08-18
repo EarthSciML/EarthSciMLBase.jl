@@ -46,6 +46,10 @@ function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0 = nothing,
     type_convert_params(sys_mtk, u0)
     p = MTKParameters(sys_mtk, defaults(sys_mtk))
 
+    if st.alg isa MapKernel
+        p = bitsify_params(p)
+    end
+
     f2 = nonstiff_ops(sys, sys_mtk, coord_args, dom, u0, p, st.alg)
 
     cb = []
@@ -81,4 +85,24 @@ function type_convert_params(sys::System, u::AbstractArray)
             dflt[p] = T(dflt[p])
         end
     end
+end
+
+"""
+Convert parameters to bitstypes so that they can be used on the GPU.
+"""
+function bitsify_params(p::MTKParameters, op = tuple)
+    tunable = op(p.tunable...)
+    initials = op(p.initials...)
+    discrete = Tuple(eltype(buf) <: Real ? op(buf...) : copy.(buf) for buf in p.discrete)
+    constant = Tuple(eltype(buf) <: Real ? op(buf...) : copy.(buf) for buf in p.constant)
+    nonnumeric = isempty(p.nonnumeric) ? p.nonnumeric : copy.(p.nonnumeric)
+    caches = isempty(p.caches) ? p.caches : copy.(p.caches)
+    return MTKParameters(
+        tunable,
+        initials,
+        discrete,
+        constant,
+        nonnumeric,
+        caches
+    )
 end
