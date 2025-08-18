@@ -197,7 +197,7 @@ Return the endpoints of the partial independent
 variables for this domain.
 """
 function endpoints(d::DomainInfo)
-    T = Float64 # Enpoints are always Float64 to avoid rounding issues.
+    T = Float64 # Endpoints are always Float64 to avoid rounding issues.
     bcs = filter((icbc) -> icbc isa BCcomponent, d.icbc)
     rngs = NTuple{2, T}[]
     for bc in bcs
