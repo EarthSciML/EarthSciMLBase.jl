@@ -328,6 +328,16 @@ function init_u(mtk_sys::System, d::DomainInfo{ET, AT}) where {ET, AT}
     k in eachindex(g[2]), l in eachindex(g[3])])
 end
 
+"""
+    $(SIGNATURES)
+
+Initialize an arrays with the given dimensions
+"""
+function init_array(d::DomainInfo{ET, AT}, sizes...) where {ET, AT}
+    x = AT(zeros(ET, 1, 1, 1, (*)(sizes...)))
+    reshape(x, sizes...)
+end
+
 function default_params(mtk_sys::AbstractSystem)
     dflts = ModelingToolkit.get_defaults(mtk_sys)
     MTKParameters(mtk_sys, dflts)

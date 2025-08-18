@@ -193,6 +193,21 @@ end
 """
 $(SIGNATURES)
 
+Return the concrete grid representation for this domain, as a Vector including the grid
+points for the entire 3D domain.
+"""
+function concrete_grid(domain::DomainInfo{ET, AT}) where {ET, AT}
+    g = grid(domain)
+    II = CartesianIndices(tuple(size(domain)...))
+    ATvec = typeof(reshape(AT(zeros(ET, 1, 1, 1, 1)), :))
+    map(enumerate(g)) do (j, c)
+        ATvec([c[II[i][j]] for i in 1:length(II)])
+    end
+end
+
+"""
+$(SIGNATURES)
+
 Return the endpoints of the partial independent
 variables for this domain.
 """

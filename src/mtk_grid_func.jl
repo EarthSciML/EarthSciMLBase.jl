@@ -148,11 +148,7 @@ end
 function _mtk_grid_func(sys_mtk, mtkf, domain::DomainInfo{ET, AT},
         alg::MA) where {ET, AT, MA <: MapAlgorithm}
     nrows = length(unknowns(sys_mtk))
-    II = CartesianIndices(tuple(size(domain)...))
-    ATvec = typeof(reshape(AT(zeros(ET, 1, 1, 1, 1)), :))
-    c1, c2, c3 = map(zip(grid(domain), 1:3)) do (c, j)
-        ATvec([c[II[i][j]] for i in 1:length(II)])
-    end
+    c1, c2, c3 = concrete_grid(domain)
     function f(du::AbstractVector, u::AbstractVector, p, t) # In-place
         u = reshape(u, nrows, :)
         du = reshape(du, nrows, :)
@@ -174,8 +170,8 @@ end
 
 # Return a function to apply the MTK system to each column of u after reshaping to a matrix.
 function mtk_grid_func(
-        sys_mtk::System, domain::DomainInfo{T}, u0, alg::MA = MapBroadcast();
-        sparse = false, tgrad = false, vjp = true) where {T, MA <: MapAlgorithm}
+        sys_mtk::System, domain::DomainInfo{T, AT}, u0, alg::MA = MapBroadcast();
+        sparse = false, tgrad = false, vjp = true) where {T,AT, MA <: MapAlgorithm}
     sys_mtk, coord_args = _prepare_coord_sys(sys_mtk, domain)
 
     mtkf_coord = build_coord_ode_function(sys_mtk, coord_args)
@@ -186,13 +182,11 @@ function mtk_grid_func(
     ncells = reduce(*, length.(grid(domain)))
     nvars = length(unknowns(sys_mtk))
 
-    if !sparse
-        single_jac_prototype = Matrix{eltype(u0)}(undef, nvars, nvars)
+    jac_prototype = if !sparse
+        BlockDiagonal(init_array(domain, nvars, nvars, ncells), alg)
     else
-        single_jac_prototype = ODEFunction(
-            sys_mtk, tgrad = tgrad, jac = true, sparse = sparse).jac_prototype
+        error("Sparse Jacobian not yet implemented for MTK grid functions.")
     end
-    jac_prototype = BlockDiagonal([similar(single_jac_prototype) for _ in 1:ncells], alg)
     jf = mtk_jac_grid_func(sys_mtk, jac_coord, domain, alg)
 
     kwargs = []
@@ -212,27 +206,21 @@ end
 # ngrid is the number of grid cells.
 function mtk_jac_grid_func(sys_mtk, jacf, domain, alg = MapBroadcast())
     nvar = length(unknowns(sys_mtk))
-    II = CartesianIndices(tuple(size(domain)...))
-    c1, c2, c3 = grid(domain)
-    function jac(out, u, p, t) # In-place
+    c1, c2, c3 = concrete_grid(domain)
+    function jac(J, u, p, t) # In-place
         u = reshape(u, nvar, :)
-        blks = blocks(out)
-        for r in 1:size(u, 2)
-            _u = view(u, :, r)
-            jacf(blks[r], _u, p, t, c1[II[r][1]], c2[II[r][2]], c3[II[r][3]])
+        function calcJ(r, u, J, p, t, c1, c2, c3)
+            jacf(view(J, :, :, r), view(u, :, r), p, t, c1[r], c2[r], c3[r])
+            return nothing
         end
+        map_closure_to_range(calcJ, 1:size(u, 2), alg, u, J.data, p, t, c1, c2, c3)
         nothing
     end
     function jac(u, p, t) # Out-of-place
         u = reshape(u, nvar, :)
-        calcJ(r) = jacf(view(u, :, r), p, t, c1[II[r][1]], c2[II[r][2]], c3[II[r][3]])
-        j1 = calcJ(1) # Do first block to get type and size
-        o = BlockDiagonal(Vector{typeof(j1)}(undef, size(u, 2)), size(j1, 1), alg)
-        blocks(o)[1] = j1
-        Threads.@threads for r in 2:size(u, 2) # Now do the rest
-            blocks(o)[r] = calcJ(r)
-        end
-        o
+        calcJ(r, u, p, t, c1, c2, c3) = jacf(view(u, :, r), p, t, c1[r], c2[r], c3[r])
+        blocks = map_closure_to_range(calcJ, 1:size(u, 2), alg, u, p, t, c1, c2, c3)
+        return BlockDiagonal(cat(blocks..., dims=3), alg)
     end
 end
 

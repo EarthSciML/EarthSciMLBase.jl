@@ -28,7 +28,7 @@ domain = DomainInfo(
         1.0, 1.0, 1.0])
 
 eqs = [D(u) ~ -α * √abs(v) + u + lon + β,
-    D(v) ~ -α * √abs(u) + lat + lev * 1e-14,
+    D(v) ~ -α * √abs(u) + lat + lev * 1.0f-14,
     windspeed ~ lon + 2lat + 3lev
 ]
 sys = System(eqs, t, name = :sys)
@@ -38,7 +38,8 @@ prob = ODEProblem(sys_simplified, [], (0.0, 1); jac = true, tgrad = true)
 solve(prob, Tsit5())
 
 sys_coord, coord_args = EarthSciMLBase._prepare_coord_sys(sys_simplified, domain)
-@test occursin("EarthSciMLBase._CoordTmpF(lon, 1)(t)", string(ModelingToolkit.observed(sys_coord)))
+@test occursin(
+    "EarthSciMLBase._CoordTmpF(lon, 1)(t)", string(ModelingToolkit.observed(sys_coord)))
 f = EarthSciMLBase.build_coord_ode_function(
     sys_coord, coord_args; eval_module = ModelingToolkit)
 p = MTKParameters(sys_coord, defaults(sys_coord))
@@ -83,20 +84,26 @@ u0 = EarthSciMLBase.init_u(sys_coord, domain)
         sol2 = solve(prob, Tsit5())
         @test sum(sol2.u[end]) ≈ -3029.442918648946
     end
-
-    @testset "In place GPU" begin
-        prob_gpu = ODEProblem(f, jl(reshape(u0, :)), (0.0, 1.0), p)
-        @test_broken sol = solve(prob_gpu, Tsit5())
-    end
-
-    @testset "Out of place GPU" begin
-        prob_gpu = ODEProblem{false}(f, jl(reshape(u0, :)), (0.0, 1.0), p)
-        @test_broken sol = solve(prob_gpu, Tsit5())
-    end
 end
 
 @testset "observed" begin
     obs_f = EarthSciMLBase.build_coord_observed_function(
         sys_coord, coord_args, [sys_coord.windspeed])
     @test [14] ≈ obs_f(reshape(u0, :), p, 0.0, 1, 2, 3)
+end
+
+if Sys.isapple()
+    @testset "GPU jacobian" begin
+        using Metal
+        domain = DomainInfo(
+            constIC(16.0, indepdomain), constBC(16.0, partialdomains...); grid_spacing = [
+                1.0, 1.0, 1.0],
+            u_proto = MtlArray(zeros(Float32, 1, 1, 1, 1)))
+        csys = couple(sys, domain)
+        prob = ODEProblem(csys, SolverIMEX(MapKernel(), stiff_sparse = false))
+
+        Jo = similar(prob.f.jac_prototype)
+        prob.f.jac(Jo, prob.u0, prob.p, prob.tspan[1])
+        @test Array(EarthSciMLBase.block(Jo, 1)) ≈ Jop
+    end
 end

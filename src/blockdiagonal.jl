@@ -3,40 +3,38 @@ using LinearAlgebra
 
 abstract type AbstractBlockDiagonal{T} <: AbstractMatrix{T} end
 
-blocks(B::AbstractBlockDiagonal) = B.blocks
-
-struct BlockDiagonal{T, V <: AbstractMatrix{T}, MA <: MapAlgorithm} <:
+struct BlockDiagonal{T, V <: AbstractArray{T, 3}, MA <: MapAlgorithm} <:
        AbstractBlockDiagonal{T}
-    blocks::Vector{V}
+    data::V
     n::Int
     alg::MA
 end
 
-"""
-    BlockDiagonal(blocks)
-    BlockDiagonal(blocks, ::MapAlgorithm)
+block(B::BlockDiagonal, i) = view(B.data, :, :, i)
+nblocks(B::BlockDiagonal) = size(B.data, 3)
 
-Creates a block-diagonal matrix given a vector of the `blocks`.
-The blocks must all be the same size and square.
+"""
+    BlockDiagonal(data)
+    BlockDiagonal(data, ::MapAlgorithm)
+
+Creates a block-diagonal matrix given a 3D array of the `data`.
+The first two dimensions of `data` must be the same, so that the blocks are square.
 """
 function BlockDiagonal(
-        blocks::Vector{V}, alg::MA) where {T, V <: AbstractMatrix{T}, MA <: MapAlgorithm}
-    @assert length(blocks)>0 "blocks must be non-empty"
-    rows = size.(blocks, (1,))
-    @assert all(diff(rows) .== 0) "All blocks must have the same number of rows"
-    cols = size.(blocks, (2,))
-    @assert all(diff(cols) .== 0) "All blocks must have the same number of columns"
-    @assert cols[1]==rows[1] "All blocks must be square"
+        data::V, alg::MA) where {T, V <: AbstractArray{T, 3}, MA <: MapAlgorithm}
+    rows = size(data, 1)
+    cols = size(data, 2)
+    @assert cols==rows "The blocks must be square"
 
-    return BlockDiagonal{T, V, MA}(blocks, rows[1], alg)
+    return BlockDiagonal{T, V, MA}(data, rows, alg)
 end
-BlockDiagonal(blocks) = BlockDiagonal(blocks, MapBroadcast())
+BlockDiagonal(data) = BlockDiagonal(data, MapBroadcast())
 
 function Base.size(B::AbstractBlockDiagonal)
-    N = length(B.blocks) * B.n
+    N = nblocks(B) * B.n
     return (N, N)
 end
-Base.size(B::AbstractBlockDiagonal, ::Int) = length(B.blocks) * B.n
+Base.size(B::AbstractBlockDiagonal, ::Int) = nblocks(B) * B.n
 
 _getblock(n, i) = (i - 1) ÷ n + 1
 _getr(n, i) = (i - 1) % n + 1
@@ -48,7 +46,7 @@ function Base.getindex(B::BlockDiagonal{T}, i::Integer, j::Integer) where {T}
     end
     r = _getr(B.n, i)
     c = _getr(B.n, j)
-    B.blocks[b][r, c]
+    B.data[r, c, b]
 end
 
 function Base.setindex!(B::BlockDiagonal, v, i::Integer, j::Integer)
@@ -58,29 +56,31 @@ function Base.setindex!(B::BlockDiagonal, v, i::Integer, j::Integer)
     end
     r = _getr(B.n, i)
     c = _getr(B.n, j)
-    B.blocks[b][r, c] = v
+    B.data[r, c, b] = v
 end
 
 function Base.Matrix(B::BlockDiagonal{T}) where {T}
     A = zeros(T, size(B))
-    for i in 1:length(B.blocks)
-        A[((i - 1) * B.n + 1):(i * B.n), ((i - 1) * B.n + 1):(i * B.n)] .= B.blocks[i]
+    for i in 1:nblocks(B)
+        r = ((i - 1) * B.n + 1):(i * B.n)
+        c = ((i - 1) * B.n + 1):(i * B.n)
+        @views A[r, c] .= B.data[:, :, i]
     end
     return A
 end
 
 for op in (:(Base.inv), :(Base.similar), :(Base.copy), :(Base.deepcopy_internal))
     eval(quote
-        $(op)(B::BlockDiagonal) = BlockDiagonal($op.(blocks(B)), B.n, B.alg)
+        $(op)(B::BlockDiagonal) = BlockDiagonal($op(B.data), B.n, B.alg)
     end)
 end
 
 for op! in (:(Base.copyto!),)
     eval(quote
         function $op!(A::BlockDiagonal, B::BlockDiagonal)
-            @assert length(A.blocks)==length(B.blocks) "Number of blocks must match"
+            @assert size(A.data)==size(B.data) "Number of blocks must match"
             @assert A.n==B.n "Block sizes must match"
-            $op!.(blocks(A), blocks(B))
+            $op!.(A.data, B.data)
         end
     end)
 end
@@ -96,6 +96,9 @@ struct BlockDiagonalLU{T, V <: AbstractVector{T}, MA <: MapAlgorithm} <:
 end
 BlockDiagonalLU(blocks, alg) = BlockDiagonalLU(blocks, size(blocks[1], 1), alg)
 
+block(B::BlockDiagonalLU, i) = B.blocks[i]
+nblocks(B::BlockDiagonalLU) = length(B.blocks)
+
 function LinearAlgebra.issuccess(F::BlockDiagonalLU; kwargs...)
     for b in blocks(F)
         if !LinearAlgebra.issuccess(b; kwargs...)
@@ -105,26 +108,32 @@ function LinearAlgebra.issuccess(F::BlockDiagonalLU; kwargs...)
     return true
 end
 
+function ArrayInterface.lu_instance(::MtlMatrix{Float32, Metal.PrivateStorage})
+    LU{Float32, MtlMatrix{Float32, Metal.PrivateStorage},
+        MtlVector{UInt32, Metal.PrivateStorage}}
+end
+
 function ArrayInterface.lu_instance(B::AbstractBlockDiagonal)
-    return BlockDiagonalLU([ArrayInterface.lu_instance(b) for b in blocks(B)], B.n, B.alg)
+    return BlockDiagonalLU(
+        [ArrayInterface.lu_instance(block(B, i)) for i in 1:nblocks(B)], B.n, B.alg)
 end
 
 function LinearAlgebra.lu!(B::AbstractBlockDiagonal, args...; kwargs...)
     o = BlockDiagonalLU(
-        Vector{typeof(ArrayInterface.lu_instance(blocks(B)[1]))}(undef, length(blocks(B))),
+        Vector{typeof(ArrayInterface.lu_instance(block(B, 1)))}(undef, nblocks(B)),
         B.n, B.alg)
-    flu!(i) = o.blocks[i] = lu!(blocks(B)[i], args...; kwargs...)
-    map_closure_to_range(flu!, eachindex(blocks(B)), B.alg)
+    flu!(i) = o.blocks[i] = lu!(block(B, i), args...; kwargs...)
+    map_closure_to_range(flu!, 1:nblocks(B), B.alg)
     o
 end
 
 function LinearAlgebra.lu(B::AbstractBlockDiagonal, args...; kwargs...)
     o = BlockDiagonalLU(
-        Vector{typeof(ArrayInterface.lu_instance(blocks(B)[1]))}(
-            undef, length(blocks(B))),
+        Vector{typeof(ArrayInterface.lu_instance(block(B, 1)))}(
+            undef, nblocks(B)),
         B.n, B.alg)
-    flu(i) = o.blocks[i] = lu(blocks(B)[i], args...; kwargs...)
-    map_closure_to_range(flu, eachindex(blocks(B)), B.alg)
+    flu(i) = o.blocks[i] = lu(block(B, i), args...; kwargs...)
+    map_closure_to_range(flu, 1:nblocks(B), B.alg)
     o
 end
 
@@ -133,30 +142,31 @@ function LinearAlgebra.ldiv!(
     @assert size(x)==size(b) "dimensions of x and b must match"
     @assert size(A, 1)==size(b, 1) "number of rows must match"
     function fldiv!(i)
-        block = blocks(A)[i]
+        blck = block(A, i)
         rng = ((i - 1) * A.n + 1):(i * A.n)
         _x = view(x, rng, :)
         _b = view(b, rng, :)
-        ldiv!(_x, block, _b; kwargs...)
+        ldiv!(_x, blck, _b; kwargs...)
     end
-    map_closure_to_range(fldiv!, eachindex(blocks(A)), A.alg)
+    map_closure_to_range(fldiv!, 1:nblocks(A), A.alg)
     x
 end
 
 function LinearAlgebra.:\(A::BlockDiagonalLU, b::T) where {T <: AbstractVector}
     @assert size(A, 1)==size(b, 1) "number of rows must match"
-    o = Vector{T}(undef, length(blocks(A)))
+    o = Vector{T}(undef, length(A.blocks))
     function backslashf(i)
-        block = blocks(A)[i]
+        blck = block(A, i)
         rng = ((i - 1) * A.n + 1):(i * A.n)
         _b = view(b, rng)
-        o[i] = block \ _b
+        o[i] = blck \ _b
     end
-    map_closure_to_range(backslashf, eachindex(blocks(A)), A.alg)
+    map_closure_to_range(backslashf, 1:nblocks(A), A.alg)
     vcat(o...)
 end
 
 function Base.:+(B::BlockDiagonal, M::UniformScaling)
-    plusf(i) = blocks(B)[i] + M
-    BlockDiagonal(map_closure_to_range(plusf, eachindex(blocks(B)), B.alg), B.n, B.alg)
+    plusf(i) = block(B, i) + M
+    o = map_closure_to_range(plusf, 1:nblocks(B), B.alg)
+    BlockDiagonal(cat(o..., dims = 3), B.n, B.alg)
 end

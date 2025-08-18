@@ -3,7 +3,8 @@ using LinearAlgebra
 using Test
 
 @testset "LU" begin
-    x = BlockDiagonal([rand(3, 3), rand(3, 3)])
+    x = BlockDiagonal(rand(3, 3, 2))
+    @test size(x) == (6, 6)
     lux1 = lu(Matrix(x))
     lux2 = lu(x)
     lux3 = lu!(x)
@@ -16,7 +17,7 @@ end
 
 @testset "ldiv!" begin
     @testset "Vector" begin
-        x = BlockDiagonal([rand(3, 3), rand(3, 3)])
+        x = BlockDiagonal(rand(3, 3, 2))
         y = rand(6)
         z1 = LinearAlgebra.ldiv!(similar(y), lu(x), y)
         z2 = LinearAlgebra.ldiv!(similar(y), lu(Matrix(x)), y)
@@ -24,7 +25,7 @@ end
     end
 
     @testset "Matrix" begin
-        x = BlockDiagonal([rand(3, 3), rand(3, 3)])
+        x = BlockDiagonal(rand(3, 3, 2))
         y = rand(6, 2)
         z1 = LinearAlgebra.ldiv!(similar(y), lu(x), y)
         z2 = LinearAlgebra.ldiv!(similar(y), lu(Matrix(x)), y)
@@ -34,7 +35,7 @@ end
 
 @testset "backslash" begin
     @testset "Vector" begin
-        x = BlockDiagonal([rand(3, 3), rand(3, 3)])
+        x = BlockDiagonal(rand(3, 3, 2))
         y = rand(6)
         z1 = lu(x) \ y
         z2 = lu(Matrix(x)) \ y
@@ -43,7 +44,7 @@ end
 end
 
 @testset "Indexing" begin
-    x = BlockDiagonal([reshape(1:9, 3, 3), reshape(10:18, 3, 3)])
+    x =  BlockDiagonal(reshape(1.0:18, 3, 3,2))
 
     @testset "getindex" begin
         @test all(x[1:3, 1:3] .== reshape(1:9, 3, 3))
@@ -53,15 +54,15 @@ end
     end
 
     @testset "setindex!" begin
-        x = BlockDiagonal([rand(3, 3), rand(3, 3)])
+        x = BlockDiagonal(rand(3, 3, 2))
         x[1:3, 1:3] .= reshape(1:9, 3, 3)
         x[4:6, 4:6] .= reshape(10:18, 3, 3)
-        @test all(x.blocks .≈ [reshape(1:9, 3, 3), reshape(10:18, 3, 3)])
+        @test all(x.data .≈ reshape(1.0:18, 3, 3,2))
     end
 end
 
 @testset "plus" begin
-    x = BlockDiagonal([zeros(3, 3), zeros(3, 3)])
+    x = BlockDiagonal(zeros(3, 3, 2))
     y = x + UniformScaling(1.0)
     @test y isa BlockDiagonal
     @test y ≈ I(6)
