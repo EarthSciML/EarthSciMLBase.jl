@@ -271,8 +271,8 @@ end
     @test du[1] ≈ -13.141593f0
 end
 
-if Sys.isapple()
-    @testset "Metal GPU" begin
+#if Sys.isapple()
+#    @testset "Metal GPU" begin
         using Metal
         ucopy = MtlArray(Float32.(u))
         domain = DomainInfo(

@@ -1,4 +1,4 @@
-using EarthSciMLBase: BlockDiagonal
+using EarthSciMLBase: BlockDiagonal, block
 using LinearAlgebra
 using Test
 
@@ -7,12 +7,20 @@ using Test
     @test size(x) == (6, 6)
     lux1 = lu(Matrix(x))
     lux2 = lu(x)
+    @test lux1.L[1:3, 1:3] ≈ block(lux2, 1).L
+    @test lux1.U[1:3, 1:3] ≈ block(lux2, 1).U
+    @test lux1.L[4:6, 4:6] ≈ block(lux2, 2).L
+    @test lux1.U[4:6, 4:6] ≈ block(lux2, 2).U
     lux3 = lu!(x)
-    @test all([b1.L ≈ b2.L && b1.U ≈ b2.U for (b1, b2) in zip(lux2.blocks, lux3.blocks)])
-    @test lux1.L[1:3, 1:3] ≈ lux2.blocks[1].L
-    @test lux1.U[1:3, 1:3] ≈ lux2.blocks[1].U
-    @test lux1.L[4:6, 4:6] ≈ lux2.blocks[2].L
-    @test lux1.U[4:6, 4:6] ≈ lux2.blocks[2].U
+    @test lux1.L[1:3, 1:3] ≈ block(lux3, 1).L
+    @test lux1.U[1:3, 1:3] ≈ block(lux3, 1).U
+    @test lux1.L[4:6, 4:6] ≈ block(lux3, 2).L
+    @test lux1.U[4:6, 4:6] ≈ block(lux3, 2).U
+
+    @test LinearAlgebra.issuccess(lux1) == true
+
+    x = BlockDiagonal(zeros(3, 3, 2))
+    @test LinearAlgebra.issuccess(lu(x; check=false)) == false
 end
 
 @testset "ldiv!" begin
@@ -44,7 +52,7 @@ end
 end
 
 @testset "Indexing" begin
-    x =  BlockDiagonal(reshape(1.0:18, 3, 3,2))
+    x = BlockDiagonal(reshape(1.0:18, 3, 3, 2))
 
     @testset "getindex" begin
         @test all(x[1:3, 1:3] .== reshape(1:9, 3, 3))
@@ -57,7 +65,7 @@ end
         x = BlockDiagonal(rand(3, 3, 2))
         x[1:3, 1:3] .= reshape(1:9, 3, 3)
         x[4:6, 4:6] .= reshape(10:18, 3, 3)
-        @test all(x.data .≈ reshape(1.0:18, 3, 3,2))
+        @test all(x.data .≈ reshape(1.0:18, 3, 3, 2))
     end
 end
 
@@ -66,4 +74,10 @@ end
     y = x + UniformScaling(1.0)
     @test y isa BlockDiagonal
     @test y ≈ I(6)
+end
+
+@testset "Diagonal View" begin
+    x = BlockDiagonal(reshape(1:18, 3, 3, 2))
+    y = Matrix(x)
+    @test @view(x[diagind(x)]) == @view(y[diagind(y)])
 end

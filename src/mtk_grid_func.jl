@@ -26,23 +26,23 @@ struct MapKernel <: MapAlgorithm
     end
 end
 
-function map_closure_to_range(f, range, ::MapAlgorithm = MapThreads(), args...)
+function map_closure_to_range(f, range, ::MapAlgorithm = MapThreads(), args...; kwargs...)
     ThreadsX.map(range) do i
-        f(i, args...)
+        f(i, args...; kwargs...)
     end
 end
-function map_closure_to_range(f, range, ::MapBroadcast, args...)
-    f2(i) = f(i, args...)
+function map_closure_to_range(f, range, ::MapBroadcast, args...; kwargs...)
+    f2(i) = f(i, args...; kwargs...)
     f2.(range)
 end
-function map_closure_to_range(f, range, mk::MapKernel, args...)
+function map_closure_to_range(f, range, mk::MapKernel, args...; kwargs...)
     bknd = if (length(args) > 0) && (args[1] isa AbstractArray)
         AK.get_backend(args[1])
     else
         error("No backend specified for MapKernel. Please provide an array as the first argument.")
     end
     AK.foreachindex(range, bknd; mk.kwargs...) do i
-        f(i, args...)
+        f(i, args...; kwargs...)
     end
 end
 
