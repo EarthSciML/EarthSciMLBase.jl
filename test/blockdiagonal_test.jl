@@ -20,7 +20,7 @@ using Test
     @test LinearAlgebra.issuccess(lux1) == true
 
     x = BlockDiagonal(zeros(3, 3, 2))
-    @test LinearAlgebra.issuccess(lu(x; check=false)) == false
+    @test LinearAlgebra.issuccess(lu(x; check = false)) == false
 end
 
 @testset "ldiv!" begin

@@ -271,8 +271,8 @@ end
     @test du[1] ≈ -13.141593f0
 end
 
-#if Sys.isapple()
-#    @testset "Metal GPU" begin
+if Sys.isapple()
+    @testset "Metal GPU" begin
         using Metal
         ucopy = MtlArray(Float32.(u))
         domain = DomainInfo(
@@ -293,7 +293,7 @@ end
         prob.f(du, prob.u0, prob.p, prob.tspan[1])
         @test Array(du)[1] ≈ -3.5553088f0 + -13.141593f0
 
-        solve(prob, KenCarp47(linsolve = LUFactorization()))
+        @test_broken solve(prob, KenCarp47(linsolve = LUFactorization())) # Fails to ldiv!
     end
 end
 

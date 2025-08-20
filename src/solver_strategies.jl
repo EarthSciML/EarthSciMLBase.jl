@@ -25,7 +25,7 @@ struct SolverIMEX <: SolverStrategy
     alg::MapAlgorithm
     stiff_sparse::Bool
     stiff_tgrad::Bool
-    function SolverIMEX(alg = MapBroadcast(); stiff_sparse = true, stiff_tgrad = true)
+    function SolverIMEX(alg = MapBroadcast(); stiff_sparse = false, stiff_tgrad = true)
         new(alg, stiff_sparse, stiff_tgrad)
     end
 end
