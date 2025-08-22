@@ -1,51 +1,3 @@
-export MapAlgorithm, MapBroadcast, MapThreads, MapKernel, map_closure_to_range
-
-"""
-A type to specify the algorithm used for performing a computation
-across a range of grid cells.
-"""
-abstract type MapAlgorithm end
-
-"""
-Perform computations by broadcasting.
-"""
-struct MapBroadcast <: MapAlgorithm end
-"""
-Perform computations in parallel using multi-threading.
-"""
-struct MapThreads <: MapAlgorithm end
-"""
-Perform computations on CPU or GPU using AcceleratedKernels.jl.
-
-kwargs are passed to the AcceleratedKernels.jl `foreachindex` function.
-"""
-struct MapKernel <: MapAlgorithm
-    kwargs::Dict{Symbol, Any}
-    function MapKernel(; kwargs...)
-        new(kwargs)
-    end
-end
-
-function map_closure_to_range(f, range, ::MapAlgorithm = MapThreads(), args...; kwargs...)
-    ThreadsX.map(range) do i
-        f(i, args...; kwargs...)
-    end
-end
-function map_closure_to_range(f, range, ::MapBroadcast, args...; kwargs...)
-    f2(i) = f(i, args...; kwargs...)
-    f2.(range)
-end
-function map_closure_to_range(f, range, mk::MapKernel, args...; kwargs...)
-    bknd = if (length(args) > 0) && (args[1] isa AbstractArray)
-        AK.get_backend(args[1])
-    else
-        error("No backend specified for MapKernel. Please provide an array as the first argument.")
-    end
-    AK.foreachindex(range, bknd; mk.kwargs...) do i
-        f(i, args...; kwargs...)
-    end
-end
-
 # Move coordinate variables from the parameter list of a function to the argument list.
 # This is useful for creating functions that take coordinates as arguments.
 function rewrite_coord_func(x, coord_args, idv::Symbol)
@@ -170,8 +122,12 @@ end
 
 # Return a function to apply the MTK system to each column of u after reshaping to a matrix.
 function mtk_grid_func(
-        sys_mtk::System, domain::DomainInfo{T, AT}, u0, alg::MA = MapBroadcast();
-        sparse = false, tgrad = false, vjp = true) where {T,AT, MA <: MapAlgorithm}
+        sys_mtk::System, domain::DomainInfo{T, AT}, u0,
+        alg::MA = MapBroadcast(),
+        jac_type::JT = BlockDiagonalJacobian();
+        sparse = false, tgrad = false, vjp = true) where {
+        T, AT, MA <: MapAlgorithm, JT <: JacobianType}
+
     sys_mtk, coord_args = _prepare_coord_sys(sys_mtk, domain)
 
     mtkf_coord = build_coord_ode_function(sys_mtk, coord_args)
@@ -179,15 +135,10 @@ function mtk_grid_func(
 
     f = _mtk_grid_func(sys_mtk, mtkf_coord, domain, alg)
 
-    ncells = reduce(*, length.(grid(domain)))
     nvars = length(unknowns(sys_mtk))
 
-    jac_prototype = if !sparse
-        BlockDiagonal(init_array(domain, nvars, nvars, ncells), alg)
-    else
-        error("Sparse Jacobian not yet implemented for MTK grid functions.")
-    end
-    jf = mtk_jac_grid_func(sys_mtk, jac_coord, domain, alg)
+    jac_prototype = build_jacobian(jac_type, nvars, domain, alg, sparse)
+    jf = mtk_jac_grid_func(sys_mtk, jac_coord, domain, jac_type, alg)
 
     kwargs = []
     if tgrad
@@ -200,28 +151,6 @@ function mtk_grid_func(
         push!(kwargs, :vjp => vj)
     end
     ODEFunction(f; jac_prototype = jac_prototype, jac = jf, kwargs...), sys_mtk, coord_args
-end
-
-# Create a function to calculate the gridded Jacobian.
-# ngrid is the number of grid cells.
-function mtk_jac_grid_func(sys_mtk, jacf, domain, alg = MapBroadcast())
-    nvar = length(unknowns(sys_mtk))
-    c1, c2, c3 = concrete_grid(domain)
-    function jac(J, u, p, t) # In-place
-        u = reshape(u, nvar, :)
-        function calcJ(r, u, J, p, t, c1, c2, c3)
-            jacf(view(J, :, :, r), view(u, :, r), p, t, c1[r], c2[r], c3[r])
-            return nothing
-        end
-        map_closure_to_range(calcJ, 1:size(u, 2), alg, u, J.data, p, t, c1, c2, c3)
-        nothing
-    end
-    function jac(u, p, t) # Out-of-place
-        u = reshape(u, nvar, :)
-        calcJ(r, u, p, t, c1, c2, c3) = jacf(view(u, :, r), p, t, c1[r], c2[r], c3[r])
-        blocks = map_closure_to_range(calcJ, 1:size(u, 2), alg, u, p, t, c1, c2, c3)
-        return BlockDiagonal(cat(blocks..., dims=3), alg)
-    end
 end
 
 # Create a function to calculate the gridded time gradient.

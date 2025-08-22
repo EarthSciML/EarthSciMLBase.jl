@@ -21,12 +21,15 @@ Additional kwargs for ODEProblem constructor:
   - p: parameters; if "nothing", default values will be used.
   - name: name of the model.
 """
-struct SolverIMEX <: SolverStrategy
-    alg::MapAlgorithm
+struct SolverIMEX{MA, JT} <: SolverStrategy
+    alg::MA
+    jac_type::JT
     stiff_sparse::Bool
     stiff_tgrad::Bool
-    function SolverIMEX(alg = MapBroadcast(); stiff_sparse = false, stiff_tgrad = true)
-        new(alg, stiff_sparse, stiff_tgrad)
+    function SolverIMEX(alg::MA = MapBroadcast(), jac_type::JT = BlockDiagonalJacobian();
+            stiff_sparse = false, stiff_tgrad = true) where {
+            MA <: MapAlgorithm, JT <: JacobianType}
+        new{MA, JT}(alg, jac_type, stiff_sparse, stiff_tgrad)
     end
 end
 

@@ -1,6 +1,8 @@
-using EarthSciMLBase: BlockDiagonal, block
+using EarthSciMLBase: BlockDiagonal, block, MapKernel
 using LinearAlgebra
+import SciMLOperators as SMO
 using Test
+using LinearSolve
 
 @testset "LU" begin
     x = BlockDiagonal(rand(3, 3, 2))
@@ -80,4 +82,90 @@ end
     x = BlockDiagonal(reshape(1:18, 3, 3, 2))
     y = Matrix(x)
     @test @view(x[diagind(x)]) == @view(y[diagind(y)])
+end
+
+@testset "Multiplication" begin
+    x = BlockDiagonal(reshape(1:18, 3, 3, 2))
+
+    @testset "Vector" begin
+        b = rand(6)
+        o = Matrix(x) * b
+        o2 = similar(b)
+        mul!(o2, x, b)
+        o3 = x * b
+
+        @test o ≈ o2
+        @test o ≈ o3
+        # Make sure the correct methods are being used.
+        @test occursin("BlockDiagonal", string(@which mul!(o2, x, b)))
+        @test occursin("BlockDiagonal", string(@which x * b))
+    end
+    @testset "Matrix" begin
+        b = rand(6, 3)
+
+        o = Matrix(x) * b
+        o2 = similar(b)
+        mul!(o2, x, b)
+        @test occursin("BlockDiagonal", string(@which mul!(o2, x, b)))
+        o3 = x * b
+        @test occursin("BlockDiagonal", string(@which x * b))
+
+        @test o ≈ o2
+        @test o ≈ o3
+    end
+end
+
+@testset "SciMLOperators" begin
+    import SciMLOperators as SMO
+    opfunc!(w, v, u, p, t) = mul!(w, u, v)
+    opfunc!(v, u, p, t) = u * v
+    x = BlockDiagonal(rand(3, 3, 2))
+    b = rand(6)
+    o = similar(b)
+    op = SMO.FunctionOperator(opfunc!, b, o, u = x, p = nothing, t = 0.0, islinear = true)
+    @test op(o, b, x, nothing, 0.0) ≈ mul!(o, x, b)
+end
+
+@testset "generic_lufact!" begin
+    x = BlockDiagonal(rand(3, 3, 2))
+    y = Matrix(x)
+    ipiv = zeros(Int64, size(x.data, 1), size(x.data, 3))
+    lx = LinearSolve.generic_lufact!(x, RowMaximum(), ipiv)
+
+    ly = lu(y)
+    @test ly.factors ≈ Matrix(BlockDiagonal(lx.factors))
+    @test ly.ipiv == lx.ipiv[:]
+
+    @testset "Singular" begin
+        x = BlockDiagonal(zeros(3, 3, 2))
+        lx = LinearSolve.generic_lufact!(x, RowMaximum(), ipiv; check = false)
+        @test lx.info == 1
+    end
+end
+
+if Sys.isapple()
+    @testset "Metal" begin
+        using Metal
+        d = rand(Float32, 3, 3, 2)
+        x = BlockDiagonal(MtlArray(d), MapKernel());
+        y = Array(BlockDiagonal(d))
+
+        ipiv = MtlArray(zeros(Int64, size(x.data, 1), size(x.data, 3)))
+        lx = LinearSolve.generic_lufact!(x, RowMaximum(), ipiv)
+
+        ly = lu(y)
+        @test ly.factors ≈ Matrix(BlockDiagonal(Array(lx.factors)))
+        @test ly.ipiv == Array(lx.ipiv)[:]
+
+        @testset "ldiv!" begin
+            d = rand(Float32, 3, 3, 2)
+            x = BlockDiagonal(MtlArray(d))
+            x2 = BlockDiagonal(Array(d))
+            y = MtlArray(rand(Float32, 6))
+            y2 = Array(y)
+            z1 = LinearAlgebra.ldiv!(similar(y), lu(x), y)
+            z2 = LinearAlgebra.ldiv!(similar(y2), lu(x2), y2)
+            @test Array(z1) ≈ z2
+        end
+    end
 end
