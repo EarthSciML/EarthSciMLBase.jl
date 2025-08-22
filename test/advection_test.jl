@@ -82,8 +82,8 @@ end
     deg2rad(x) = x * π / 180.0
     domain = DomainInfo(
         Function[
-            partialderivatives_δxyδlonlat,
-        ],
+        partialderivatives_δxyδlonlat,
+    ],
         constIC(0.0,
             t ∈ Interval(Dates.datetime2unix(DateTime(2022, 1, 1)),
                 Dates.datetime2unix(DateTime(2022, 1, 3)))),
