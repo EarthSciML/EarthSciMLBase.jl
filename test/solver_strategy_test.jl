@@ -281,8 +281,9 @@ if Sys.isapple()
 
         csys = couple(sys, op, domain)
 
-        prob = ODEProblem(csys, SolverIMEX(MapKernel(), BlockDiagonalJacobian(),
-            stiff_sparse=false))
+        prob = ODEProblem(
+            csys, SolverIMEX(MapKernel(), BlockDiagonalJacobian(),
+                stiff_sparse = false))
 
         du = similar(prob.u0)
         prob.f.f1(du, prob.u0, prob.p, prob.tspan[1])
@@ -294,7 +295,15 @@ if Sys.isapple()
         prob.f(du, prob.u0, prob.p, prob.tspan[1])
         @test Array(du)[1] ≈ -3.5553088f0 + -13.141593f0
 
-        solve(prob, KenCarp47(linsolve = GenericLUFactorization()))
+        sol = solve(prob, KenCarp47(linsolve = GenericLUFactorization()))
+        @test sum(abs.(sol.u[end]))≈3.476624f7 rtol=1e-3
+
+        @test_broken begin
+            prob = ODEProblem(csys,
+                SolverIMEX(MapKernel(), BlockDiagonalOperatorJacobian(),
+                    stiff_sparse = false))
+            sol = solve(prob, KenCarp47(linsolve = KrylovJL()))
+        end
     end
 end
 

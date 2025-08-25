@@ -1,4 +1,4 @@
-using EarthSciMLBase: BlockDiagonal, block, MapKernel
+using EarthSciMLBase: BlockDiagonal, block, MapKernel, ldiv_factors!
 using LinearAlgebra
 import SciMLOperators as SMO
 using Test
@@ -29,14 +29,6 @@ end
     @testset "Vector" begin
         x = BlockDiagonal(rand(3, 3, 2))
         y = rand(6)
-        z1 = LinearAlgebra.ldiv!(similar(y), lu(x), y)
-        z2 = LinearAlgebra.ldiv!(similar(y), lu(Matrix(x)), y)
-        @test z1 ≈ z2
-    end
-
-    @testset "Matrix" begin
-        x = BlockDiagonal(rand(3, 3, 2))
-        y = rand(6, 2)
         z1 = LinearAlgebra.ldiv!(similar(y), lu(x), y)
         z2 = LinearAlgebra.ldiv!(similar(y), lu(Matrix(x)), y)
         @test z1 ≈ z2
@@ -147,7 +139,7 @@ if Sys.isapple()
     @testset "Metal" begin
         using Metal
         d = rand(Float32, 3, 3, 2)
-        x = BlockDiagonal(MtlArray(d), MapKernel());
+        x = BlockDiagonal(MtlArray(d), MapKernel())
         y = Array(BlockDiagonal(d))
 
         ipiv = MtlArray(zeros(Int64, size(x.data, 1), size(x.data, 3)))
@@ -168,4 +160,17 @@ if Sys.isapple()
             @test Array(z1) ≈ z2
         end
     end
+end
+
+@testset "ldiv_factors!" begin
+    A = rand(3, 3)
+    b = rand(3)
+
+    F = lu(A)
+    x = similar(b)
+    ldiv_factors!(x, F.factors, F.ipiv, b)
+    @test norm(A * x - b)≈0.0 atol=1e-10
+    x2 = similar(b)
+    LinearAlgebra.ldiv!(x2, F, b)
+    @test x ≈ x2
 end
