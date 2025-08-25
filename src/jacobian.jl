@@ -31,7 +31,7 @@ function mtk_jac_grid_func(
     function jac(J::AbstractBlockDiagonal, u, p, t) # In-place
         u = reshape(u, nvar, :)
         function calcJ(r, u, J, p, t, c1, c2, c3)
-            jacf(view(J, :, :, r), view(u, :, r), p, t, c1[r], c2[r], c3[r])
+            jacf(view(J,:,:,r), view(u, :, r), p, t, c1[r], c2[r], c3[r])
             return nothing
         end
         map_closure_to_range(calcJ, 1:size(u, 2), alg, u, J.data, p, t, c1, c2, c3)
@@ -60,11 +60,11 @@ function mtk_jac_grid_func(
     end
 end
 
-
 """
 Build the jacobian matrix.
 """
-function build_jacobian(::BlockDiagonalJacobian, nvars, domain::DomainInfo, alg, sparse::Bool)
+function build_jacobian(
+        ::BlockDiagonalJacobian, nvars, domain::DomainInfo, alg, sparse::Bool)
     if sparse
         error("Sparse Jacobian not yet implemented for MTK grid functions.")
     end
@@ -74,7 +74,8 @@ end
 function build_jacobian(::BlockDiagonalJacobian, X::AbstractArray, alg)
     BlockDiagonal(X, alg)
 end
-function build_jacobian(::BlockDiagonalOperatorJacobian, nvars, domain::DomainInfo, alg, sparse::Bool)
+function build_jacobian(
+        ::BlockDiagonalOperatorJacobian, nvars, domain::DomainInfo, alg, sparse::Bool)
     # Functions for the SciMLOperator.
     opfunc!(w, v, u, p, t) = mul!(w, u, v)
     opfunc!(v, u, p, t) = u * v

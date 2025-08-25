@@ -127,7 +127,6 @@ function mtk_grid_func(
         jac_type::JT = BlockDiagonalJacobian();
         sparse = false, tgrad = false, vjp = true) where {
         T, AT, MA <: MapAlgorithm, JT <: JacobianType}
-
     sys_mtk, coord_args = _prepare_coord_sys(sys_mtk, domain)
 
     mtkf_coord = build_coord_ode_function(sys_mtk, coord_args)

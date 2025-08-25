@@ -11,7 +11,7 @@ struct BlockDiagonal{T, V <: AbstractArray{T, 3}, MA <: MapAlgorithm} <:
     alg::MA
 end
 
-block(B::BlockDiagonal, i) = view(B.data, :, :, i)
+block(B::BlockDiagonal, i) = view(B.data,:,:,i)
 nblocks(B::BlockDiagonal) = size(B.data, 3)
 
 """
@@ -153,7 +153,7 @@ end
 
 function _lu!(o::BlockDiagonalLU, B::AbstractBlockDiagonal, args...; kwargs...)
     function flu(i, args...; kwargs...)
-        b = lu(view(B.data, :, :, i), args...; kwargs...)
+        b = lu(view(B.data,:,:,i), args...; kwargs...)
         o.factors[:, :, i] .= b.factors
         o.ipiv[:, i] .= b.ipiv
         b.info
@@ -228,7 +228,7 @@ end
 function LinearAlgebra.mul!(C::AbstractVecOrMat, A::BlockDiagonal, B::AbstractVecOrMat)
     @assert size(A, 2)==size(B, 1) "Sizes must match"
     function mulf(i, C, A, B)
-        blck = view(A, :, :, i)
+        blck = view(A,:,:,i)
         n = size(blck, 1)
         rng = ((i - 1) * n + 1):(i * n)
         mul!(view(C, rng, :), blck, view(B, rng, :))

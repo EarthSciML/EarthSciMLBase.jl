@@ -63,7 +63,7 @@ t_max = 11.5
 
 @parameters y lon=0.0 lat=0.0 lev=1.0 α=10.0
 @constants p = 1.0
-@variables(u(t)=1.0, v(t)=1.0, x(t), [unit = u"1/m"], y(t), [unit = u"1/m"], z(t),
+@variables(u(t)=1.0, v(t)=1.0, x(t), [unit=u"1/m"], y(t), [unit=u"1/m"], z(t),
     windspeed(t))
 
 indepdomain = t ∈ Interval(t_min, t_max)
@@ -156,7 +156,8 @@ end
 
 @testset "mtk_func" begin
     ucopy = copy(u)
-    f, sys_coords, coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy;
+    f, sys_coords,
+    coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy;
         sparse = false, tgrad = true)
     fthreads, = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy,
         MapThreads(); sparse = false, tgrad = false)
