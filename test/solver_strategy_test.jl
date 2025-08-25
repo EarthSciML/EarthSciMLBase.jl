@@ -156,9 +156,8 @@ end
 
 @testset "mtk_func" begin
     ucopy = copy(u)
-    f, sys_coords,
-    coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy;
-        sparse = true, tgrad = true)
+    f, sys_coords, coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy;
+        sparse = false, tgrad = true)
     fthreads, = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy,
         MapThreads(); sparse = false, tgrad = false)
     p = EarthSciMLBase.default_params(sys_coords)
@@ -179,41 +178,35 @@ end
         @test du1 ≈ du2 ≈ du3
     end
 
-    @testset "jac sparse" begin
-        du = similar(f.jac_prototype)
-        f.jac(du, ucopy[:], p, 0.0)
-        @test sum(sum.(du.blocks)) ≈ 12617.772209024473
-
-        du2 = f.jac(reshape(ucopy, :), p, 0.0)
-        @test all(du.blocks .≈ du2.blocks)
-    end
-
-    f, = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy; sparse = false, tgrad = true)
     @testset "jac dense" begin
         du = similar(f.jac_prototype)
         f.jac(du, ucopy[:], p, 0.0)
-        @test sum(sum.(du.blocks)) ≈ 12617.772209024473
+        @test sum(du.data) ≈ 12617.772209024473
 
-        du2 = f.jac(reshape(ucopy, :), p, 0.0)
-        @test all(du.blocks .≈ du2.blocks)
+        @test_broken begin # oop not currently implemented
+            du2 = f.jac(reshape(ucopy, :), p, 0.0)
+            @test all(du.data .≈ du2.data)
+        end
     end
 
     @testset "jac MapThreads" begin
         du = similar(fthreads.jac_prototype)
         fthreads.jac(du, ucopy[:], p, 0.0)
-        @test sum(sum.(du.blocks)) ≈ 12617.772209024473
+        @test sum(du.data) ≈ 12617.772209024473
 
-        du2 = fthreads.jac(reshape(ucopy, :), p, 0.0)
-        @test all(du.blocks .≈ du2.blocks)
+        @test_broken begin # oop not currently implemented
+            du2 = fthreads.jac(reshape(ucopy, :), p, 0.0)
+            @test all(du.data .≈ du2.data)
+        end
     end
 
     @testset "tgrad" begin
         du = similar(f.jac_prototype)
-        for i in 1:length(du.blocks)
-            du.blocks[i] .= 0
+        for i in 1:size(du.data, 3)
+            EarthSciMLBase.block(du, i) .= 0
         end
         f.tgrad(du, ucopy[:], p, 0.0)
-        @test sum(sum.(du.blocks)) ≈ 0.0
+        @test sum(du.data) ≈ 0.0
     end
 end
 
@@ -295,8 +288,9 @@ if Sys.isapple()
         prob.f(du, prob.u0, prob.p, prob.tspan[1])
         @test Array(du)[1] ≈ -3.5553088f0 + -13.141593f0
 
-        sol = solve(prob, KenCarp47(linsolve = GenericLUFactorization()))
-        @test sum(abs.(sol.u[end]))≈3.476624f7 rtol=1e-3
+        sol = solve(prob, KenCarp47(linsolve = GenericLUFactorization()), abstol = 1.0f-6,
+            reltol = 1.0f-6)
+        @test sum(abs.(sol.u[end]))≈3.4450348f7 rtol=1e-3
 
         @test_broken begin
             prob = ODEProblem(csys,
@@ -329,8 +323,8 @@ end
         @test sum(abs.(sol.u[end]))≈3.444627331604664e7 rtol=1e-3 # No Splitting error in this one.
 
         for alg in [MapBroadcast(), MapThreads()]
-            for iip in [true, false]
-                for sparse in [true, false]
+            for iip in [true] # [true, false] oop not currently implemented for BlockDiagonalJacobian.
+                for sparse in [false] # [true, false] # BlockDiagonalJacobian not currently implemented for sparse.
                     @testset "alg=$alg; iip=$iip; sparse=$sparse" begin
                         st = SolverIMEX(alg; stiff_sparse = sparse)
                         prob = ODEProblem{iip}(csys, st)

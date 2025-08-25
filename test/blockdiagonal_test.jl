@@ -89,8 +89,8 @@ end
         @test o ≈ o2
         @test o ≈ o3
         # Make sure the correct methods are being used.
-        @test occursin("BlockDiagonal", string(@which mul!(o2, x, b)))
-        @test occursin("BlockDiagonal", string(@which x * b))
+        @test occursin("BlockDiagonal", string(which(mul!, typeof.((o2, x, b)))))
+        @test occursin("BlockDiagonal", string(which(*, typeof.((x, b)))))
     end
     @testset "Matrix" begin
         b = rand(6, 3)
@@ -98,9 +98,9 @@ end
         o = Matrix(x) * b
         o2 = similar(b)
         mul!(o2, x, b)
-        @test occursin("BlockDiagonal", string(@which mul!(o2, x, b)))
+        @test occursin("BlockDiagonal", string(which(mul!, typeof.((o2, x, b)))))
         o3 = x * b
-        @test occursin("BlockDiagonal", string(@which x * b))
+        @test occursin("BlockDiagonal", string(which(*, typeof.((x, b)))))
 
         @test o ≈ o2
         @test o ≈ o3
@@ -126,6 +126,7 @@ end
 
     ly = lu(y)
     @test ly.factors ≈ Matrix(BlockDiagonal(lx.factors))
+    lx.ipiv[4:6] .+= 3 # The generic LU implementation indexes pivots based on each block.
     @test ly.ipiv == lx.ipiv[:]
 
     @testset "Singular" begin
@@ -144,6 +145,7 @@ if Sys.isapple()
 
         ipiv = MtlArray(zeros(Int64, size(x.data, 1), size(x.data, 3)))
         lx = LinearSolve.generic_lufact!(x, RowMaximum(), ipiv)
+        lx.ipiv[4:6] .+= 3 # The generic LU implementation indexes pivots based on each block.
 
         ly = lu(y)
         @test ly.factors ≈ Matrix(BlockDiagonal(Array(lx.factors)))

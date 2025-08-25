@@ -163,10 +163,10 @@ function mtk_tgrad_grid_func(sys_mtk, tgradf, domain, alg = MapBroadcast())
         u = reshape(u, nvar, :)
         # FIXME(CT): I believe the tgrad output should be a vector and not a clone of the Jacobian.
         # This may be a bug in the DifferentialEquations.jl interface.
-        blks = blocks(out)
         for r in 1:size(u, 2)
             _u = view(u, :, r)
-            tgradf(blks[r], _u, p, t, c1[II[r][1]], c2[II[r][2]], c3[II[r][3]])
+            tgradf(EarthSciMLBase.block(out, r), _u, p, t,
+                c1[II[r][1]], c2[II[r][2]], c3[II[r][3]])
         end
     end
 end
