@@ -45,7 +45,7 @@ f = EarthSciMLBase.build_coord_ode_function(
 p = MTKParameters(sys_coord, defaults(sys_coord))
 duop = f(prob.u0, p, 0.0, 2.0, 1.0, 1e13)
 u_perm = [findfirst(isequal(u), unknowns(sys_simplified)) for u in unknowns(sys_coord)]
-new_p = remake_buffer(sys_simplified, prob.p, Dict(lon => 2.0, lat => 1.0, lev => 1e13))
+new_p = remake_buffer(sys_simplified, prob.p, [lon, lat, lev], [2.0, 1.0, 1e13])
 @test duop ≈ prob.f(prob.u0, new_p, 0.0)[u_perm]
 @test prob.f(prob.u0, prob.p, 0.0)[u_perm] ≈ f(prob.u0, p, 0.0, 0, 0, 0)
 
@@ -98,7 +98,7 @@ if Sys.isapple()
         domain = DomainInfo(
             constIC(16.0, indepdomain), constBC(16.0, partialdomains...); grid_spacing = [
                 1.0, 1.0, 1.0],
-            u_proto = MtlArray(zeros(Float32, 1, 1, 1, 1)))
+            uproto = MtlArray(zeros(Float32, 1, 1, 1, 1)))
         csys = couple(sys, domain)
         prob = ODEProblem(csys, SolverIMEX(MapKernel(), stiff_sparse = false))
 

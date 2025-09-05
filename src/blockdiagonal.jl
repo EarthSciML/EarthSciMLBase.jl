@@ -250,7 +250,7 @@ end
 import LinearSolve as LS
 function LS.init_cacheval(
         alg::LS.GenericLUFactorization, A::BlockDiagonal, b, u, Pl, Pr,
-        maxiters::Int, abstol, reltol, verbose::LS.LinearVerbosity,
+        maxiters::Int, abstol, reltol, verbose::Bool,
         assumptions::LS.OperatorAssumptions)
     luI = ArrayInterface.lu_instance(A)
     luI, luI.ipiv

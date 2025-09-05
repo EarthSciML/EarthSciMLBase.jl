@@ -11,13 +11,6 @@ abstract type ICBCcomponent end
 abstract type ICcomponent <: ICBCcomponent end
 abstract type BCcomponent <: ICBCcomponent end
 
-function _process_uproto(u_proto::AT) where {AT}
-    if length(size(u_proto)) != 4
-        throw(ArgumentError("The prototype state array `u_proto` must be 4 dimensional"))
-    end
-    eltype(u_proto), AT
-end
-
 """
 $(SIGNATURES)
 
@@ -54,45 +47,50 @@ struct DomainInfo{ET, AT}
     spatial_ref::Any
 
     """
+    The prototype state array for the domain.
+    """
+    uproto::AT
+
+    """
     The reference time for the domain, relative to which the simulation time
     period will be calculated.
     """
     tref::ET
 
     function DomainInfo(pdfs, gs, icbc, sr, t_ref::ET) where {ET}
-        new{ET, Array{ET, 4}}(pdfs, gs, icbc, sr, t_ref)
+        new{ET, Vector{ET}}(pdfs, gs, icbc, sr, zeros(ET, 0), t_ref)
     end
     function DomainInfo(
-            icbc::ICBCcomponent...; u_proto = zeros(1, 1, 1, 1), grid_spacing = nothing,
-            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
+            icbc::ICBCcomponent...; uproto::AT = zeros(0), grid_spacing = nothing,
+            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT<:AbstractArray}
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        et, at = _process_uproto(u_proto)
+        et = eltype(uproto)
         grid_spacing = isnothing(grid_spacing) ? defaultgridspacing(et, icbc) : grid_spacing
-        new{et, at}([], grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
+        new{et, AT}([], grid_spacing, ICBCcomponent[icbc...], spatial_ref, uproto, 0)
     end
     function DomainInfo(fdx::Function, icbc::ICBCcomponent...; grid_spacing = nothing,
-            u_proto = zeros(1, 1, 1, 1), spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
+            uproto::AT = zeros(0), spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT<:AbstractArray}
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        et, at = _process_uproto(u_proto)
+        et = eltype(uproto)
         grid_spacing = isnothing(grid_spacing) ? defaultgridspacing(et, icbc) : grid_spacing
-        new{et, at}([fdx], grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
+        new{et, AT}([fdx], grid_spacing, ICBCcomponent[icbc...], spatial_ref, uproto, 0)
     end
     function DomainInfo(fdxs::Vector{Function}, icbc::ICBCcomponent...;
-            u_proto = zeros(1, 1, 1, 1), grid_spacing = nothing, spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
+            uproto::AT = zeros(0), grid_spacing = nothing, spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT<:AbstractArray}
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        et, at = _process_uproto(u_proto)
+        et = eltype(uproto)
         grid_spacing = isnothing(grid_spacing) ? defaultgridspacing(et, icbc) : grid_spacing
-        new{et, at}(fdxs, grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
+        new{et, AT}(fdxs, grid_spacing, ICBCcomponent[icbc...], spatial_ref, uproto, 0)
     end
     function DomainInfo(starttime::DateTime, endtime::DateTime;
             xrange = nothing, yrange = nothing, levrange = nothing,
-            latrange = nothing, lonrange = nothing, u_proto = zeros(1, 1, 1, 1),
+            latrange = nothing, lonrange = nothing, uproto::AT = zeros(0),
             level_trans = nothing, tref = starttime,
-            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
-        et, at = _process_uproto(u_proto)
+            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT<:AbstractArray}
+        et = eltype(uproto)
         @assert et(datetime2unix(starttime))<et(datetime2unix(endtime)) "starttime must be before endtime when represented as $et."
         @assert (!isnothing(xrange) &&
                  !isnothing(yrange)) ||
@@ -141,7 +139,7 @@ struct DomainInfo{ET, AT}
             push!(grid_spacing, gridT(step(levrange)))
         end
         bcs = constBC(et(0.0), boundaries...)
-        new{et, at}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, tref)
+        new{et, AT}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, uproto, tref)
     end
 end
 
@@ -164,13 +162,6 @@ Return the scalar data type of the state variable elements for this domain.
 """
 Base.eltype(_::DomainInfo{ET}) where {ET} = ET
 Base.@deprecate dtype(d) eltype(d)
-
-"""
-$(TYPEDSIGNATURES)
-
-Return the data type of the state variable array for this domain.
-"""
-arraytype(_::DomainInfo{ET, AT}) where {ET, AT} = AT
 
 """
 $(SIGNATURES)
@@ -199,9 +190,11 @@ points for the entire 3D domain.
 function concrete_grid(domain::DomainInfo{ET, AT}) where {ET, AT}
     g = grid(domain)
     II = CartesianIndices(tuple(size(domain)...))
-    ATvec = typeof(reshape(AT(zeros(ET, 1, 1, 1, 1)), :))
     map(enumerate(g)) do (j, c)
-        ATvec([c[II[i][j]] for i in 1:length(II)])
+        # Collect the grid points and convert them to the correct array type.
+        _grd = [c[II[i][j]] for i in 1:length(II)]
+        grd = similar(domain.uproto, length(_grd))
+        copyto!(grd, _grd)
     end
 end
 
@@ -570,7 +563,6 @@ function replacement_params(localcoords::AbstractVector, globalcoords::AbstractV
 end
 
 function add_partial_derivative_func(di::DomainInfo, f::Function)
-    fs = di.partial_derivative_funcs
-    push!(fs, f)
-    @set di.partial_derivative_funcs = fs
+    push!(di.partial_derivative_funcs, f)
+    di
 end
