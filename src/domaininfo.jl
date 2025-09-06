@@ -62,7 +62,7 @@ struct DomainInfo{ET, AT}
     end
     function DomainInfo(
             icbc::ICBCcomponent...; uproto::AT = zeros(0), grid_spacing = nothing,
-            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT<:AbstractArray}
+            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT <: AbstractArray}
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
         et = eltype(uproto)
@@ -70,7 +70,8 @@ struct DomainInfo{ET, AT}
         new{et, AT}([], grid_spacing, ICBCcomponent[icbc...], spatial_ref, uproto, 0)
     end
     function DomainInfo(fdx::Function, icbc::ICBCcomponent...; grid_spacing = nothing,
-            uproto::AT = zeros(0), spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT<:AbstractArray}
+            uproto::AT = zeros(0),
+            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT <: AbstractArray}
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
         et = eltype(uproto)
@@ -78,7 +79,8 @@ struct DomainInfo{ET, AT}
         new{et, AT}([fdx], grid_spacing, ICBCcomponent[icbc...], spatial_ref, uproto, 0)
     end
     function DomainInfo(fdxs::Vector{Function}, icbc::ICBCcomponent...;
-            uproto::AT = zeros(0), grid_spacing = nothing, spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT<:AbstractArray}
+            uproto::AT = zeros(0), grid_spacing = nothing,
+            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT <: AbstractArray}
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
         et = eltype(uproto)
@@ -89,7 +91,7 @@ struct DomainInfo{ET, AT}
             xrange = nothing, yrange = nothing, levrange = nothing,
             latrange = nothing, lonrange = nothing, uproto::AT = zeros(0),
             level_trans = nothing, tref = starttime,
-            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT<:AbstractArray}
+            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT <: AbstractArray}
         et = eltype(uproto)
         @assert et(datetime2unix(starttime))<et(datetime2unix(endtime)) "starttime must be before endtime when represented as $et."
         @assert (!isnothing(xrange) &&
