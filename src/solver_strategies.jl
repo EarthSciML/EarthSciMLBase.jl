@@ -21,12 +21,15 @@ Additional kwargs for ODEProblem constructor:
   - p: parameters; if "nothing", default values will be used.
   - name: name of the model.
 """
-struct SolverIMEX <: SolverStrategy
-    alg::MapAlgorithm
+struct SolverIMEX{MA, JT} <: SolverStrategy
+    alg::MA
+    jac_type::JT
     stiff_sparse::Bool
     stiff_tgrad::Bool
-    function SolverIMEX(alg = MapBroadcast(); stiff_sparse = true, stiff_tgrad = true)
-        new(alg, stiff_sparse, stiff_tgrad)
+    function SolverIMEX(alg::MA = MapBroadcast(), jac_type::JT = BlockDiagonalJacobian();
+            stiff_sparse = false, stiff_tgrad = true) where {
+            MA <: MapAlgorithm, JT <: JacobianType}
+        new{MA, JT}(alg, jac_type, stiff_sparse, stiff_tgrad)
     end
 end
 
@@ -45,6 +48,10 @@ function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0 = nothing,
 
     type_convert_params(sys_mtk, u0)
     p = MTKParameters(sys_mtk, defaults(sys_mtk))
+
+    if st.alg isa MapKernel
+        p = bitsify_params(p)
+    end
 
     f2 = nonstiff_ops(sys, sys_mtk, coord_args, dom, u0, p, st.alg)
 
@@ -81,4 +88,24 @@ function type_convert_params(sys::System, u::AbstractArray)
             dflt[p] = T(dflt[p])
         end
     end
+end
+
+"""
+Convert parameters to bitstypes so that they can be used on the GPU.
+"""
+function bitsify_params(p::MTKParameters, op = tuple)
+    tunable = op(p.tunable...)
+    initials = op(p.initials...)
+    discrete = Tuple(eltype(buf) <: Real ? op(buf...) : copy.(buf) for buf in p.discrete)
+    constant = Tuple(eltype(buf) <: Real ? op(buf...) : copy.(buf) for buf in p.constant)
+    nonnumeric = isempty(p.nonnumeric) ? p.nonnumeric : copy.(p.nonnumeric)
+    caches = isempty(p.caches) ? p.caches : copy.(p.caches)
+    return MTKParameters(
+        tunable,
+        initials,
+        discrete,
+        constant,
+        nonnumeric,
+        caches
+    )
 end

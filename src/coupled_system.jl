@@ -290,7 +290,7 @@ function nonstiff_ops(sys::CoupledSystem, sys_mtk, coord_args, domain, u0, p, al
     if length(fs) == 0
         return let
             f(u, p, t) = zeros(size(u))
-            f(du, u, p, t) = du .= 0.0
+            f(du, u, p, t) = du .= zero(eltype(u))
             f
         end
     elseif length(fs) == 1

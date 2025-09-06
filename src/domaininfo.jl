@@ -11,13 +11,6 @@ abstract type ICBCcomponent end
 abstract type ICcomponent <: ICBCcomponent end
 abstract type BCcomponent <: ICBCcomponent end
 
-function _process_uproto(u_proto::AT) where {AT}
-    if length(size(u_proto)) != 4
-        throw(ArgumentError("The prototype state array `u_proto` must be 4 dimensional"))
-    end
-    eltype(u_proto), AT
-end
-
 """
 $(SIGNATURES)
 
@@ -45,7 +38,7 @@ struct DomainInfo{ET, AT}
     partial_derivative_funcs::Vector{Function}
 
     "The discretization intervals for the partial independent variables."
-    grid_spacing::Any
+    grid_spacing::Vector{Float64} # Use Float64 grid spacing to avoid precision issues.
 
     "The sets of initial and/or boundary conditions."
     icbc::Vector{ICBCcomponent}
@@ -54,42 +47,52 @@ struct DomainInfo{ET, AT}
     spatial_ref::Any
 
     """
+    The prototype state array for the domain.
+    """
+    uproto::AT
+
+    """
     The reference time for the domain, relative to which the simulation time
     period will be calculated.
     """
     tref::ET
 
     function DomainInfo(pdfs, gs, icbc, sr, t_ref::ET) where {ET}
-        new{ET, Array{ET, 4}}(pdfs, gs, icbc, sr, t_ref)
+        new{ET, Vector{ET}}(pdfs, gs, icbc, sr, zeros(ET, 0), t_ref)
     end
     function DomainInfo(
-            icbc::ICBCcomponent...; u_proto = zeros(1, 1, 1, 1), grid_spacing = nothing,
-            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
+            icbc::ICBCcomponent...; uproto::AT = zeros(0), grid_spacing = nothing,
+            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT <: AbstractArray}
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        et, at = _process_uproto(u_proto)
-        new{et, at}([], grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
+        et = eltype(uproto)
+        grid_spacing = isnothing(grid_spacing) ? defaultgridspacing(et, icbc) : grid_spacing
+        new{et, AT}([], grid_spacing, ICBCcomponent[icbc...], spatial_ref, uproto, 0)
     end
     function DomainInfo(fdx::Function, icbc::ICBCcomponent...; grid_spacing = nothing,
-            u_proto = zeros(1, 1, 1, 1), spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
+            uproto::AT = zeros(0),
+            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT <: AbstractArray}
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        et, at = _process_uproto(u_proto)
-        new{et, at}([fdx], grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
+        et = eltype(uproto)
+        grid_spacing = isnothing(grid_spacing) ? defaultgridspacing(et, icbc) : grid_spacing
+        new{et, AT}([fdx], grid_spacing, ICBCcomponent[icbc...], spatial_ref, uproto, 0)
     end
     function DomainInfo(fdxs::Vector{Function}, icbc::ICBCcomponent...;
-            u_proto = zeros(1, 1, 1, 1), grid_spacing = nothing, spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
+            uproto::AT = zeros(0), grid_spacing = nothing,
+            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT <: AbstractArray}
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        et, at = _process_uproto(u_proto)
-        new{et, at}(fdxs, grid_spacing, ICBCcomponent[icbc...], spatial_ref, 0)
+        et = eltype(uproto)
+        grid_spacing = isnothing(grid_spacing) ? defaultgridspacing(et, icbc) : grid_spacing
+        new{et, AT}(fdxs, grid_spacing, ICBCcomponent[icbc...], spatial_ref, uproto, 0)
     end
     function DomainInfo(starttime::DateTime, endtime::DateTime;
             xrange = nothing, yrange = nothing, levrange = nothing,
-            latrange = nothing, lonrange = nothing, u_proto = zeros(1, 1, 1, 1),
+            latrange = nothing, lonrange = nothing, uproto::AT = zeros(0),
             level_trans = nothing, tref = starttime,
-            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs")
-        et, at = _process_uproto(u_proto)
+            spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT <: AbstractArray}
+        et = eltype(uproto)
         @assert et(datetime2unix(starttime))<et(datetime2unix(endtime)) "starttime must be before endtime when represented as $et."
         @assert (!isnothing(xrange) &&
                  !isnothing(yrange)) ||
@@ -112,6 +115,7 @@ struct DomainInfo{ET, AT}
 
         boundaries = [] # Boundary conditions
         grid_spacing = []
+        gridT = Float64 # Grid spacing is always Float64 to avoid precision issues.
         if !isnothing(latrange)
             @assert maximum(abs.(latrange))<=π "Latitude must be in radians."
             @assert maximum(abs.(lonrange))<=2π "Longitude must be in radians."
@@ -121,7 +125,7 @@ struct DomainInfo{ET, AT}
                 unit = u"rad", description = "Latitude"])
             push!(boundaries, lon ∈ Interval(et.([first(lonrange), last(lonrange)])...))
             push!(boundaries, lat ∈ Interval(et.([first(latrange), last(latrange)])...))
-            push!(grid_spacing, et.([step(lonrange), step(latrange)])...)
+            push!(grid_spacing, gridT.([step(lonrange), step(latrange)])...)
         else
             x = only(@parameters x=mean(xrange) [
                 unit = u"m", description = "East-West Distance"])
@@ -129,16 +133,21 @@ struct DomainInfo{ET, AT}
                 unit = u"m", description = "North-South Distance"])
             push!(boundaries, x ∈ Interval(et.([first(xrange), last(xrange)])...))
             push!(boundaries, y ∈ Interval(et.([first(yrange), last(yrange)])...))
-            push!(grid_spacing, et.([step(xrange), step(yrange)])...)
+            push!(grid_spacing, gridT.([step(xrange), step(yrange)])...)
         end
         if !isnothing(levrange)
             lev = only(@parameters lev=mean(levrange) [description = "Level Index"])
             push!(boundaries, lev ∈ Interval(et.([first(levrange), last(levrange)])...))
-            push!(grid_spacing, et(step(levrange)))
+            push!(grid_spacing, gridT(step(levrange)))
         end
         bcs = constBC(et(0.0), boundaries...)
-        new{et, at}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, tref)
+        new{et, AT}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, uproto, tref)
     end
+end
+
+function defaultgridspacing(et, icbc)
+    ndims = length(filter(icbc -> icbc isa BCcomponent, icbc))
+    return ones(et, ndims)
 end
 
 Base.size(d::DomainInfo) = tuple((length(g) for g in grid(d))...)
@@ -157,36 +166,38 @@ Base.eltype(_::DomainInfo{ET}) where {ET} = ET
 Base.@deprecate dtype(d) eltype(d)
 
 """
-$(TYPEDSIGNATURES)
-
-Return the data type of the state variable array for this domain.
-"""
-arraytype(_::DomainInfo{ET, AT}) where {ET, AT} = AT
-
-"""
 $(SIGNATURES)
 
 Return the ranges representing the discretization of the partial independent
 variables for this domain, based on the discretization intervals given in `Δs`.
 """
 function grid(d::DomainInfo{T}) where {T}
-    if !((d.grid_spacing isa Base.AbstractVecOrTuple) &&
-         (length(pvars(d)) == length(d.grid_spacing)))
-        throw(ArgumentError("The number of partial independent variables ($(length(pvars(d)))) must equal the number of grid spacings provided ($(d.grid_spacing))."))
-    end
     endpts = endpoints(d)
     [s:d:e for ((s, e), d) in zip(endpts, d.grid_spacing)]
 end
 function grid(d::DomainInfo{T}, staggering) where {T}
-    if !((d.grid_spacing isa Base.AbstractVecOrTuple) &&
-         (length(pvars(d)) == length(d.grid_spacing)))
-        throw(ArgumentError("The number of partial independent variables ($(length(pvars(d)))) must equal the number of grid spacings provided ($(d.grid_spacing))."))
-    end
     endpts = endpoints(d)
     @assert length(staggering)==length(endpts) "The number of staggering values $(length(staggering)) must match the number of partial independent variables $(length(endpts))."
     @assert all(isa.(staggering, (Bool,))) "Staggering must be a vector of booleans."
-    [stag ? range(start = s-d/2, step = d, length = length(s:d:e)+1) : s:d:e
+    [stag ? range(start = s - d / 2, step = d, length = length(s:d:e) + 1) : s:d:e
      for (stag, (s, e), d) in zip(staggering, endpts, d.grid_spacing)]
+end
+
+"""
+$(SIGNATURES)
+
+Return the concrete grid representation for this domain, as a Vector including the grid
+points for the entire 3D domain.
+"""
+function concrete_grid(domain::DomainInfo{ET, AT}) where {ET, AT}
+    g = grid(domain)
+    II = CartesianIndices(tuple(size(domain)...))
+    map(enumerate(g)) do (j, c)
+        # Collect the grid points and convert them to the correct array type.
+        _grd = [c[II[i][j]] for i in 1:length(II)]
+        grd = similar(domain.uproto, length(_grd))
+        copyto!(grd, _grd)
+    end
 end
 
 """
@@ -195,19 +206,17 @@ $(SIGNATURES)
 Return the endpoints of the partial independent
 variables for this domain.
 """
-function endpoints(d::DomainInfo{T}) where {T}
-    i = 1
-    rngs = []
-    for icbc in d.icbc
-        if icbc isa BCcomponent
-            for pd in icbc.partialdomains
-                rng = (T(DomainSets.infimum(pd.domain)), T(DomainSets.supremum(pd.domain)))
-                push!(rngs, rng)
-                i += 1
-            end
+function endpoints(d::DomainInfo)
+    T = Float64 # Endpoints are always Float64 to avoid rounding issues.
+    bcs = filter((icbc) -> icbc isa BCcomponent, d.icbc)
+    rngs = NTuple{2, T}[]
+    for bc in bcs
+        for pd in bc.partialdomains
+            rng = (T(DomainSets.infimum(pd.domain)), T(DomainSets.supremum(pd.domain)))
+            push!(rngs, rng)
         end
     end
-    return [rng for rng in rngs]
+    return rngs
 end
 
 """
@@ -556,7 +565,6 @@ function replacement_params(localcoords::AbstractVector, globalcoords::AbstractV
 end
 
 function add_partial_derivative_func(di::DomainInfo, f::Function)
-    fs = di.partial_derivative_funcs
-    push!(fs, f)
-    @set di.partial_derivative_funcs = fs
+    push!(di.partial_derivative_funcs, f)
+    di
 end

@@ -314,19 +314,26 @@ function remove_extra_defaults(original_sys, simplified_sys)
 end
 
 """
-Initialize the state variables.
+Initialize the state variable array.
 """
-function init_u(mtk_sys::System, d::DomainInfo{ET, AT}) where {ET, AT}
+function init_u(mtk_sys::System, d::DomainInfo{ET}) where {ET}
     vars = unknowns(mtk_sys)
     dflts = ModelingToolkit.get_defaults(mtk_sys)
-    u0 = [dflts[u] for u in vars]
+    u0_single = [dflts[u] for u in vars]
 
-    g = grid(d)
-    # Set initial conditions
-    AT([u0[i]
-        for i in eachindex(u0), j in eachindex(g[1]),
-    k in eachindex(g[2]), l in eachindex(g[3])])
+    u0 = init_array(d, length(u0_single), size(d)...)
+    for (i, u) in enumerate(u0_single)
+        @view(u0[i, :, :, :]) .= ET(u)
+    end
+    return u0
 end
+
+"""
+    $(SIGNATURES)
+
+Initialize an arrays with the given dimensions
+"""
+init_array(d::DomainInfo, sizes...) = similar(d.uproto, sizes...)
 
 function default_params(mtk_sys::AbstractSystem)
     dflts = ModelingToolkit.get_defaults(mtk_sys)

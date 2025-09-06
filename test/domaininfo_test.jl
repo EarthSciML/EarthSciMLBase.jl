@@ -182,11 +182,11 @@ end
 
 @testset "xy staggered" begin
     di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
-        xrange = 0:0.1:1, yrange = 0:0.1:2, u_proto = zeros(Float32, 1, 1, 1, 1))
+        xrange = 0:0.1:1, yrange = 0:0.1:2, uproto = zeros(Float32, 1, 1, 1, 1))
 
     @test Symbol.(pvars(di)) == [:x, :y]
-    @test grid(di) == [0.0f0:0.1f0:1.0f0, 0.0f0:0.1f0:2.0f0]
-    @test grid(di, (true, false)) ≈ [-0.05f0:0.1f0:1.0500001f0, 0.0f0:0.1f0:2.0f0]
+    @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0]
+    @test grid(di, (true, false)) ≈ [-0.05:0.1:1.05, 0.0:0.1:2.0]
     @test get_tspan(di) == (0.0, 10800.0)
     @test length(di.partial_derivative_funcs) == 0
 end
@@ -228,11 +228,11 @@ end
     di = DomainInfo(
         DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
         xrange = 0:0.1:1, yrange = 0:0.1:2, levrange = 1:15,
-        u_proto = zeros(Float32, 1, 1, 1, 1))
+        uproto = zeros(Float32, 1, 1, 1, 1))
 
     @test Symbol.(pvars(di)) == [:x, :y, :lev]
-    @test grid(di) == [0.0f0:0.1f0:1.0f0, 0.0f0:0.1f0:2.0f0, 1.0f0:15.0f0]
-    @test get_tspan(di) == (0.0f0, 10800.0f0)
+    @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0, 1.0:15.0]
+    @test get_tspan(di) == (0.0, 10800.0)
     @test length(di.partial_derivative_funcs) == 0
 end
 
@@ -240,7 +240,7 @@ end
     di = DomainInfo(
         DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
         lonrange = (-2π):(π / 10):(2π), latrange = 0:(π / 10):π, levrange = 1:0.5:10,
-        u_proto = zeros(Float32, 1, 1, 1, 1))
+        uproto = zeros(Float32, 1, 1, 1, 1))
 
     @test Symbol.(pvars(di)) == [:lon, :lat, :lev]
     @test grid(di) ≈ [Float32(-2π):Float32(π / 10):Float32(2π),

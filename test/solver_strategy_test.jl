@@ -13,43 +13,41 @@ end
 
 function EarthSciMLBase.get_odefunction(
         op::ExampleOp, csys::CoupledSystem, mtk_sys, coord_args,
-        domain::DomainInfo, u0, p, alg::MapAlgorithm)
+        domain::DomainInfo{ET, AT}, u0, p, alg::MapAlgorithm) where {ET, AT}
     α, trans1, trans2, trans3 = EarthSciMLBase.get_needed_vars(op, csys, mtk_sys, domain)
 
     obs_f = EarthSciMLBase.build_coord_observed_function(mtk_sys, coord_args,
         [α, trans1, trans2, trans3])
 
-    II = CartesianIndices(tuple(size(domain)...))
-    c1, c2, c3 = EarthSciMLBase.grid(domain)
-    obscache = zeros(EarthSciMLBase.dtype(domain), 4)
-    T = eltype(domain)
-    sz = length.(EarthSciMLBase.grid(domain))
+    c1, c2, c3 = EarthSciMLBase.concrete_grid(domain)
+    obscache = similar(domain.uproto, 4)
+
+    nrows = length(unknowns(mtk_sys))
+    sz = tuple(size(domain)...)
+    II = CartesianIndices(sz)
 
     function run(du, u, p, t) # In-place
-        u = reshape(u, :, sz...)
-        du = reshape(du, :, sz...)
-        II = CartesianIndices(tuple(sz...))
-        for ix in 1:size(u, 1)
-            for I in II
-                # Demonstrate coordinate transforms and observed values
-                obs_f(obscache, view(u, :, I), p, t, c1[I[1]], c2[I[2]], c3[I[3]])
-                t1, t2, t3, fv = obscache
-                # Set derivative value.
-                du[ix, I] = (t1 + t2 + t3) * fv
-            end
+        u = reshape(u, nrows, sz...)
+        du = reshape(du, nrows, sz...)
+        function f(j, du, u, p, t, c1, c2, c3)
+            # Demonstrate coordinate transforms and observed values
+            obs_f(obscache, view(u, :, II[j]), p, t, c1[j], c2[j], c3[j])
+            t1, t2, t3, fv = obscache
+            # Set derivative value.
+            view(du, :, II[j]) .= (t1 + t2 + t3) * fv
+            return nothing
         end
-        nothing
+        map_closure_to_range(f, 1:((*)(sz...)), alg, du, u, p, t, c1, c2, c3)
+        return reshape(du, :)
     end
     function run(u, p, t) # Out-of-place
         u = reshape(u, :, sz...)
-        II = CartesianIndices(size(u)[2:end])
-        du = [begin
-                  t1, t2, t3, fv = obs_f(view(u, :, I), p, t,
-                      T(c1[I[1]]), T(c2[I[2]]), T(c3[I[3]]))
-                  (t1 + t2 + t3) * fv
-              end
-              for ix in 1:size(u, 1), I in II]
-        reshape(du, :)
+        function f(j, u, p, t, c1, c2, c3)
+            t1, t2, t3, fv = obs_f(view(u, :, II[j]), p, t, c1[j], c2[j], c3[j])
+            [(t1 + t2 + t3) * fv for _ in 1:size(u, 1)]
+        end
+        du = map_closure_to_range(f, 1:((*)(sz...)), alg, u, p, t, c1, c2, c3)
+        reshape(hcat(du...), :)
     end
     return run
 end
@@ -65,7 +63,7 @@ t_max = 11.5
 
 @parameters y lon=0.0 lat=0.0 lev=1.0 α=10.0
 @constants p = 1.0
-@variables(u(t)=1.0, v(t)=1.0, x(t), [unit = u"1/m"], y(t), [unit = u"1/m"], z(t),
+@variables(u(t)=1.0, v(t)=1.0, x(t), [unit=u"1/m"], y(t), [unit=u"1/m"], z(t),
     windspeed(t))
 
 indepdomain = t ∈ Interval(t_min, t_max)
@@ -119,8 +117,9 @@ scimlop = EarthSciMLBase.nonstiff_ops(csys, sys_coords, coord_args, domain, resh
     p, MapBroadcast())
 du = similar(u)
 du .= 0
-@views scimlop(reshape(du, :), reshape(u, :), p, 0.0)
-
+scimlop(reshape(du, :), reshape(u, :), p, 0.0)
+@test sum(abs.(du)) ≈ 14542.756845747295
+du = scimlop(reshape(u, :), p, 0.0)
 @test sum(abs.(du)) ≈ 14542.756845747295
 
 du2 = scimlop(reshape(u, :), p, 0.0)
@@ -128,10 +127,8 @@ du2 = scimlop(reshape(u, :), p, 0.0)
 
 grid = EarthSciMLBase.grid(domain)
 sys1 = mtkcompile(sys)
-prob = ODEProblem(sys1, [], (0.0, 1.0),
-    [
-        lon => grid[1][1], lat => grid[2][1], lev => grid[3][1]
-    ])
+op_pt = [lon => grid[1][1], lat => grid[2][1], lev => grid[3][1]]
+prob = ODEProblem(sys1, op_pt, (0.0, 1.0))
 sol1 = solve(prob, Tsit5(); abstol = 1e-12, reltol = 1e-12)
 @test sol1.retcode == ReturnCode.Success
 @test sol1.u[end] ≈ [-27.15156429366082, -26.264264199779465] ||
@@ -161,7 +158,7 @@ end
     ucopy = copy(u)
     f, sys_coords,
     coord_args = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy;
-        sparse = true, tgrad = true)
+        sparse = false, tgrad = true)
     fthreads, = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy,
         MapThreads(); sparse = false, tgrad = false)
     p = EarthSciMLBase.default_params(sys_coords)
@@ -182,41 +179,31 @@ end
         @test du1 ≈ du2 ≈ du3
     end
 
-    @testset "jac sparse" begin
-        du = similar(f.jac_prototype)
-        f.jac(du, ucopy[:], p, 0.0)
-        @test sum(sum.(du.blocks)) ≈ 12617.772209024473
-
-        du2 = f.jac(reshape(ucopy, :), p, 0.0)
-        @test all(du.blocks .≈ du2.blocks)
-    end
-
-    f, = EarthSciMLBase.mtk_grid_func(sys_mtk, domain, ucopy; sparse = false, tgrad = true)
     @testset "jac dense" begin
         du = similar(f.jac_prototype)
         f.jac(du, ucopy[:], p, 0.0)
-        @test sum(sum.(du.blocks)) ≈ 12617.772209024473
+        @test sum(du.data) ≈ 12617.772209024473
 
-        du2 = f.jac(reshape(ucopy, :), p, 0.0)
-        @test all(du.blocks .≈ du2.blocks)
+            du2 = f.jac(reshape(ucopy, :), p, 0.0)
+            @test all(du.data .≈ du2.data)
     end
 
     @testset "jac MapThreads" begin
         du = similar(fthreads.jac_prototype)
         fthreads.jac(du, ucopy[:], p, 0.0)
-        @test sum(sum.(du.blocks)) ≈ 12617.772209024473
+        @test sum(du.data) ≈ 12617.772209024473
 
-        du2 = fthreads.jac(reshape(ucopy, :), p, 0.0)
-        @test all(du.blocks .≈ du2.blocks)
+            du2 = fthreads.jac(reshape(ucopy, :), p, 0.0)
+            @test all(du.data .≈ du2.data)
     end
 
     @testset "tgrad" begin
         du = similar(f.jac_prototype)
-        for i in 1:length(du.blocks)
-            du.blocks[i] .= 0
+        for i in 1:size(du.data, 3)
+            EarthSciMLBase.block(du, i) .= 0
         end
         f.tgrad(du, ucopy[:], p, 0.0)
-        @test sum(sum.(du.blocks)) ≈ 0.0
+        @test sum(du.data) ≈ 0.0
     end
 end
 
@@ -230,7 +217,7 @@ st = SolverStrangThreads(Tsit5(), 1.0)
 @testset "Float32" begin
     domain = DomainInfo(
         constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
-        u_proto = zeros(Float32, 1, 1, 1, 1), grid_spacing = [0.1, 0.1, 1])
+        uproto = zeros(Float32, 1, 1, 1, 1), grid_spacing = [0.1, 0.1, 1])
 
     csys = couple(sys, op, domain)
 
@@ -252,7 +239,7 @@ end
     domain = DomainInfo(
         partialderivatives_δxyδlonlat,
         constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
-        u_proto = zeros(Float32, 1, 1, 1, 1), grid_spacing = [0.1, 0.1, 1])
+        uproto = zeros(Float32, 1, 1, 1, 1), grid_spacing = [0.1, 0.1, 1])
 
     csys = couple(sys, domain)
 
@@ -260,6 +247,60 @@ end
     sol = solve(prob, Euler(); dt = 1.0, abstol = 1e-6, reltol = 1e-6)
 
     @test sum(abs.(sol.u[end])) ≈ 3.8660308f7
+end
+
+@testset "MapKernel" begin
+    ucopy = Float32.(u)
+    domain = DomainInfo(
+        constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
+        uproto = ucopy, grid_spacing = [0.1, 0.1, 1])
+    csys = couple(sys, domain)
+    prob = ODEProblem(csys, SolverIMEX(MapKernel()))
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, prob.tspan[1])
+    @test du[1] ≈ -13.141593f0
+end
+
+if Sys.isapple() # TODO: Why aren't the results of these tests deterministic?
+    @testset "Metal GPU" begin
+        using Metal
+        ucopy = MtlArray(Float32.(u))
+        domain = DomainInfo(
+            constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
+            uproto = ucopy, grid_spacing = [0.1, 0.1, 1])
+
+        csys = couple(sys, op, domain)
+
+        prob = ODEProblem(
+            csys, SolverIMEX(MapKernel(), BlockDiagonalJacobian(),
+                stiff_sparse = false))
+
+        du = similar(prob.u0)
+        prob.f.f1(du, prob.u0, prob.p, prob.tspan[1])
+        @test Array(du)[1] ≈ -13.141593f0
+        du .= 0.0f0
+        prob.f.f2(du, prob.u0, prob.p, prob.tspan[1])
+        @test Array(du)[1] ≈ -3.5553088f0
+        du .= 0.0f0
+        prob.f(du, prob.u0, prob.p, prob.tspan[1])
+        @test Array(du)[1] ≈ -3.5553088f0 + -13.141593f0
+
+        @testset "generic lu" begin
+            sol = solve(
+                prob, KenCarp47(linsolve = GenericLUFactorization()), abstol = 1.0f-7,
+                reltol = 1.0f-7)
+            @test sum(Float64.(Array(abs.(sol.u[end]))))≈4.0054012260009766e7 rtol=2e-2
+        end
+
+        @testset "krylov" begin
+            prob = ODEProblem(csys,
+                SolverIMEX(MapKernel(), BlockDiagonalOperatorJacobian(),
+                    stiff_sparse = false))
+            sol = solve(prob, KenCarp47(linsolve = KrylovJL()), abstol = 1.0f-7,
+                reltol = 1.0f-7)
+            @test sum(Float64.(Array(abs.(sol.u[end]))))≈3.477207642895508e7 rtol=2e-2 # TODO: Why is this different from above?
+        end
+    end
 end
 
 @testset "SimulatorStrategies" begin
@@ -284,8 +325,8 @@ end
         @test sum(abs.(sol.u[end]))≈3.444627331604664e7 rtol=1e-3 # No Splitting error in this one.
 
         for alg in [MapBroadcast(), MapThreads()]
-            for iip in [true, false]
-                for sparse in [true, false]
+            for iip in [true] # [true, false] oop not currently implemented for BlockDiagonalJacobian.
+                for sparse in [false] # [true, false] # BlockDiagonalJacobian not currently implemented for sparse.
                     @testset "alg=$alg; iip=$iip; sparse=$sparse" begin
                         st = SolverIMEX(alg; stiff_sparse = sparse)
                         prob = ODEProblem{iip}(csys, st)
