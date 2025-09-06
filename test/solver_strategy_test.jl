@@ -184,10 +184,8 @@ end
         f.jac(du, ucopy[:], p, 0.0)
         @test sum(du.data) ≈ 12617.772209024473
 
-        @test_broken begin # oop not currently implemented
             du2 = f.jac(reshape(ucopy, :), p, 0.0)
             @test all(du.data .≈ du2.data)
-        end
     end
 
     @testset "jac MapThreads" begin
@@ -195,10 +193,8 @@ end
         fthreads.jac(du, ucopy[:], p, 0.0)
         @test sum(du.data) ≈ 12617.772209024473
 
-        @test_broken begin # oop not currently implemented
             du2 = fthreads.jac(reshape(ucopy, :), p, 0.0)
             @test all(du.data .≈ du2.data)
-        end
     end
 
     @testset "tgrad" begin
