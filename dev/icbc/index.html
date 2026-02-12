@@ -14,12 +14,12 @@ function ExampleSys()
         D(u) ~ √abs(v),
         D(v) ~ √abs(u)
     ]
-    ODESystem(eqs, t, [u, v], [x, y]; name = :Docs₊Example)
+    System(eqs, t, [u, v], [x, y]; name = :Docs₊Example)
 end
 
 ExampleSys()</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} u\left( t \right)}{\mathrm{d}t} &amp;= \sqrt{\left|v\left( t \right)\right|} \\
-\frac{\mathrm{d} v\left( t \right)}{\mathrm{d}t} &amp;= \sqrt{\left|u\left( t \right)\right|}
+\frac{\mathrm{d} ~ u\left( t \right)}{\mathrm{d}t} &amp;= \sqrt{\left|v\left( t \right)\right|} \\
+\frac{\mathrm{d} ~ v\left( t \right)}{\mathrm{d}t} &amp;= \sqrt{\left|u\left( t \right)\right|}
 \end{align}
  \]</p><p>Next, we specify our initial and boundary conditions using the <a href="../api/#EarthSciMLBase.DomainInfo"><code>DomainInfo</code></a> type. We initialize <a href="../api/#EarthSciMLBase.DomainInfo"><code>DomainInfo</code></a> with sets of initial and boundary conditions. In the example below, we set constant initial conditions using <a href="../api/#EarthSciMLBase.constIC"><code>constIC</code></a> and constant boundary conditions using <a href="../api/#EarthSciMLBase.constBC"><code>constBC</code></a>.</p><pre><code class="language-julia hljs">using DomainSets
 
@@ -38,8 +38,8 @@ icbc = DomainInfo(
 eq_sys = convert(PDESystem, model)</code></pre><p class="math-container">\[ \begin{align}
 \mathtt{{\delta}Docs.Example.x\_transform}\left( t, x, y \right) &amp;= 1 \\
 \mathtt{{\delta}Docs.Example.y\_transform}\left( t, x, y \right) &amp;= 1 \\
-\frac{\mathrm{d}}{\mathrm{d}t} \mathtt{Docs.Example.u}\left( t, x, y \right) &amp;= \sqrt{\left|\mathtt{Docs.Example.v}\left( t, x, y \right)\right|} \\
-\frac{\mathrm{d}}{\mathrm{d}t} \mathtt{Docs.Example.v}\left( t, x, y \right) &amp;= \sqrt{\left|\mathtt{Docs.Example.u}\left( t, x, y \right)\right|}
+\frac{\mathrm{d}}{\mathrm{d}t} ~ \mathtt{Docs.Example.u}\left( t, x, y \right) &amp;= \sqrt{\left|\mathtt{Docs.Example.v}\left( t, x, y \right)\right|} \\
+\frac{\mathrm{d}}{\mathrm{d}t} ~ \mathtt{Docs.Example.v}\left( t, x, y \right) &amp;= \sqrt{\left|\mathtt{Docs.Example.u}\left( t, x, y \right)\right|}
 \end{align}
  \]</p><p>We can also look at the expanded boundary conditions of the resulting equation system:</p><pre><code class="language-julia hljs">eq_sys.bcs</code></pre><p class="math-container">\[ \begin{align}
 \mathtt{{\delta}Docs.Example.x\_transform}\left( 0, x, y \right) &amp;= 4 \\
@@ -63,4 +63,4 @@ eq_sys = convert(PDESystem, model)</code></pre><p class="math-container">\[ \beg
 \mathtt{Docs.Example.v}\left( t, x, 0 \right) &amp;= 16 \\
 \mathtt{Docs.Example.v}\left( t, x, 1 \right) &amp;= 16
 \end{align}
- \]</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../system_events/">« System Events</a><a class="docs-footer-nextpage" href="../advection/">Advection »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.13.0 on <span class="colophon-date" title="Friday 4 July 2025 03:23">Friday 4 July 2025</span>. Using Julia version 1.11.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ \]</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../system_events/">« System Events</a><a class="docs-footer-nextpage" href="../advection/">Advection »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Thursday 12 February 2026 23:56">Thursday 12 February 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

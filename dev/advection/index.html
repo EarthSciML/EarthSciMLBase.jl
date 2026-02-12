@@ -7,33 +7,24 @@ D = D_nounits
 function ExampleSys()
     @variables y(t)
     @parameters p=2.0 x=1
-    ODESystem([D(y) ~ p], t, [y], [p, x]; name = :ExampleSys)
+    System([D(y) ~ p], t, [y], [p, x]; name = :ExampleSys)
 end
 
-ExampleSys()</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d} y\left( t \right)}{\mathrm{d}t} &amp;= p
-\end{align}
- \]</p><p>We also need to create our initial and boundary conditions.</p><pre><code class="language-julia hljs">using DomainSets
+ExampleSys()</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr1">Model ExampleSys:</span>
+<span class="sgr1">Equations (1):</span>
+  1 standard: see equations(ExampleSys)
+<span class="sgr1">Unknowns (1):</span> see unknowns(ExampleSys)
+  y(t)
+<span class="sgr1">Parameters (2):</span> see parameters(ExampleSys)
+  p
+  x</code></pre><p>We also need to create our initial and boundary conditions.</p><pre><code class="language-julia hljs">using DomainSets
 @parameters x
 domain = DomainInfo(constIC(0.0, t ∈ Interval(0, 1.0)), constBC(1.0, x ∈ Interval(0, 1.0)))</code></pre><p>Now we convert add advection to each of the state variables. We&#39;re also adding a constant wind (<a href="../api/#EarthSciMLBase.ConstantWind-Tuple{Any, Vararg{Any}}"><code>ConstantWind</code></a>) in the x-direction, with a speed of 1.0.</p><pre><code class="language-julia hljs">sys_advection = couple(ExampleSys(), domain, ConstantWind(t, 1.0), Advection())
-sys_mtk = convert(PDESystem, sys_advection)</code></pre><p class="math-container">\[ \begin{align}
-\mathtt{{\delta}ExampleSys.x\_transform}\left( t, x \right) &amp;= 1 \\
-\mathtt{MeanWind.v\_x}\left( t, x \right) &amp;= \mathtt{ConstantWind.v\_1}\left( t, x \right) \\
-\frac{\mathrm{d}}{\mathrm{d}t} \mathtt{ExampleSys.y}\left( t, x \right) &amp;= \mathtt{ExampleSys.p} - \mathtt{MeanWind.v\_x}\left( t, x \right) \frac{\mathrm{d}}{\mathrm{d}x} \mathtt{ExampleSys.y}\left( t, x \right) \\
-\mathtt{ConstantWind.v\_1}\left( t, x \right) &amp;= \mathtt{ConstantWind.c\_v1}
-\end{align}
- \]</p><p>Finally, we can discretize the system and solve it:</p><pre><code class="language-julia hljs">using MethodOfLines, DifferentialEquations, Plots
-discretization = MOLFiniteDifference([x =&gt; 10], t, approx_order = 2)
-@time prob = discretize(sys_mtk, discretization)
-@time sol = solve(prob, Tsit5(), saveat = 0.1)
-
-# Plot the solution.
-discrete_x = sol[x]
-discrete_t = sol[t]
-yvar = only(sys_mtk.dvs[[occursin(&quot;ExampleSys₊y&quot;, string(dv)) for dv in sys_mtk.dvs]])
-soly = sol[yvar]
-anim = @animate for k in 1:length(discrete_t)
-    plot(discrete_x, soly[k, 1:end], title = &quot;t=\$(discrete_t[k])&quot;,
-        ylim = (0, 2.5), lab = :none)
-end
-gif(anim, fps = 8)</code></pre><img src="e2bfbca2.gif" alt="Example block output"/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../icbc/">« Initial and Boundary Conditions</a><a class="docs-footer-nextpage" href="../coord_transforms/">Coordinate Transforms »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.13.0 on <span class="colophon-date" title="Friday 4 July 2025 03:23">Friday 4 July 2025</span>. Using Julia version 1.11.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+sys_mtk = convert(PDESystem, sys_advection)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">PDESystem
+Equations: Symbolics.Equation[δExampleSys₊x_transform(t, x) ~ <span class="sgr34">1</span>, MeanWind₊v_x(t, x) ~ ConstantWind₊v_1(t, x), Differential(t, 1)(ExampleSys₊y(t, x)) ~ ExampleSys₊p - Differential(x, 1)(ExampleSys₊y(t, x))*MeanWind₊v_x(t, x), ConstantWind₊v_1(t, x) ~ ConstantWind₊c_v1]
+Boundary Conditions: Symbolics.Equation[δExampleSys₊x_transform(<span class="sgr34">0.0</span>, x) ~ <span class="sgr34">0.0</span>, MeanWind₊v_x(<span class="sgr34">0.0</span>, x) ~ <span class="sgr34">0.0</span>, ConstantWind₊v_1(<span class="sgr34">0.0</span>, x) ~ <span class="sgr34">0.0</span>, ExampleSys₊y(<span class="sgr34">0.0</span>, x) ~ <span class="sgr34">0.0</span>, ConstantWind₊v_1(<span class="sgr34">0.0</span>, x) ~ <span class="sgr34">0.0</span>, MeanWind₊v_x(<span class="sgr34">0.0</span>, x) ~ <span class="sgr34">0.0</span>, δExampleSys₊x_transform(t, <span class="sgr34">0.0</span>) ~ <span class="sgr34">1.0</span>, δExampleSys₊x_transform(t, <span class="sgr34">1.0</span>) ~ <span class="sgr34">1.0</span>, MeanWind₊v_x(t, <span class="sgr34">0.0</span>) ~ <span class="sgr34">1.0</span>, MeanWind₊v_x(t, <span class="sgr34">1.0</span>) ~ <span class="sgr34">1.0</span>, ConstantWind₊v_1(t, <span class="sgr34">0.0</span>) ~ <span class="sgr34">1.0</span>, ConstantWind₊v_1(t, <span class="sgr34">1.0</span>) ~ <span class="sgr34">1.0</span>, ExampleSys₊y(t, <span class="sgr34">0.0</span>) ~ <span class="sgr34">1.0</span>, ExampleSys₊y(t, <span class="sgr34">1.0</span>) ~ <span class="sgr34">1.0</span>, ConstantWind₊v_1(t, <span class="sgr34">0.0</span>) ~ <span class="sgr34">1.0</span>, ConstantWind₊v_1(t, <span class="sgr34">1.0</span>) ~ <span class="sgr34">1.0</span>, MeanWind₊v_x(t, <span class="sgr34">0.0</span>) ~ <span class="sgr34">1.0</span>, MeanWind₊v_x(t, <span class="sgr34">1.0</span>) ~ <span class="sgr34">1.0</span>]
+Domain: Symbolics.VarDomainPairing[Symbolics.VarDomainPairing(t, 0.0 .. 1.0), Symbolics.VarDomainPairing(x, 0.0 .. 1.0)]
+Dependent Variables: Symbolics.Num[δExampleSys₊x_transform(t, x), MeanWind₊v_x(t, x), ConstantWind₊v_1(t, x), ExampleSys₊y(t, x), ConstantWind₊v_1(t, x), MeanWind₊v_x(t, x)]
+Independent Variables: Symbolics.Num[t, x]
+Parameters: SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymbolicUtils.SymReal}[ExampleSys₊p, ExampleSys₊x]
+Default Parameter ValuesModelingToolkitBase.AtomicArrayDict{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymbolicUtils.SymReal}, Dict{SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymbolicUtils.SymReal}, SymbolicUtils.BasicSymbolicImpl.var&quot;typeof(BasicSymbolicImpl)&quot;{SymbolicUtils.SymReal}}}()</code></pre><div class="admonition is-info" id="Note-fb361c4991d9aa97"><header class="admonition-header">Note<a class="admonition-anchor" href="#Note-fb361c4991d9aa97" title="Permalink"></a></header><div class="admonition-body"><p>Discretization and numerical solution of this PDE system requires <a href="https://docs.sciml.ai/MethodOfLines/stable/">MethodOfLines.jl</a>, which is not currently compatible with the latest ModelingToolkit ecosystem.</p></div></div></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../icbc/">« Initial and Boundary Conditions</a><a class="docs-footer-nextpage" href="../coord_transforms/">Coordinate Transforms »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.16.1 on <span class="colophon-date" title="Thursday 12 February 2026 23:56">Thursday 12 February 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
