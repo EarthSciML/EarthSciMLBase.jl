@@ -49,14 +49,6 @@ function map_closure_to_range(f, range, mk::MapKernel, args...; kwargs...)
         f(i, args...; kwargs...)
     end
 end
-function map_closure_to_range(f, range, ::MapReactant, args...)
-    function _map(f, range, args...)
-        f2(i) = f(i, args...; kwargs...)
-        map(f2, range)
-    end
-    Reactant.@jit _map(f, range, args...)
-end
-
 function mapreduce_range(f, op, range, ::MapAlgorithm, args...)
     bknd = if (length(args) > 0) && (args[1] isa AbstractArray)
         AK.get_backend(args[1])
@@ -65,12 +57,4 @@ function mapreduce_range(f, op, range, ::MapAlgorithm, args...)
     end
     f2(i) = f(i, args...)
     AK.mapreduce(f2, op, range, bknd; init = 0, neutral = 0)
-end
-function mapreduce_range(f, op, range, ::MapReactant, args...)
-    function _mapreduce(range, args...)
-        f2(i) = f(i, args...)
-        out = map(f2, range)
-        reduce(op, out, init = 0)
-    end
-    Reactant.@jit _mapreduce(range, args...)
 end

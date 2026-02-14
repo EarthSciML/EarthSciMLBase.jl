@@ -11,8 +11,8 @@ using ModelingToolkit: t, D
 eq = D(x) ~ α * x / β
 @named sys = System([eq], t; metadata = Dict(CoupleType => :metatest))
 
-ii(x, y) = findfirst(isequal(x), y)
-isin(x, y) = ii(x, y) !== nothing
+ii(x, y) = findfirst(isequal(x), collect(y))
+isin(x, y) = any(isequal(x), y)
 @variables β(t) [unit = u"kg*s", description = "β description"]
 
 @testset "Single substitution" begin

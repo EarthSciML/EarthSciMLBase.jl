@@ -167,9 +167,9 @@ function operator_compose(a::ModelingToolkit.System, b::ModelingToolkit.System,
         end
     end
     aa = copy_with_change(a; eqs = a_eqs, unknowns = [unknowns(a); extra_avars...],
-        parameters = [full_parameters(a); extra_params...])
+        parameters = [parameters(a); extra_params...])
     bb = copy_with_change(b; eqs = b_eqs, unknowns = [unknowns(b); extra_bvars...],
-        parameters = [full_parameters(b); extra_params...])
+        parameters = [parameters(b); extra_params...])
     ConnectorSystem(connections, aa, bb)
 end
 

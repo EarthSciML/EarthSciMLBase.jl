@@ -31,7 +31,7 @@ determines the loss rate) with a temperature value that varies in time.
 """
 function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
     params = parameters(sys)
-    defaults = copy(getfield(sys, :defaults))
+    defaults = copy(getfield(sys, :initial_conditions))
     replace = Dict()
     for p in ps
         if p in ModelingToolkit.tosymbol.(unknowns(sys), escape = false) # Skip if it is already a variable.

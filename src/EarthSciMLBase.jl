@@ -5,8 +5,9 @@ using Graphs, MetaGraphsNext
 using DocStringExtensions
 using DynamicQuantities, Dates
 using DomainSets
-using SciMLBase: DECallback, CallbackSet, ODEProblem, SplitODEProblem, reinit!, solve!,
+using SciMLBase: DECallback, CallbackSet, SplitODEProblem, reinit!, solve!,
                  init, remake
+import SciMLBase: ODEProblem
 using Statistics
 using DiffEqCallbacks
 using LinearAlgebra
@@ -17,7 +18,6 @@ using MacroTools, RuntimeGeneratedFunctions
 import SciMLOperators as SMO
 import ThreadsX
 import AcceleratedKernels as AK
-import Reactant
 
 include("add_dims.jl")
 include("domaininfo.jl")

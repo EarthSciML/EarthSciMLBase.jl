@@ -26,7 +26,11 @@ function rewrite_broadcast(x)
         end
     elseif @capture(x, (f_)(args__)) # Function call
         return :($f.($(args...)))
-    elseif @capture(x, if a_ b_ else c_ end) # if expression
+    elseif @capture(x, if a_
+        b_
+    else
+        c_
+    end) # if expression
         return :(ifelse.($a, $b, $c))
     end
     return x
@@ -41,8 +45,7 @@ function _add_coord_args(ex, coord_args, idv::Symbol, ::MapReactant)
     ex = MacroTools.postwalk(x -> rewrite_broadcast(x), ex)
 end
 
-
-function gen_coord_func(sys, expr, coord_args, alg::MapAlgorithm=MapBroadcast();
+function gen_coord_func(sys, expr, coord_args, alg::MapAlgorithm = MapBroadcast();
         eval_expression = false, eval_module = @__MODULE__)
     idv = var2symbol(ModelingToolkit.get_iv(sys))
     fexpr = ModelingToolkit.generate_custom_function(sys, expr, expression = Val{true})
@@ -94,21 +97,39 @@ end
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-function build_coord_ode_function(sys_coord, coord_args, MA::MapAlgorithm=MapBroadcast();
+function build_coord_ode_function(sys_coord, coord_args, MA::MapAlgorithm = MapBroadcast();
         kwargs...)
     exprs = [eq.rhs for eq in equations(sys_coord)]
     gen_coord_func(sys_coord, exprs, coord_args, MA; kwargs...)
 end
 
-function build_coord_jac_function(sys_coord, coord_args, MA::MapAlgorithm=MapBroadcast();
+function build_coord_jac_function(sys_coord, coord_args, MA::MapAlgorithm = MapBroadcast();
         sparse = false, kwargs...)
     jac_expr = ModelingToolkit.calculate_jacobian(sys_coord, sparse = sparse; kwargs...)
     gen_coord_func(sys_coord, jac_expr, coord_args, MA; kwargs...)
 end
 
-function build_coord_tgrad_function(sys_coord, coord_args, MA::MapAlgorithm=MapBroadcast();
+function build_coord_tgrad_function(
+        sys_coord, coord_args, MA::MapAlgorithm = MapBroadcast();
         kwargs...)
     tgrad_expr = ModelingToolkit.calculate_tgrad(sys_coord; kwargs...)
+    # Substitute time derivatives of _CoordTmpF terms with 0.0.
+    # _CoordTmpF represents coordinate parameters that are constant in time,
+    # but expand_derivatives doesn't resolve their derivatives in Symbolics v7.
+    subs = Dict()
+    for e in tgrad_expr
+        for v in Symbolics.get_variables(e)
+            if Symbolics.iscall(v) && Symbolics.operation(v) isa Symbolics.Differential
+                inner = Symbolics.arguments(v)[1]
+                if Symbolics.iscall(inner) && Symbolics.operation(inner) isa _CoordTmpF
+                    subs[Symbolics.wrap(v)] = 0.0
+                end
+            end
+        end
+    end
+    if !isempty(subs)
+        tgrad_expr = Symbolics.substitute.(tgrad_expr, (subs,))
+    end
     gen_coord_func(sys_coord, tgrad_expr, coord_args, MA; kwargs...)
 end
 
@@ -160,7 +181,7 @@ function _mtk_grid_func(sys_mtk, mtkf, domain::DomainInfo{ET, AT},
         u = reshape(u, nrows, :)
         @info u, p, t, c1, c2, c3
         @info mtkf
-        du =  mtkf(u, p, t, c1, c2, c3)
+        du = mtkf(u, p, t, c1, c2, c3)
         reshape(hcat(du...), :)
     end
     return f
@@ -184,44 +205,6 @@ function mtk_grid_func(
 
     jac_prototype = build_jacobian(jac_type, nvars, domain, alg, sparse)
     jf = mtk_jac_grid_func(sys_mtk, jac_coord, domain, jac_type, alg)
-
-    kwargs = []
-    if tgrad
-        tgf = build_coord_tgrad_function(sys_mtk, coord_args, alg)
-        tg = mtk_tgrad_grid_func(sys_mtk, tgf, domain, alg)
-        push!(kwargs, :tgrad => tg)
-    end
-    if vjp
-        vj = mtk_vjp_grid_func(sys_mtk, jac_coord, domain, alg)
-        push!(kwargs, :vjp => vj)
-    end
-    ODEFunction(f; jac_prototype = jac_prototype, jac = jf, kwargs...), sys_mtk, coord_args
-end
-
-function mtk_grid_func(
-        sys_mtk::System, domain::DomainInfo{T, AT}, u0,
-        alg::MapReactant,
-        jac_type::JT = BlockDiagonalJacobian();
-        sparse = false, tgrad = false, vjp = true) where {
-        T, AT, JT <: JacobianType}
-    sys_mtk, coord_args = _prepare_coord_sys(sys_mtk, domain)
-
-    mtkf_coord = build_coord_ode_function(sys_mtk, coord_args, alg)
-    jac_coord = build_coord_jac_function(sys_mtk, coord_args, alg; sparse = sparse)
-
-    nvars = length(unknowns(sys_mtk))
-    jac_prototype = build_jacobian(jac_type, nvars, domain, alg, sparse)
-
-    f, jf = let
-        f = _mtk_grid_func(sys_mtk, mtkf_coord, domain, alg)
-        jf = mtk_jac_grid_func(sys_mtk, jac_coord, domain, jac_type, alg)
-        p = MTKParameters(sys_mtk, defaults(sys_mtk))
-        t = zero(eltype(domain))
-        du = similar(u0) # TODO(CT): Is this allocation avoidable?
-        f_compiled = Reactant.@compile f(du, u0, p, t)
-        #jf_compiled = Reactant.@compile jf(jac_prototype, u0, p, t)
-        f_compiled, jf #jf_compiled
-    end
 
     kwargs = []
     if tgrad

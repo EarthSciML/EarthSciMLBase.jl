@@ -10,7 +10,7 @@ Our first example system is a simple reaction system:
 
 ```@example ex1
 using EarthSciMLBase
-using ModelingToolkit, Catalyst, DomainSets, MethodOfLines, DifferentialEquations
+using ModelingToolkit, Catalyst, DomainSets, DifferentialEquations
 using ModelingToolkit: t_nounits, D_nounits
 t = t_nounits
 D = D_nounits
@@ -27,7 +27,7 @@ function ExampleSys1()
     rs = ReactionSystem(
         [Reaction(2.0, [c₁], [c₂])],
         t; name = :Sys1, combinatoric_ratelaws = false)
-    convert(System, complete(rs), metadata = Dict(CoupleType => ExampleSys1Coupler))
+    ode_model(complete(rs); metadata = Dict(CoupleType => ExampleSys1Coupler))
 end
 
 ExampleSys1()
@@ -95,56 +95,6 @@ odesol = solve(odeprob)
 plot(odesol)
 ```
 
-Once we've confirmed that our model works in a 0D "box model" setting,
-we can expand it to 1, 2, or 3 dimensions using by adding in initial
-and boundary conditions.
-We will also add in advection using constant-velocity wind fields
-add the same time.
+!!! note
 
-```@example ex1
-x_min = y_min = t_min = 0.0
-x_max = y_max = t_max = 1.0
-domain = DomainInfo(
-    constIC(4.0, t ∈ Interval(t_min, t_max)),
-    periodicBC(x ∈ Interval(x_min, x_max)),
-    zerogradBC(y ∈ Interval(y_min, y_max))
-)
-
-sys_pde = couple(sys, domain, ConstantWind(t, 1.0, 1.0), Advection())
-
-sys_pde_mtk = convert(PDESystem, sys_pde)
-```
-
-Now we can inspect this new system that we've created:
-
-```@example ex1
-sys_pde_mtk.dvs
-```
-
-```@example ex1
-sys_pde_mtk.bcs
-```
-
-Finally, we can run a simulation using this system:
-
-```@example ex1
-discretization = MOLFiniteDifference([x => 10, y => 10], t, approx_order = 2)
-@time pdeprob = discretize(sys_pde_mtk, discretization)
-@time pdesol = solve(pdeprob, Tsit5(), saveat = 0.1)
-
-# Plot the solution.
-discrete_x, discrete_y, discrete_t = pdesol[x], pdesol[y], pdesol[t]
-@variables Sys1₊c₁(..) Sys1₊c₂(..)
-solc1, solc2 = pdesol[Sys1₊c₁(t, x, y)], pdesol[Sys1₊c₂(t, x, y)]
-anim = @animate for k in 1:length(discrete_t)
-    p1 = heatmap(solc1[k, 1:(end - 1), 1:(end - 1)],
-        title = "c₁ t=\$(discrete_t[k])", clim = (0, 4.0), lab = :none)
-    p2 = heatmap(solc2[k, 1:(end - 1), 1:(end - 1)],
-        title = "c₂ t=\$(discrete_t[k])", clim = (0, 7.0), lab = :none)
-    plot(p1, p2, layout = (1, 2), size = (800, 400))
-end
-gif(anim, fps = 8)
-```
-
-Because our system is a system of ordinary differential equations rather than partial differential equations, all of the grid cells in the animation above have the same value.
-Refer to the [advection example](@ref Advection) for an example of a system of partial differential equations.
+    This model can also be expanded to 1, 2, or 3 dimensions by adding initial and boundary conditions, advection, etc. See the [advection example](@ref Advection) for more details. Discretization and numerical solution of PDE systems requires [MethodOfLines.jl](https://docs.sciml.ai/MethodOfLines/stable/), which is not currently compatible with the latest ModelingToolkit ecosystem.

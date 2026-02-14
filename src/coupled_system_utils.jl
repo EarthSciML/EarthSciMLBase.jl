@@ -30,7 +30,6 @@ function observed_expression(eqs, x)
     if isnothing(expr)
         return nothing
     end
-    expr = ModelingToolkit.subs_constants(expr)
     for v in Symbolics.get_variables(expr)
         v_expr = observed_expression(eqs, v)
         if !isnothing(v_expr)
@@ -153,20 +152,20 @@ function copy_with_change(sys::System;
         metadata = ModelingToolkit.get_metadata(sys),
         continuous_events = ModelingToolkit.get_continuous_events(sys),
         discrete_events = ModelingToolkit.get_discrete_events(sys),
-        defaults = getfield(sys, :defaults)
+        defaults = getfield(sys, :initial_conditions)
 )
     try
         if isnothing(unknowns) && isnothing(parameters)
             return System(eqs, ModelingToolkit.get_iv(sys);
                 name = name, metadata = metadata,
                 continuous_events = continuous_events, discrete_events = discrete_events,
-                defaults = defaults
+                initial_conditions = defaults
             )
         else
             return System(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
                 name = name, metadata = metadata,
                 continuous_events = continuous_events, discrete_events = discrete_events,
-                defaults = defaults
+                initial_conditions = defaults
             )
         end
     catch e
@@ -196,7 +195,7 @@ function get_affected_vars(event)
 end
 
 function var2symbol(var)
-    if var isa Symbolics.CallWithMetadata
+    if var isa Symbolics.CallAndWrap
         var = var.f
     elseif SymbolicUtils.iscall(var)
         var = operation(var)
@@ -318,8 +317,9 @@ Initialize the state variable array.
 """
 function init_u(mtk_sys::System, d::DomainInfo{ET}) where {ET}
     vars = unknowns(mtk_sys)
-    dflts = ModelingToolkit.get_defaults(mtk_sys)
-    u0_single = [dflts[u] for u in vars]
+    ics = ModelingToolkit.initial_conditions(mtk_sys)
+    # Convert symbolic numeric values to concrete Float64
+    u0_single = [Symbolics.value(Symbolics.Num(ics[u])) for u in vars]
 
     u0 = init_array(d, length(u0_single)*prod(size(d)))
     u0_tmp = reshape(u0, length(u0_single), :)
@@ -334,11 +334,11 @@ end
 
 Initialize an arrays with the given dimensions
 """
-init_array(d::DomainInfo, sizes...) = similar(d.uproto, sizes...)
+init_array(d::DomainInfo, sizes...) = similar(d.u_proto, sizes...)
 
 function default_params(mtk_sys::AbstractSystem)
-    dflts = ModelingToolkit.get_defaults(mtk_sys)
-    MTKParameters(mtk_sys, dflts)
+    ics = ModelingToolkit.initial_conditions(mtk_sys)
+    MTKParameters(mtk_sys, ics)
 end
 
 # return whether the part of a after the last "₊" character matches b.

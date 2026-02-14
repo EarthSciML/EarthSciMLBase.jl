@@ -41,7 +41,7 @@ function mtk_jac_grid_func(
         u = reshape(u, nvar, :)
         calcJ(r, u, p, t, c1, c2, c3) = jacf(view(u, :, r), p, t, c1[r], c2[r], c3[r])
         blocks = map_closure_to_range(calcJ, 1:size(u, 2), alg, u, p, t, c1, c2, c3)
-        blocks3d = reduce((x,y) -> cat(x,y; dims=3), blocks)
+        blocks3d = reduce((x, y) -> cat(x, y; dims = 3), blocks)
         return BlockDiagonal(blocks3d, alg)
     end
 end

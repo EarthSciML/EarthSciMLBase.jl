@@ -49,7 +49,7 @@ struct DomainInfo{ET, AT}
     """
     The prototype state array for the domain.
     """
-    uproto::AT
+    u_proto::AT
 
     """
     The reference time for the domain, relative to which the simulation time
@@ -61,38 +61,38 @@ struct DomainInfo{ET, AT}
         new{ET, Vector{ET}}(pdfs, gs, icbc, sr, zeros(ET, 0), t_ref)
     end
     function DomainInfo(
-            icbc::ICBCcomponent...; uproto::AT = zeros(0), grid_spacing = nothing,
+            icbc::ICBCcomponent...; u_proto::AT = zeros(0), grid_spacing = nothing,
             spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT <: AbstractArray}
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        et = eltype(uproto)
+        et = eltype(u_proto)
         grid_spacing = isnothing(grid_spacing) ? defaultgridspacing(et, icbc) : grid_spacing
-        new{et, AT}([], grid_spacing, ICBCcomponent[icbc...], spatial_ref, uproto, 0)
+        new{et, AT}([], grid_spacing, ICBCcomponent[icbc...], spatial_ref, u_proto, 0)
     end
     function DomainInfo(fdx::Function, icbc::ICBCcomponent...; grid_spacing = nothing,
-            uproto::AT = zeros(0),
+            u_proto::AT = zeros(0),
             spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT <: AbstractArray}
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        et = eltype(uproto)
+        et = eltype(u_proto)
         grid_spacing = isnothing(grid_spacing) ? defaultgridspacing(et, icbc) : grid_spacing
-        new{et, AT}([fdx], grid_spacing, ICBCcomponent[icbc...], spatial_ref, uproto, 0)
+        new{et, AT}([fdx], grid_spacing, ICBCcomponent[icbc...], spatial_ref, u_proto, 0)
     end
     function DomainInfo(fdxs::Vector{Function}, icbc::ICBCcomponent...;
-            uproto::AT = zeros(0), grid_spacing = nothing,
+            u_proto::AT = zeros(0), grid_spacing = nothing,
             spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT <: AbstractArray}
         @assert length(icbc)>0 "At least one initial or boundary condition is required."
         @assert icbc[1] isa ICcomponent "The first initial or boundary condition must be the initial condition for the independent variable."
-        et = eltype(uproto)
+        et = eltype(u_proto)
         grid_spacing = isnothing(grid_spacing) ? defaultgridspacing(et, icbc) : grid_spacing
-        new{et, AT}(fdxs, grid_spacing, ICBCcomponent[icbc...], spatial_ref, uproto, 0)
+        new{et, AT}(fdxs, grid_spacing, ICBCcomponent[icbc...], spatial_ref, u_proto, 0)
     end
     function DomainInfo(starttime::DateTime, endtime::DateTime;
             xrange = nothing, yrange = nothing, levrange = nothing,
-            latrange = nothing, lonrange = nothing, uproto::AT = zeros(0),
+            latrange = nothing, lonrange = nothing, u_proto::AT = zeros(0),
             level_trans = nothing, tref = starttime,
             spatial_ref = "+proj=longlat +datum=WGS84 +no_defs") where {AT <: AbstractArray}
-        et = eltype(uproto)
+        et = eltype(u_proto)
         @assert et(datetime2unix(starttime))<et(datetime2unix(endtime)) "starttime must be before endtime when represented as $et."
         @assert (!isnothing(xrange) &&
                  !isnothing(yrange)) ||
@@ -141,7 +141,7 @@ struct DomainInfo{ET, AT}
             push!(grid_spacing, gridT(step(levrange)))
         end
         bcs = constBC(et(0.0), boundaries...)
-        new{et, AT}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, uproto, tref)
+        new{et, AT}(fdxs, grid_spacing, ICBCcomponent[ic, bcs], spatial_ref, u_proto, tref)
     end
 end
 
@@ -195,7 +195,7 @@ function concrete_grid(domain::DomainInfo{ET, AT}) where {ET, AT}
     map(enumerate(g)) do (j, c)
         # Collect the grid points and convert them to the correct array type.
         _grd = [c[II[i][j]] for i in 1:length(II)]
-        grd = similar(domain.uproto, length(_grd))
+        grd = similar(domain.u_proto, length(_grd))
         copyto!(grd, _grd)
     end
 end

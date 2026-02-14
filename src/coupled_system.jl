@@ -208,22 +208,22 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
     iv = ModelingToolkit.get_iv(first(systems))
 
     # Create temporary coupled system and use it to get system events.
-    defaults = ModelingToolkit.get_defaults(ModelingToolkit.flatten(
+    ics = ModelingToolkit.initial_conditions(ModelingToolkit.flatten(
         System(Equation[], iv; name = :temp, systems = systems)))
     if length(discrete_event_fs) > 0
         temp_connectors = System(connector_eqs, iv; name = name,
-            defaults = defaults, kwargs...)
+            initial_conditions = ics, kwargs...)
         temp_sys = mtkcompile(ModelingToolkit.flatten(compose(
             temp_connectors, systems...)))
         de = filter(!isnothing, [f(temp_sys) for f in discrete_event_fs])
 
         # Create system of connectors and events.
         connectors = System(connector_eqs, iv; name = name,
-            discrete_events = de, defaults = defaults, kwargs...)
+            discrete_events = de, initial_conditions = ics, kwargs...)
     else
         # Create system of connectors.
         connectors = System(connector_eqs, iv; name = name,
-            defaults = defaults, kwargs...)
+            initial_conditions = ics, kwargs...)
     end
 
     # Compose everything together.

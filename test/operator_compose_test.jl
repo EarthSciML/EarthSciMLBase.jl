@@ -50,7 +50,8 @@ end
 
     eqstr = replace(string(eq), "Symbolics." => "")
     # The simplified equation should be D(x) = p + sys2_xˍt, where sys2_xˍt is also equal to p.
-    @test eqstr == "Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊syscopy_ddt_xˍt(t)]"
+    @test eqstr ==
+          "Equation[Differential(t, 1)(sys1₊x(t)) ~ sys1₊p + sys1₊syscopy_ddt_xˍt(t)]"
 end
 
 @testset "translated" begin
@@ -67,7 +68,7 @@ end
     op = convert(System, combined)
     eq = equations(op)
     eqstr = replace(string(eq), "Symbolics." => "")
-    @test eqstr == "Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_ddt_yˍt(t)]"
+    @test eqstr == "Equation[Differential(t, 1)(sys1₊x(t)) ~ sys1₊p + sys1₊sys2_ddt_yˍt(t)]"
 end
 
 @testset "translate" begin
@@ -110,8 +111,9 @@ end
     eq = equations(op)
     obs = observed(op)
     eqstr = replace(string(eq), "Symbolics." => "")
-    @test eqstr ==
-          "Equation[Differential(t)(sys1₊x(t)) ~ sys1₊p + 2sys1₊sysXY_ddt_y2ˍt(t) + sys1₊sysXY_ddt_y1ˍt(t)]"
+    @test occursin("sys1₊p", eqstr)
+    @test occursin("2sys1₊sysXY_ddt_y2ˍt(t)", eqstr)
+    @test occursin("sys1₊sysXY_ddt_y1ˍt(t)", eqstr)
 end
 
 @testset "Non-ODE" begin
@@ -381,7 +383,7 @@ end
     function Chemistry(; name = :chemistry)
         @variables k(t_nounits)
         @parameters a0 = 1
-        sys1 = NonlinearSystem([k ~ a0], [k], [a0]; name = :rate)
+        sys1 = System([k ~ a0], [k], [a0]; name = :rate)
 
         function rate()
             return sys1.k

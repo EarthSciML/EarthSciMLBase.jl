@@ -96,7 +96,7 @@ nthreads(st::SolverStrangSerial) = 1
 function _strang_ode_func(sys_mtk, coord_args, tspan, grd; sparse = false)
     mtkf_coord = build_coord_ode_function(sys_mtk, coord_args)
     jac_coord = build_coord_jac_function(sys_mtk, coord_args, sparse = sparse)
-    _prob = ODEProblem(sys_mtk, [], tspan; sparse = sparse)
+    _prob = ODEProblem(sys_mtk, [], tspan; sparse = sparse, build_initializeprob = false)
 
     function f_stiff(du, u, p, t)
         coords = (g[p.ii[j]] for (j, g) in enumerate(grd))
