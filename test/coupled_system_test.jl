@@ -70,9 +70,12 @@ using OrdinaryDiffEqTsit5
 
     # Check that the expected equations are present (allowing for equivalent simplifications)
     have_str = string(have_eqs)
-    @test occursin("reqn₊γ", have_str) && occursin("reqn₊I", have_str) && occursin("reqn₊R", have_str)
-    @test occursin("seqn₊β", have_str) && occursin("seqn₊S", have_str) && occursin("seqn₊I", have_str)
-    @test occursin("ieqn₊β", have_str) && occursin("ieqn₊S", have_str) && occursin("ieqn₊I", have_str)
+    @test occursin("reqn₊γ", have_str) && occursin("reqn₊I", have_str) &&
+          occursin("reqn₊R", have_str)
+    @test occursin("seqn₊β", have_str) && occursin("seqn₊S", have_str) &&
+          occursin("seqn₊I", have_str)
+    @test occursin("ieqn₊β", have_str) && occursin("ieqn₊S", have_str) &&
+          occursin("ieqn₊I", have_str)
     @test length(have_eqs) == 3
 
     @testset "Graph" begin
@@ -193,9 +196,11 @@ end
     @variables x3(t_nounits)
 
     event1 = [1.0, 2, 3] => (f = update_affect!, modified = (p = p_1,))
-    event2 = [1.0, 2, 3] => (f = (mod, obs, ctx, integ) -> (p_2 = 1,), modified = (p_2 = p_2,))
+    event2 = [
+        1.0, 2, 3] => (f = (mod, obs, ctx, integ) -> (p_2 = 1,), modified = (p_2 = p_2,))
     event3 = [1.0, 2, 3] => (f = update_affect!, modified = (p = p_3,))
-    event4 = [1.0, 2, 3] => (f = (mod, obs, ctx, integ) -> (p_4 = 1,), modified = (p_4 = p_4,))
+    event4 = [
+        1.0, 2, 3] => (f = (mod, obs, ctx, integ) -> (p_4 = 1,), modified = (p_4 = p_4,))
 
     sys = System(
         [

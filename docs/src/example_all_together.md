@@ -96,4 +96,5 @@ plot(odesol)
 ```
 
 !!! note
+
     This model can also be expanded to 1, 2, or 3 dimensions by adding initial and boundary conditions, advection, etc. See the [advection example](@ref Advection) for more details. Discretization and numerical solution of PDE systems requires [MethodOfLines.jl](https://docs.sciml.ai/MethodOfLines/stable/), which is not currently compatible with the latest ModelingToolkit ecosystem.

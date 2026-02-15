@@ -37,7 +37,6 @@ function add_dims(exp, vars::AbstractVector, dims::AbstractVector)
     exp
 end
 
-
 function add_dims(vars::AbstractVector, dims::AbstractVector)
     syms = [Symbolics.tosymbol(x, escape = false) for x in vars]
     o = Num[]

@@ -41,4 +41,5 @@ sys_mtk = convert(PDESystem, sys_advection)
 ```
 
 !!! note
+
     Discretization and numerical solution of this PDE system requires [MethodOfLines.jl](https://docs.sciml.ai/MethodOfLines/stable/), which is not currently compatible with the latest ModelingToolkit ecosystem.

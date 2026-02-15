@@ -143,7 +143,7 @@ Our domain specification also includes grid spacing the the `lon`, `lat`, and `l
 coordinates, which we set as 0.1π, 0.1π, and 1, respectively.
 
 !!! warning
-    
+
     Initial and boundary conditions are not fully implemented for this case, so regardless
     of the conditions you specify, the initial conditions will be the default values
     of the variables in the ODE system, and the boundary conditions will be zero.
