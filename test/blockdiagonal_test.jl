@@ -164,31 +164,32 @@ if Sys.isapple()
     end
 end
 
-# @testset "Reactant" begin
-#     using Reactant
-#     d = rand(Float32, 3, 3, 2)
-#     x = BlockDiagonal(Reactant.to_rarray(d), MapReactant())
-#     y = Array(BlockDiagonal(d))
+@testset "Reactant" begin
+    import Reactant
+    d = rand(Float32, 3, 3, 2)
+    x = BlockDiagonal(Reactant.to_rarray(d), MapReactant())
+    y = Array(BlockDiagonal(d))
 
-#     ipiv = Reactant.to_rarray(zeros(Int64, size(x.data, 1), size(x.data, 3)))
-#     lx = LinearSolve.generic_lufact!(x, RowMaximum(), ipiv)
-#     lx.ipiv[4:6] .+= 3 # The generic LU implementation indexes pivots based on each block.
+    ipiv = Reactant.to_rarray(zeros(Int64, size(x.data, 1), size(x.data, 3)))
+    f = Reactant.@compile LinearSolve.generic_lufact!(x, RowMaximum(), ipiv)
+    lx = LinearSolve.generic_lufact!(x, RowMaximum(), ipiv)
+    lx.ipiv[4:6] .+= 3 # The generic LU implementation indexes pivots based on each block.
 
-#     ly = lu(y)
-#     @test ly.factors ≈ Matrix(BlockDiagonal(Array(lx.factors)))
-#     @test ly.ipiv == Array(lx.ipiv)[:]
+    ly = lu(y)
+    @test ly.factors ≈ Matrix(BlockDiagonal(Array(lx.factors)))
+    @test ly.ipiv == Array(lx.ipiv)[:]
 
-#     @testset "ldiv!" begin
-#         d = rand(Float32, 3, 3, 2)
-#         x = BlockDiagonal(MtlArray(d))
-#         x2 = BlockDiagonal(Array(d))
-#         y = MtlArray(rand(Float32, 6))
-#         y2 = Array(y)
-#         z1 = LinearAlgebra.ldiv!(similar(y), lu(x), y)
-#         z2 = LinearAlgebra.ldiv!(similar(y2), lu(x2), y2)
-#         @test Array(z1) ≈ z2
-#     end
-# end
+    @testset "ldiv!" begin
+        d = rand(Float32, 3, 3, 2)
+        x = BlockDiagonal(MtlArray(d))
+        x2 = BlockDiagonal(Array(d))
+        y = MtlArray(rand(Float32, 6))
+        y2 = Array(y)
+        z1 = LinearAlgebra.ldiv!(similar(y), lu(x), y)
+        z2 = LinearAlgebra.ldiv!(similar(y2), lu(x2), y2)
+        @test Array(z1) ≈ z2
+    end
+end
 
 @testset "ldiv_factors!" begin
     A = rand(3, 3)
