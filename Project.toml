@@ -1,6 +1,6 @@
 name = "EarthSciMLBase"
 uuid = "e53f1632-a13c-4728-9402-0c66d48804b0"
-version = "0.25.0"
+version = "0.25.1"
 authors = ["EarthSciML Authors and Contributors"]
 
 [deps]
@@ -45,10 +45,10 @@ DomainSets = "0.7.15"
 DynamicQuantities = "1"
 ForwardDiff = "1"
 Graphs = "1.12"
-JLArrays = "0.2.0"
+JLArrays = "0.2.0, 0.3"
 LinearSolve = "3.7.2"
 MacroTools = "0.5.15"
-MetaGraphsNext = "0.5, 0.6, 0.7"
+MetaGraphsNext = "0.5, 0.6, 0.7, 0.8"
 Metal = "1.7.0"
 ModelingToolkit = "11"
 OrdinaryDiffEqLowOrderRK = "1.2.0"

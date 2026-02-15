@@ -160,7 +160,10 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = no
         kwargs = filter((p -> p.first ≠ :callback), kwargs)
     end
 
-    ODEProblem(nonstiff_op, view(u0, :), (start, finish), p; callback = CallbackSet(cb...),
+    # Attach sys_mtk so that users can query unknowns(prob.f.sys) to get the
+    # variable ordering that matches prob.u0 (same ordering as init_u uses).
+    nonstiff_fn = ODEFunction(nonstiff_op; sys = sys_mtk)
+    ODEProblem(nonstiff_fn, view(u0, :), (start, finish), p; callback = CallbackSet(cb...),
         dt = st.timestep, kwargs...)
 end
 

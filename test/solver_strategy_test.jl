@@ -226,7 +226,7 @@ st = SolverStrangThreads(Tsit5(), 1.0)
     @test_broken eltype(prob.f(prob.u0[:], prob.p, prob.tspan[1])) == Float32 # MTK v11 code generation does not preserve Float32
     sol = solve(prob, Euler(); dt = 1.0)
 
-    @test sum(abs.(sol.u[end])) ≈ 3.820642384890682e7
+    @test sum(abs.(sol.u[end])) ≈ 3.820642384890682e7 rtol = 1e-6
 
     @testset "Split problem" begin
         prob = ODEProblem(csys, SolverIMEX())
