@@ -98,12 +98,17 @@ end
 
 """
 The result of a LU factorization of a block diagonal matrix.
+
+The `perm` field optionally stores the row permutation vector (used by Reactant's batched solve).
+When `perm` is `nothing`, the standard LAPACK-style `ipiv` incremental swaps are used for solving.
 """
-struct BlockDiagonalLU{T, VF <: AbstractArray{T, 3}, VIP <: AbstractArray{Int64, 2}}
+struct BlockDiagonalLU{T, VF <: AbstractArray{T, 3}, VIP <: AbstractArray{Int64, 2}, VP}
     factors::VF
     ipiv::VIP
     info::Int64
+    perm::VP
 end
+BlockDiagonalLU(factors, ipiv, info) = BlockDiagonalLU(factors, ipiv, info, nothing)
 
 function ArrayInterface.lu_instance(B::AbstractBlockDiagonal)
     return BlockDiagonalLU(
