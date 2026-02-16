@@ -5,21 +5,16 @@ import Reactant
 using ModelingToolkit
 
 function EarthSciMLBase.map_closure_to_range(f, range, ::EarthSciMLBase.MapReactant, args...)
-    function _map(f, range, args...)
-        f2(i) = f(i, args...)
-        map(f2, range)
-    end
-    Reactant.@jit _map(f, range, args...)
+    f2(i) = f(i, args...)
+    map(f2, range)
 end
 
 function EarthSciMLBase.mapreduce_range(f, op, range, ::EarthSciMLBase.MapReactant, args...)
-    function _mapreduce(range, args...)
-        f2(i) = f(i, args...)
-        out = map(f2, range)
-        reduce(op, out, init = 0)
-    end
-    Reactant.@jit _mapreduce(range, args...)
+    f2(i) = f(i, args...)
+    mapreduce(f2, op, range; init = 0)
 end
+
+EarthSciMLBase._default_map_alg(::Reactant.ConcretePJRTArray) = EarthSciMLBase.MapBroadcast()
 
 function EarthSciMLBase.mtk_grid_func(
         sys_mtk::System, domain::EarthSciMLBase.DomainInfo{T, AT}, u0,
