@@ -34,27 +34,27 @@ function LS.generic_lufact!(
     return EarthSciMLBase.BlockDiagonalLU(factors, ipiv_out, 0, perm)
 end
 
-# Batched ldiv! for Reactant BlockDiagonalLU.
-# Uses the perm vector from the batched LU factorization to apply row permutations,
-# then solves via triangular substitution on each block.
+# Batched ldiv! compiled to MLIR via @jit.
+# Constructs a Reactant BatchedLU from the stored factors and perm, then uses
+# Reactant's batched ldiv! which compiles to @opcall batch(_lu_solve_core, ...)
+# with StableHLO triangular_solve operations.
 function LinearAlgebra.ldiv!(
         x::AbstractVector,
         A::EarthSciMLBase.BlockDiagonalLU{T, <:Reactant.ConcretePJRTArray},
         b::AbstractVector) where {T}
-    factors = Array(A.factors)
-    perm = Int64.(Array(A.perm))
-    n = size(factors, 1)
-    nblk = size(factors, 3)
+    n = size(A.factors, 1)
+    nblk = size(A.factors, 3)
+    b_3d = Reactant.to_rarray(reshape(T.(b), n, 1, nblk))
+    info = Reactant.to_rarray(zeros(eltype(A.perm), nblk))
 
-    for i in 1:nblk
-        rng = ((i - 1) * n + 1):(i * n)
-        pi = @view(perm[:, i])
-        bi = b[rng]
-        # Apply row permutation then solve L*U*x = P*b
-        permuted_bi = bi[pi]
-        y = UnitLowerTriangular(@view(factors[:, :, i])) \ permuted_bi
-        x[rng] .= UpperTriangular(@view(factors[:, :, i])) \ y
+    function _batched_solve(factors, perm, info, b_3d)
+        F = Reactant.TracedLinearAlgebra.BatchedLU(factors, perm, perm, info)
+        ldiv!(F, b_3d)
+        return b_3d
     end
+
+    Reactant.@jit _batched_solve(A.factors, A.perm, info, b_3d)
+    x .= reshape(Array(b_3d), :)
     return x
 end
 
