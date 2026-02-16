@@ -199,7 +199,7 @@ function LinearAlgebra.ldiv!(x::AbstractVector, A::BlockDiagonalLU, b::AbstractV
         ldiv_factors!(_x, _factors, _ipiv, _b)
     end
     map_closure_to_range(
-        fldiv!, 1:nblocks(A), MapKernel(), A.factors, A.ipiv, x, b)
+        fldiv!, 1:nblocks(A), _default_map_alg(A.factors), A.factors, A.ipiv, x, b)
     x
 end
 
