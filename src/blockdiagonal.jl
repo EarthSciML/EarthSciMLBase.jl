@@ -62,10 +62,30 @@ end
 
 ArrayInterface.fast_scalar_indexing(B::BlockDiagonal) = false
 
+struct BlockDiagonalDiagView{T, V <: AbstractArray{T, 3}} <: AbstractVector{T}
+    data::V
+    n::Int
+end
+
+Base.size(v::BlockDiagonalDiagView) = (v.n * size(v.data, 3),)
+
+function Base.getindex(v::BlockDiagonalDiagView, i::Integer)
+    n = v.n
+    blk = (i - 1) ÷ n + 1
+    idx = mod1(i, n)
+    return v.data[idx, idx, blk]
+end
+
+function Base.setindex!(v::BlockDiagonalDiagView, val, i::Integer)
+    n = v.n
+    blk = (i - 1) ÷ n + 1
+    idx = mod1(i, n)
+    v.data[idx, idx, blk] = val
+end
+
 function Base.view(B::BlockDiagonal, r::AbstractRange)
     if r == diagind(B)
-        ii = CartesianIndices((B.n, B.n))[1:(B.n + 1):(B.n * B.n)]
-        return reshape(view(B.data, ii, :), :)
+        return BlockDiagonalDiagView(B.data, B.n)
     end
     error("BlockDiagonal does not support range views of non-diagonal indices")
 end
