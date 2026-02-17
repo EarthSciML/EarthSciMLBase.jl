@@ -327,14 +327,9 @@ end
     @test !all(Array(du2) .== 0)
 
     @testset "generic lu" begin
-        # End-to-end solve is broken because of two issues:
-        # 1. ConcretePJRTArray doesn't support the diagonal view indexing
-        #    needed by the ODE solver's update_W! function (fixed by
-        #    BlockDiagonalDiagView in blockdiagonal.jl).
-        # 2. Reactant's fill! fails on SubArray views of ConcretePJRTArray
-        #    during Jacobian computation (upstream Reactant bug).
-        # The LU and ldiv! methods themselves work correctly
-        # (tested in blockdiagonal_test.jl).
+        # End-to-end solve hits a Reactant buffer donation issue:
+        # after compiled function calls, the solver can't copy the
+        # solution state because the buffer has been donated.
         @test_broken (sol = solve(
             prob, KenCarp47(linsolve = GenericLUFactorization()), abstol = 1.0f-7,
             reltol = 1.0f-7); sol.retcode == ReturnCode.Success)

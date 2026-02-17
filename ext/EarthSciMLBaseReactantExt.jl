@@ -5,6 +5,18 @@ import Reactant
 using ModelingToolkit
 import LinearSolve as LS
 using LinearAlgebra
+using ArrayInterface
+
+# Monkey-patch: Reactant's @compile-based fill! fails on SubArray views of
+# ConcretePJRTArray because the tracing code can't handle SubArray reindexing.
+# Fall back to scalar indexing, which uses the direct CPU buffer pointer path.
+function Base.fill!(x::SubArray{T, N, <:Reactant.ConcretePJRTArray}, val) where {T, N}
+    v = convert(T, val)
+    for I in eachindex(x)
+        @inbounds x[I] = v
+    end
+    return x
+end
 
 function EarthSciMLBase.map_closure_to_range(f, range, ::EarthSciMLBase.MapReactant, args...)
     f2(i) = f(i, args...)
@@ -14,6 +26,24 @@ end
 function EarthSciMLBase.mapreduce_range(f, op, range, ::EarthSciMLBase.MapReactant, args...)
     f2(i) = f(i, args...)
     mapreduce(f2, op, range; init = 0)
+end
+
+# Override lu_instance so the LinearSolve cache is created with types matching
+# what the Reactant batched LU factorization actually returns:
+#   ipiv  → Matrix{Int64}  (converted to CPU in generic_lufact!)
+#   perm  → ConcretePJRTArray{Int32}  (from compiled lu)
+#   alg   → MapReactant
+function ArrayInterface.lu_instance(
+        B::EarthSciMLBase.BlockDiagonal{T, <:Reactant.ConcretePJRTArray}) where {T}
+    n = size(B.data, 1)
+    nblk = size(B.data, 3)
+    return EarthSciMLBase.BlockDiagonalLU(
+        similar(B.data),
+        zeros(Int64, n, nblk),
+        0,
+        Reactant.to_rarray(zeros(Int32, n, nblk)),
+        B.alg
+    )
 end
 
 # Batched LU factorization using Reactant's native MLIR compilation.
