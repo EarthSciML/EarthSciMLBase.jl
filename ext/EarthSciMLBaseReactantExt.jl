@@ -59,7 +59,7 @@ function LS.generic_lufact!(
             F = lu(data)
             return (F.factors, F.ipiv, F.perm)
         end
-        alg.cache[:lu_compiled] = Reactant.@compile _batched_lu(A.data)
+        alg.cache[:lu_compiled] = Reactant.@compile donated_args = :none _batched_lu(A.data)
     end
     factors, ipiv_r, perm = alg.cache[:lu_compiled](A.data)
 
@@ -90,7 +90,7 @@ function LinearAlgebra.ldiv!(
             ldiv!(F, b_3d)
             return b_3d
         end
-        alg.cache[:solve_compiled] = Reactant.@compile _batched_solve(A.factors, A.perm, info, b_3d)
+        alg.cache[:solve_compiled] = Reactant.@compile donated_args = :none _batched_solve(A.factors, A.perm, info, b_3d)
     end
 
     alg.cache[:solve_compiled](A.factors, A.perm, info, b_3d)
@@ -119,7 +119,7 @@ function EarthSciMLBase.mtk_grid_func(
         p = MTKParameters(sys_mtk, ModelingToolkit.initial_conditions(sys_mtk))
         t = zero(eltype(domain))
         du = similar(u0) # TODO(CT): Is this allocation avoidable?
-        f_compiled = Reactant.@compile f(du, u0, p, t)
+        f_compiled = Reactant.@compile donated_args = :none f(du, u0, p, t)
         #jf_compiled = Reactant.@compile jf(jac_prototype, u0, p, t)
         f_compiled, jf #jf_compiled
     end

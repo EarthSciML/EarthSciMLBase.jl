@@ -327,12 +327,10 @@ end
     @test !all(Array(du2) .== 0)
 
     @testset "generic lu" begin
-        # End-to-end solve hits a Reactant buffer donation issue:
-        # after compiled function calls, the solver can't copy the
-        # solution state because the buffer has been donated.
-        @test_broken (sol = solve(
+        sol = solve(
             prob, KenCarp47(linsolve = GenericLUFactorization()), abstol = 1.0f-7,
-            reltol = 1.0f-7); sol.retcode == ReturnCode.Success)
+            reltol = 1.0f-7)
+        @test sol.retcode == ReturnCode.Success
     end
 end
 
