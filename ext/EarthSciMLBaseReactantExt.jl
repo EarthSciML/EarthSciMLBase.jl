@@ -19,41 +19,51 @@ end
 # Batched LU factorization using Reactant's native MLIR compilation.
 # Instead of iterating over blocks, this calls lu() on the entire 3D array,
 # which Reactant compiles to enzymexla.linalg_lu.
+# The compiled function is cached in the MapAlgorithm to avoid recompilation.
 function LS.generic_lufact!(
         A::EarthSciMLBase.BlockDiagonal{T, <:Reactant.ConcretePJRTArray},
         pivot::RowMaximum, ipiv; check = false) where {T}
-    function _batched_lu(data)
-        F = lu(data)
-        return (F.factors, F.ipiv, F.perm)
+    alg = A.alg
+    if !haskey(alg.cache, :lu_compiled)
+        function _batched_lu(data)
+            F = lu(data)
+            return (F.factors, F.ipiv, F.perm)
+        end
+        alg.cache[:lu_compiled] = Reactant.@compile _batched_lu(A.data)
     end
-    factors, ipiv_r, perm = Reactant.@jit _batched_lu(A.data)
+    factors, ipiv_r, perm = alg.cache[:lu_compiled](A.data)
 
     # Convert ipiv from Int32 (XLA default) to Int64 for BlockDiagonalLU compatibility
     ipiv_out = Int64.(Array(ipiv_r))
 
-    return EarthSciMLBase.BlockDiagonalLU(factors, ipiv_out, 0, perm)
+    return EarthSciMLBase.BlockDiagonalLU(factors, ipiv_out, 0, perm, alg)
 end
 
-# Batched ldiv! compiled to MLIR via @jit.
+# Batched ldiv! compiled to MLIR via @compile.
 # Constructs a Reactant BatchedLU from the stored factors and perm, then uses
 # Reactant's batched ldiv! which compiles to @opcall batch(_lu_solve_core, ...)
 # with StableHLO triangular_solve operations.
+# The compiled function is cached in the MapAlgorithm to avoid recompilation.
 function LinearAlgebra.ldiv!(
         x::AbstractVector,
         A::EarthSciMLBase.BlockDiagonalLU{T, <:Reactant.ConcretePJRTArray},
         b::AbstractVector) where {T}
+    alg = A.alg
     n = size(A.factors, 1)
     nblk = size(A.factors, 3)
     b_3d = Reactant.to_rarray(reshape(T.(b), n, 1, nblk))
     info = Reactant.to_rarray(zeros(eltype(A.perm), nblk))
 
-    function _batched_solve(factors, perm, info, b_3d)
-        F = Reactant.TracedLinearAlgebra.BatchedLU(factors, perm, perm, info)
-        ldiv!(F, b_3d)
-        return b_3d
+    if !haskey(alg.cache, :solve_compiled)
+        function _batched_solve(factors, perm, info, b_3d)
+            F = Reactant.TracedLinearAlgebra.BatchedLU(factors, perm, perm, info)
+            ldiv!(F, b_3d)
+            return b_3d
+        end
+        alg.cache[:solve_compiled] = Reactant.@compile _batched_solve(A.factors, A.perm, info, b_3d)
     end
 
-    Reactant.@jit _batched_solve(A.factors, A.perm, info, b_3d)
+    alg.cache[:solve_compiled](A.factors, A.perm, info, b_3d)
     x .= reshape(Array(b_3d), :)
     return x
 end
