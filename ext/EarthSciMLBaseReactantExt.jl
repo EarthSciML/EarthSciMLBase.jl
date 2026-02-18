@@ -18,6 +18,18 @@ function Base.fill!(x::SubArray{T, N, <:Reactant.ConcretePJRTArray}, val) where 
     return x
 end
 
+# Also handle SubArray views whose parent is a ReshapedArray wrapping ConcretePJRTArray.
+# The nonstiff operator reshapes the 1D ConcretePJRTArray before taking views, producing
+# SubArray{..., ReshapedArray{..., ConcretePJRTArray}}. Without this patch, `.=` broadcasts
+# fall through to Reactant's compiled fill! which triggers Reactant.@compile on every call.
+function Base.fill!(x::SubArray{T, N, <:Base.ReshapedArray{<:Any, <:Any, <:Reactant.ConcretePJRTArray}}, val) where {T, N}
+    v = convert(T, val)
+    for I in eachindex(x)
+        @inbounds x[I] = v
+    end
+    return x
+end
+
 function EarthSciMLBase.map_closure_to_range(f, range, ::EarthSciMLBase.MapReactant, args...)
     f2(i) = f(i, args...)
     map(f2, range)
@@ -63,10 +75,14 @@ function LS.generic_lufact!(
     end
     factors, ipiv_r, perm = alg.cache[:lu_compiled](A.data)
 
-    # Convert ipiv from Int32 (XLA default) to Int64 for BlockDiagonalLU compatibility
-    ipiv_out = Int64.(Array(ipiv_r))
+    # Cache the CPU ipiv buffer to avoid per-call allocation of Int64.(Array(ipiv_r)).
+    if !haskey(alg.cache, :ipiv_cpu)
+        alg.cache[:ipiv_cpu] = similar(Array(ipiv_r), Int64)
+    end
+    ipiv_cpu = alg.cache[:ipiv_cpu]
+    copyto!(ipiv_cpu, Array(ipiv_r))
 
-    return EarthSciMLBase.BlockDiagonalLU(factors, ipiv_out, 0, perm, alg)
+    return EarthSciMLBase.BlockDiagonalLU(factors, ipiv_cpu, 0, perm, alg)
 end
 
 # Batched ldiv! compiled to MLIR via @compile.
@@ -81,8 +97,15 @@ function LinearAlgebra.ldiv!(
     alg = A.alg
     n = size(A.factors, 1)
     nblk = size(A.factors, 3)
-    b_3d = Reactant.to_rarray(reshape(T.(b), n, 1, nblk))
-    info = Reactant.to_rarray(zeros(eltype(A.perm), nblk))
+
+    # Cache b_3d and info buffers to avoid per-call Reactant.to_rarray allocations.
+    if !haskey(alg.cache, :b_3d)
+        alg.cache[:b_3d] = Reactant.to_rarray(reshape(T.(b), n, 1, nblk))
+        alg.cache[:info] = Reactant.to_rarray(zeros(eltype(A.perm), nblk))
+    end
+    b_3d = alg.cache[:b_3d]
+    info = alg.cache[:info]
+    copyto!(b_3d, reshape(T.(b), n, 1, nblk))
 
     if !haskey(alg.cache, :solve_compiled)
         function _batched_solve(factors, perm, info, b_3d)
