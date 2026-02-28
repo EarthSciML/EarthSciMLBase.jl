@@ -215,19 +215,7 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
             initial_conditions = ics, kwargs...)
         temp_sys = mtkcompile(ModelingToolkit.flatten(compose(
             temp_connectors, systems...)))
-        results = [f(temp_sys) for f in discrete_event_fs]
-        de = []
-        for r in results
-            if isnothing(r)
-                continue
-            elseif r isa Tuple
-                # sys_event returned (event, initial_conditions_dict).
-                push!(de, r[1])
-                merge!(ics, r[2])
-            else
-                push!(de, r)
-            end
-        end
+        de = filter(!isnothing, [f(temp_sys) for f in discrete_event_fs])
 
         # Create system of connectors and events.
         connectors = System(connector_eqs, iv; name = name,
