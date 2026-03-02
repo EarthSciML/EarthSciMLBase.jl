@@ -62,10 +62,30 @@ end
 
 ArrayInterface.fast_scalar_indexing(B::BlockDiagonal) = false
 
+struct BlockDiagonalDiagView{T, V <: AbstractArray{T, 3}} <: AbstractVector{T}
+    data::V
+    n::Int
+end
+
+Base.size(v::BlockDiagonalDiagView) = (v.n * size(v.data, 3),)
+
+function Base.getindex(v::BlockDiagonalDiagView, i::Integer)
+    n = v.n
+    blk = (i - 1) ÷ n + 1
+    idx = mod1(i, n)
+    return v.data[idx, idx, blk]
+end
+
+function Base.setindex!(v::BlockDiagonalDiagView, val, i::Integer)
+    n = v.n
+    blk = (i - 1) ÷ n + 1
+    idx = mod1(i, n)
+    v.data[idx, idx, blk] = val
+end
+
 function Base.view(B::BlockDiagonal, r::AbstractRange)
     if r == diagind(B)
-        ii = CartesianIndices((B.n, B.n))[1:(B.n + 1):(B.n * B.n)]
-        return reshape(view(B.data, ii, :), :)
+        return BlockDiagonalDiagView(B.data, B.n)
     end
     error("BlockDiagonal does not support range views of non-diagonal indices")
 end
@@ -101,14 +121,17 @@ The result of a LU factorization of a block diagonal matrix.
 
 The `perm` field optionally stores the row permutation vector (used by Reactant's batched solve).
 When `perm` is `nothing`, the standard LAPACK-style `ipiv` incremental swaps are used for solving.
+The `alg` field stores the `MapAlgorithm` used for compilation caching.
 """
-struct BlockDiagonalLU{T, VF <: AbstractArray{T, 3}, VIP <: AbstractArray{Int64, 2}, VP}
+struct BlockDiagonalLU{T, VF <: AbstractArray{T, 3}, VIP <: AbstractArray{Int64, 2}, VP, MA}
     factors::VF
     ipiv::VIP
     info::Int64
     perm::VP
+    alg::MA
 end
-BlockDiagonalLU(factors, ipiv, info) = BlockDiagonalLU(factors, ipiv, info, nothing)
+BlockDiagonalLU(factors, ipiv, info) = BlockDiagonalLU(factors, ipiv, info, nothing, nothing)
+BlockDiagonalLU(factors, ipiv, info, perm) = BlockDiagonalLU(factors, ipiv, info, perm, nothing)
 
 function ArrayInterface.lu_instance(B::AbstractBlockDiagonal)
     return BlockDiagonalLU(

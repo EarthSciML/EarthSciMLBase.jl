@@ -304,6 +304,36 @@ if Sys.isapple() # TODO: Why aren't the results of these tests deterministic?
     end
 end
 
+@testset "Reactant" begin
+    import Reactant
+    # Use a small grid to keep MLIR compilation tractable.
+    domain_r = DomainInfo(
+        constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
+        u_proto = Reactant.to_rarray(zeros(Float32, 1, 1, 1, 1)),
+        grid_spacing = [π, 0.45π, 1])
+
+    csys_r = couple(sys, op, domain_r)
+
+    prob = ODEProblem(
+        csys_r, SolverIMEX(MapReactant(), BlockDiagonalJacobian(),
+            stiff_sparse = false))
+
+    du = similar(prob.u0)
+    prob.f.f1(du, prob.u0, prob.p, prob.tspan[1])
+    @test Array(du)[1] ≈ -13.141593f0
+
+    du2 = similar(prob.u0)
+    prob.f.f2(du2, prob.u0, prob.p, prob.tspan[1])
+    @test !all(Array(du2) .== 0)
+
+    @testset "generic lu" begin
+        sol = solve(
+            prob, KenCarp47(linsolve = GenericLUFactorization()), abstol = 1.0f-7,
+            reltol = 1.0f-7)
+        @test sol.retcode == ReturnCode.Success
+    end
+end
+
 @testset "SimulatorStrategies" begin
     @testset "Strang Threads" begin
         st = SolverStrangThreads(Tsit5(), 1.0)

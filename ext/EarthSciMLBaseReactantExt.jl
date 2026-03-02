@@ -5,6 +5,30 @@ import Reactant
 using ModelingToolkit
 import LinearSolve as LS
 using LinearAlgebra
+using ArrayInterface
+
+# Monkey-patch: Reactant's @compile-based fill! fails on SubArray views of
+# ConcretePJRTArray because the tracing code can't handle SubArray reindexing.
+# Fall back to scalar indexing, which uses the direct CPU buffer pointer path.
+function Base.fill!(x::SubArray{T, N, <:Reactant.ConcretePJRTArray}, val) where {T, N}
+    v = convert(T, val)
+    for I in eachindex(x)
+        @inbounds x[I] = v
+    end
+    return x
+end
+
+# Also handle SubArray views whose parent is a ReshapedArray wrapping ConcretePJRTArray.
+# The nonstiff operator reshapes the 1D ConcretePJRTArray before taking views, producing
+# SubArray{..., ReshapedArray{..., ConcretePJRTArray}}. Without this patch, `.=` broadcasts
+# fall through to Reactant's compiled fill! which triggers Reactant.@compile on every call.
+function Base.fill!(x::SubArray{T, N, <:Base.ReshapedArray{<:Any, <:Any, <:Reactant.ConcretePJRTArray}}, val) where {T, N}
+    v = convert(T, val)
+    for I in eachindex(x)
+        @inbounds x[I] = v
+    end
+    return x
+end
 
 function EarthSciMLBase.map_closure_to_range(f, range, ::EarthSciMLBase.MapReactant, args...)
     f2(i) = f(i, args...)
@@ -16,45 +40,84 @@ function EarthSciMLBase.mapreduce_range(f, op, range, ::EarthSciMLBase.MapReacta
     mapreduce(f2, op, range; init = 0)
 end
 
+# Override lu_instance so the LinearSolve cache is created with types matching
+# what the Reactant batched LU factorization actually returns:
+#   ipiv  → Matrix{Int64}  (converted to CPU in generic_lufact!)
+#   perm  → ConcretePJRTArray{Int32}  (from compiled lu)
+#   alg   → MapReactant
+function ArrayInterface.lu_instance(
+        B::EarthSciMLBase.BlockDiagonal{T, <:Reactant.ConcretePJRTArray}) where {T}
+    n = size(B.data, 1)
+    nblk = size(B.data, 3)
+    return EarthSciMLBase.BlockDiagonalLU(
+        similar(B.data),
+        zeros(Int64, n, nblk),
+        0,
+        Reactant.to_rarray(zeros(Int32, n, nblk)),
+        B.alg
+    )
+end
+
 # Batched LU factorization using Reactant's native MLIR compilation.
 # Instead of iterating over blocks, this calls lu() on the entire 3D array,
 # which Reactant compiles to enzymexla.linalg_lu.
+# The compiled function is cached in the MapAlgorithm to avoid recompilation.
 function LS.generic_lufact!(
         A::EarthSciMLBase.BlockDiagonal{T, <:Reactant.ConcretePJRTArray},
         pivot::RowMaximum, ipiv; check = false) where {T}
-    function _batched_lu(data)
-        F = lu(data)
-        return (F.factors, F.ipiv, F.perm)
+    alg = A.alg
+    if !haskey(alg.cache, :lu_compiled)
+        function _batched_lu(data)
+            F = lu(data)
+            return (F.factors, F.ipiv, F.perm)
+        end
+        alg.cache[:lu_compiled] = Reactant.@compile donated_args = :none _batched_lu(A.data)
     end
-    factors, ipiv_r, perm = Reactant.@jit _batched_lu(A.data)
+    factors, ipiv_r, perm = alg.cache[:lu_compiled](A.data)
 
-    # Convert ipiv from Int32 (XLA default) to Int64 for BlockDiagonalLU compatibility
-    ipiv_out = Int64.(Array(ipiv_r))
+    # Cache the CPU ipiv buffer to avoid per-call allocation of Int64.(Array(ipiv_r)).
+    if !haskey(alg.cache, :ipiv_cpu)
+        alg.cache[:ipiv_cpu] = similar(Array(ipiv_r), Int64)
+    end
+    ipiv_cpu = alg.cache[:ipiv_cpu]
+    copyto!(ipiv_cpu, Array(ipiv_r))
 
-    return EarthSciMLBase.BlockDiagonalLU(factors, ipiv_out, 0, perm)
+    return EarthSciMLBase.BlockDiagonalLU(factors, ipiv_cpu, 0, perm, alg)
 end
 
-# Batched ldiv! for Reactant BlockDiagonalLU.
-# Uses the perm vector from the batched LU factorization to apply row permutations,
-# then solves via triangular substitution on each block.
+# Batched ldiv! compiled to MLIR via @compile.
+# Constructs a Reactant BatchedLU from the stored factors and perm, then uses
+# Reactant's batched ldiv! which compiles to @opcall batch(_lu_solve_core, ...)
+# with StableHLO triangular_solve operations.
+# The compiled function is cached in the MapAlgorithm to avoid recompilation.
 function LinearAlgebra.ldiv!(
         x::AbstractVector,
         A::EarthSciMLBase.BlockDiagonalLU{T, <:Reactant.ConcretePJRTArray},
         b::AbstractVector) where {T}
-    factors = Array(A.factors)
-    perm = Int64.(Array(A.perm))
-    n = size(factors, 1)
-    nblk = size(factors, 3)
+    alg = A.alg
+    n = size(A.factors, 1)
+    nblk = size(A.factors, 3)
 
-    for i in 1:nblk
-        rng = ((i - 1) * n + 1):(i * n)
-        pi = @view(perm[:, i])
-        bi = b[rng]
-        # Apply row permutation then solve L*U*x = P*b
-        permuted_bi = bi[pi]
-        y = UnitLowerTriangular(@view(factors[:, :, i])) \ permuted_bi
-        x[rng] .= UpperTriangular(@view(factors[:, :, i])) \ y
+    # Cache b_3d and info buffers to avoid per-call Reactant.to_rarray allocations.
+    if !haskey(alg.cache, :b_3d)
+        alg.cache[:b_3d] = Reactant.to_rarray(reshape(T.(b), n, 1, nblk))
+        alg.cache[:info] = Reactant.to_rarray(zeros(eltype(A.perm), nblk))
     end
+    b_3d = alg.cache[:b_3d]
+    info = alg.cache[:info]
+    copyto!(b_3d, reshape(T.(b), n, 1, nblk))
+
+    if !haskey(alg.cache, :solve_compiled)
+        function _batched_solve(factors, perm, info, b_3d)
+            F = Reactant.TracedLinearAlgebra.BatchedLU(factors, perm, perm, info)
+            ldiv!(F, b_3d)
+            return b_3d
+        end
+        alg.cache[:solve_compiled] = Reactant.@compile donated_args = :none _batched_solve(A.factors, A.perm, info, b_3d)
+    end
+
+    alg.cache[:solve_compiled](A.factors, A.perm, info, b_3d)
+    x .= reshape(Array(b_3d), :)
     return x
 end
 
@@ -79,7 +142,7 @@ function EarthSciMLBase.mtk_grid_func(
         p = MTKParameters(sys_mtk, ModelingToolkit.initial_conditions(sys_mtk))
         t = zero(eltype(domain))
         du = similar(u0) # TODO(CT): Is this allocation avoidable?
-        f_compiled = Reactant.@compile f(du, u0, p, t)
+        f_compiled = Reactant.@compile donated_args = :none f(du, u0, p, t)
         #jf_compiled = Reactant.@compile jf(jac_prototype, u0, p, t)
         f_compiled, jf #jf_compiled
     end

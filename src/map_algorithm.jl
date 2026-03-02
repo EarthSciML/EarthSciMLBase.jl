@@ -26,9 +26,13 @@ struct MapKernel <: MapAlgorithm
     end
 end
 """
-Compile and run computations using MLIR with Reactant.jl
+Compile and run computations using MLIR with Reactant.jl.
+Compiled functions are cached in the `cache` dict to avoid recompilation.
 """
-struct MapReactant <: MapAlgorithm end
+mutable struct MapReactant <: MapAlgorithm
+    cache::Dict{Symbol, Any}
+    MapReactant() = new(Dict{Symbol, Any}())
+end
 
 function map_closure_to_range(f, range, ::MapAlgorithm = MapThreads(), args...; kwargs...)
     ThreadsX.map(range) do i
