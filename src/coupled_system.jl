@@ -1,4 +1,4 @@
-export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent
+export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent, merge_pdesystems
 
 """
 A system for composing together other systems using the [`couple`](@ref) function.
@@ -11,6 +11,7 @@ Things that can be added to a `CoupledSystem`:
     `:coupletype` (e.g. `ModelingToolkit.get_metadata(sys)[:coupletype]` returns a struct type
     with a single field called `sys`)
     then that type will be used to check for methods of `EarthSciMLBase.couple` that use that type.
+  - `ModelingToolkit.PDESystem`s, which will be stored separately and merged when converting to a PDESystem.
   - [`Operator`](@ref)s
   - [`DomainInfo`](@ref)s
   - [Callbacks](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/)
@@ -22,6 +23,8 @@ Things that can be added to a `CoupledSystem`:
 mutable struct CoupledSystem
     "Model components to be composed together"
     systems::Vector{ModelingToolkit.AbstractSystem}
+    "PDESystem components to be merged together"
+    pdesystems::Vector{ModelingToolkit.PDESystem}
     "Initial and boundary conditions and other domain information"
     domaininfo::Union{Nothing, DomainInfo}
     """
@@ -44,7 +47,7 @@ end
 
 function Base.show(io::IO, cs::CoupledSystem)
     print(io,
-        "CoupledSystem containing $(length(cs.systems)) system(s), $(length(cs.ops)) operator(s), and $(length(cs.callbacks) + length(cs.init_callbacks)) callback(s).")
+        "CoupledSystem containing $(length(cs.systems)) system(s), $(length(cs.pdesystems)) PDESystem(s), $(length(cs.ops)) operator(s), and $(length(cs.callbacks) + length(cs.init_callbacks)) callback(s).")
 end
 
 """
@@ -58,7 +61,7 @@ or any type `T` that has a method `couple(::CoupledSystem, ::T)::CoupledSystem` 
 `couple(::T, ::CoupledSystem)::CoupledSystem` defined for it.
 """
 function couple(systems...)::CoupledSystem
-    o = CoupledSystem([], nothing, [], [], [], [])
+    o = CoupledSystem([], [], nothing, [], [], [], [])
     for sys in systems
         if sys isa DomainInfo # Add domain information to the system.
             if o.domaininfo !== nothing
@@ -67,10 +70,13 @@ function couple(systems...)::CoupledSystem
             o.domaininfo = sys
         elseif sys isa Operator
             push!(o.ops, sys)
+        elseif sys isa ModelingToolkit.PDESystem # Add a PDESystem to the coupled system.
+            push!(o.pdesystems, sys)
         elseif sys isa ModelingToolkit.AbstractSystem # Add a system to the coupled system.
             push!(o.systems, sys)
         elseif sys isa CoupledSystem # Add a coupled system to the coupled system.
             o.systems = vcat(o.systems, sys.systems)
+            o.pdesystems = vcat(o.pdesystems, sys.pdesystems)
             o.pdefunctions = vcat(o.pdefunctions, sys.pdefunctions)
             o.ops = vcat(o.ops, sys.ops)
             o.callbacks = vcat(o.callbacks, sys.callbacks)
@@ -110,7 +116,11 @@ struct CoupleType end
 Return the coupling type associated with the given system.
 """
 function get_coupletype(sys::ModelingToolkit.AbstractSystem)
-    T = getmetadata(sys, CoupleType, nothing)
+    meta = ModelingToolkit.get_metadata(sys)
+    if isnothing(meta)
+        return Nothing
+    end
+    T = get(meta, CoupleType, nothing)
     if isnothing(T)
         return Nothing
     end
@@ -183,6 +193,10 @@ Return values:
 """
 function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compile = true,
         prune = false, extra_vars = [], kwargs...)
+    if !isempty(sys.pdesystems)
+        error("Cannot convert a CoupledSystem containing PDESystems to an ODE System. " *
+              "Use `convert(PDESystem, ...)` instead.")
+    end
     connector_eqs = Equation[]
     discrete_event_fs = []
     systems = copy(sys.systems)
@@ -253,22 +267,121 @@ end
     $(SIGNATURES)
 
 Get the ModelingToolkit PDESystem representation of a [`CoupledSystem`](@ref).
+
+If the CoupledSystem contains PDESystems, they are merged together into a single
+flat PDESystem. Any ODE Systems are first coupled together and promoted to a
+PDESystem using the provided DomainInfo, then merged with the existing PDESystems.
 """
 function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
         kwargs...)::ModelingToolkit.AbstractSystem
-    o = convert(System, sys; name = name, compile = false, prune = false, kwargs...)
+    has_pde = !isempty(sys.pdesystems)
+    has_ode = !isempty(sys.systems)
 
-    if sys.domaininfo !== nothing
-        o += sys.domaininfo
+    if !has_pde
+        # Existing path: ODE Systems only
+        o = convert(System, sys; name = name, compile = false, prune = false, kwargs...)
+        if sys.domaininfo !== nothing
+            o += sys.domaininfo
+        end
+        if length(sys.pdefunctions) > 0
+            @assert sys.domaininfo !== nothing "Cannot apply PDE functions to a system without domain information."
+            for f in sys.pdefunctions
+                o = f(o)
+            end
+        end
+        return o
     end
 
-    if length(sys.pdefunctions) > 0
-        @assert sys.domaininfo!==nothing "Cannot apply PDE functions to a system without domain information."
-        for f in sys.pdefunctions
-            o = f(o)
+    # New path: PDESystem merging
+    all_pdesystems = copy(sys.pdesystems)
+    coupling_eqs = Equation[]
+
+    # If there are ODE Systems, couple them together and promote to PDESystem
+    if has_ode
+        @assert sys.domaininfo !== nothing "DomainInfo is required when coupling ODE Systems with PDESystems."
+        ode_coupled = _couple_ode_systems(sys; name = :ode_part, kwargs...)
+        promoted = ode_coupled + sys.domaininfo
+        push!(all_pdesystems, promoted)
+    end
+
+    # Run couple2 between all PDESystem pairs
+    for (i, a) in enumerate(all_pdesystems)
+        for (j, b) in enumerate(all_pdesystems)
+            i == j && continue
+            a_t, b_t = get_coupletype(a), get_coupletype(b)
+            if hasmethod(couple2, (a_t, b_t))
+                cs = couple2(a_t(a), b_t(b))
+                @assert cs isa ConnectorSystem "The result of coupling two PDESystems together must be a EarthSciMLBase.ConnectorSystem. " *
+                                               "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
+                all_pdesystems[i], a = cs.from, cs.from
+                all_pdesystems[j], b = cs.to, cs.to
+                append!(coupling_eqs, cs.eqs)
+            end
         end
     end
-    return o
+
+    # Merge all PDESystems
+    merged = merge_pdesystems(all_pdesystems, coupling_eqs; name = name)
+
+    # Apply pdefunctions
+    for f in sys.pdefunctions
+        merged = f(merged)
+    end
+
+    return merged
+end
+
+"""
+Couple ODE systems together using the existing pipeline.
+This is extracted from `convert(System, ...)` to allow reuse
+when ODE systems need to be coupled before promotion to PDESystem.
+"""
+function _couple_ode_systems(sys::CoupledSystem; name = :ode_part, kwargs...)
+    connector_eqs = Equation[]
+    discrete_event_fs = []
+    systems = copy(sys.systems)
+    for (i, a) in enumerate(systems)
+        for (j, b) in enumerate(systems)
+            a_t, b_t = get_coupletype(a), get_coupletype(b)
+            if hasmethod(couple2, (a_t, b_t))
+                cs = couple2(a_t(a), b_t(b))
+                @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
+                                               "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
+                systems[i], a = cs.from, cs.from
+                systems[j], b = cs.to, cs.to
+                for eq in cs.eqs
+                    @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
+                end
+                append!(connector_eqs, cs.eqs)
+            end
+        end
+        de = get_sys_discrete_event(a)
+        (!isnothing(de)) && push!(discrete_event_fs, de)
+    end
+
+    iv = ModelingToolkit.get_iv(first(systems))
+
+    ics = ModelingToolkit.initial_conditions(ModelingToolkit.flatten(
+        System(Equation[], iv; name = :temp, systems = systems)))
+    if length(discrete_event_fs) > 0
+        temp_connectors = System(connector_eqs, iv; name = name,
+            initial_conditions = ics, kwargs...)
+        temp_sys = mtkcompile(ModelingToolkit.flatten(compose(
+            temp_connectors, systems...)))
+        de = filter(!isnothing, [f(temp_sys) for f in discrete_event_fs])
+        connectors = System(connector_eqs, iv; name = name,
+            discrete_events = de, initial_conditions = ics, kwargs...)
+    else
+        connectors = System(connector_eqs, iv; name = name,
+            initial_conditions = ics, kwargs...)
+    end
+
+    o = compose(connectors, systems...)
+
+    if !isnothing(sys.domaininfo) && !isempty(sys.domaininfo.partial_derivative_funcs)
+        o = extend(o, partialderivative_transform_eqs(o, sys.domaininfo))
+    end
+    ModelingToolkit.flatten(o)
 end
 
 """
