@@ -6,8 +6,11 @@ add_dims(equation, vars, dims)
 
 Add the given dimensions to each variable in `vars` in the given expression
 or equation.
-Each variable in `vars` must be unidimensional, i.e.
-defined like `@variables u(t)` rather than `@variables u(..)`.
+
+Variables that already have multiple dimensions (i.e., defined like
+`@variables v(..)` and called as `v(t, x, y)`) are left unchanged.
+This allows components that construct spatially-varying variables directly
+to be composed with components that rely on automatic dimension expansion.
 
 # Example:
 
@@ -28,6 +31,7 @@ function add_dims(exp, vars::AbstractVector, dims::AbstractVector)
     newvars = add_dims(vars, dims)
     @variables 🦖🌋temp # BUG(CT): If someone chooses 🦖🌋temp as a variable in their equation this will fail.
     for (var, newvar) in zip(vars, newvars)
+        isequal(var, newvar) && continue # Skip already-spatial variables.
         # Replace variable with temporary variable, then replace temporary
         # variable with new variable.
         # TODO(CT): Should be able to directly substitute all variables at once but doesn't work.
@@ -38,12 +42,18 @@ function add_dims(exp, vars::AbstractVector, dims::AbstractVector)
 end
 
 function add_dims(vars::AbstractVector, dims::AbstractVector)
-    syms = [Symbolics.tosymbol(x, escape = false) for x in vars]
     o = Num[]
-    for (sym, var) in zip(syms, vars)
-        newvar = (@variables $sym(..))[1]
-        newvar = add_metadata(newvar, var)
-        push!(o, newvar(dims...))
+    for var in vars
+        nargs = length(Symbolics.arguments(Symbolics.unwrap(var)))
+        if nargs > 1
+            # Variable already has spatial dimensions — keep it as-is.
+            push!(o, var)
+        else
+            sym = Symbolics.tosymbol(var, escape = false)
+            newvar = (@variables $sym(..))[1]
+            newvar = add_metadata(newvar, var)
+            push!(o, newvar(dims...))
+        end
     end
     return o
 end
