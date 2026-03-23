@@ -54,3 +54,60 @@ end
     sys3 = EarthSciMLBase.param_to_var(sys2, :β)
     @test isequal(sys2, sys3)
 end
+
+@testset "PDESystem param_to_var" begin
+    using DomainSets
+
+    @parameters px [unit = u"m"]
+    @parameters py [unit = u"m"]
+    @parameters S = 1.0 [description = "S description", unit = u"m/s"]
+    @variables ψ(..) [description = "Level-set function", unit = u"m"]
+    Dpx = Differential(px)
+    Dpy = Differential(py)
+
+    pde_eq = [D(ψ(t, px, py)) ~ -S * sqrt(Dpx(ψ(t, px, py))^2 + Dpy(ψ(t, px, py))^2)]
+    pde_bcs = [ψ(0.0, px, py) ~ sqrt((px - 50.0)^2 + (py - 50.0)^2) - 10.0]
+    pde_domains = [t ∈ Interval(0.0, 10.0), px ∈ Interval(0.0, 100.0), py ∈ Interval(0.0, 100.0)]
+    pdesys = PDESystem(pde_eq, pde_bcs, pde_domains, [t, px, py], [ψ(t, px, py)], [S];
+        name = :pdetest, metadata = Dict(CoupleType => :pdemetatest))
+
+    pdesys2 = param_to_var(pdesys, :S)
+
+    # S should no longer be a parameter
+    @test length(pdesys2.ps) == 0
+
+    # The substituted equation should contain S(t) instead of S
+    @variables S(t) [unit = u"m/s", description = "S description"]
+    eq_vars = Symbolics.get_variables(equations(pdesys2)[1])
+    has_S_t = any(v -> Symbolics.tosymbol(v, escape = false) == :S, eq_vars)
+    @test has_S_t
+
+    # Metadata should be preserved
+    @test pdesys2.metadata[CoupleType] == :pdemetatest
+
+    # System structure should be preserved
+    @test length(equations(pdesys2)) == 1
+    @test length(pdesys2.bcs) == 1
+    @test length(pdesys2.ivs) == 3
+    @test length(pdesys2.dvs) == 1
+end
+
+@testset "PDESystem param_to_var - skip existing variable" begin
+    using DomainSets
+
+    @parameters px2 [unit = u"m"]
+    @parameters S2 = 1.0 [description = "S2 description", unit = u"m/s"]
+    @variables ψ2(..) [description = "ψ2", unit = u"m"]
+    @variables S2_var(..) [description = "S2 var", unit = u"m/s"]
+
+    pde_eq = [D(ψ2(t, px2)) ~ -S2 * Differential(px2)(ψ2(t, px2))]
+    pde_bcs = [ψ2(0.0, px2) ~ px2]
+    pde_domains = [t ∈ Interval(0.0, 10.0), px2 ∈ Interval(0.0, 100.0)]
+
+    # S2_var is already a DV — passing its symbol should be a no-op
+    pdesys = PDESystem(pde_eq, pde_bcs, pde_domains, [t, px2],
+        [ψ2(t, px2), S2_var(t, px2)], [S2]; name = :pdetest2)
+
+    pdesys2 = param_to_var(pdesys, :S2_var)  # already a DV, should skip
+    @test length(pdesys2.ps) == 1  # S2 still a parameter
+end

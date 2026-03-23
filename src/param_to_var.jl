@@ -59,3 +59,49 @@ function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
         defaults = defaults
     )
 end
+
+"""
+Replace the parameter(s) `ps` in a `PDESystem` with new time-dependent variable(s)
+that have the same name, units, and description.
+
+$(SIGNATURES)
+
+Since `PDESystem` does not support `SymbolicUtils.substitute`, this method manually
+substitutes in all equations and boundary conditions, then reconstructs the `PDESystem`.
+"""
+function param_to_var(sys::ModelingToolkit.PDESystem, ps::Symbol...)
+    params = sys.ps
+    replace = Dict()
+    for p in ps
+        dv_names = [Symbolics.tosymbol(dv, escape = false) for dv in sys.dvs]
+        if p in dv_names
+            continue
+        end
+        iparam = findfirst(isequal(p), Symbol.(params))
+        @assert !isnothing(iparam) "Parameter `$p` not found in the PDESystem parameters $(Symbol.(params))"
+        param = params[iparam]
+
+        iv = first(sys.ivs)  # Use the first independent variable (typically t)
+        newvar = only(@variables $p(iv))
+        newvar = add_metadata(newvar, param; exclude_default = true)
+        replace[Symbolics.unwrap(param)] = Symbolics.unwrap(newvar)
+    end
+
+    if isempty(replace)
+        return sys
+    end
+
+    # Manually substitute in equations and boundary conditions
+    new_eqs = map(sys.eqs) do eq
+        Symbolics.substitute(eq.lhs, replace) ~ Symbolics.substitute(eq.rhs, replace)
+    end
+    new_bcs = map(sys.bcs) do bc
+        Symbolics.substitute(bc.lhs, replace) ~ Symbolics.substitute(bc.rhs, replace)
+    end
+
+    # Remove converted parameters
+    new_ps = [p for p in params if !(Symbolics.unwrap(p) in keys(replace))]
+
+    PDESystem(new_eqs, new_bcs, sys.domain, sys.ivs, sys.dvs, new_ps;
+        name = nameof(sys), metadata = sys.metadata)
+end
