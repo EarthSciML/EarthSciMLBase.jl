@@ -1,4 +1,4 @@
-export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent, merge_pdesystems
+export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent, merge_pdesystems, slice_variable
 
 """
 A system for composing together other systems using the [`couple`](@ref) function.
