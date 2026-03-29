@@ -58,3 +58,11 @@ function mapreduce_range(f, op, range, ::MapAlgorithm, args...)
     f2(i) = f(i, args...)
     AK.mapreduce(f2, op, range, bknd; init = 0, neutral = 0)
 end
+
+"""
+    _default_map_alg(A::AbstractArray)
+
+Return the default `MapAlgorithm` for the given array type.
+Defaults to `MapKernel()`, but extensions may override this for specific array types.
+"""
+_default_map_alg(::AbstractArray) = MapKernel()
