@@ -382,3 +382,42 @@ end
     @test runcount1 == 1
     @test runcount2 == 1
 end
+
+@testset "No duplicate connector equations" begin
+    struct DupACoupler
+        sys::Any
+    end
+    struct DupBCoupler
+        sys::Any
+    end
+
+    @component function DupA(; name = :DupA)
+        @variables x(t)
+        System([D_nounits(x) ~ 1], t_nounits; name, metadata = Dict(CoupleType => DupACoupler))
+    end
+
+    @component function DupB(; name = :DupB)
+        @parameters p
+        @variables y(t)
+        System([D_nounits(y) ~ p], t_nounits; name, metadata = Dict(CoupleType => DupBCoupler))
+    end
+
+    function EarthSciMLBase.couple2(a::DupACoupler, b::DupBCoupler)
+        a, b = a.sys, b.sys
+        b = EarthSciMLBase.param_to_var(b, :p)
+        ConnectorSystem([b.p ~ a.x], b, a)
+    end
+
+    cs = couple(DupA(), DupB())
+    sys = convert(System, cs; compile = false)
+
+    eq_strs = sort([string(eq) for eq in equations(sys)])
+    @test eq_strs == unique(eq_strs)
+
+    # Also verify both orderings produce no duplicates.
+    cs2 = couple(DupB(), DupA())
+    sys2 = convert(System, cs2; compile = false)
+
+    eq_strs2 = sort([string(eq) for eq in equations(sys2)])
+    @test eq_strs2 == unique(eq_strs2)
+end
