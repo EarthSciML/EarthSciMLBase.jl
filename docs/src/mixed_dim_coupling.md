@@ -105,8 +105,8 @@ end
 ## Cross-Dimension Coupling with `couple2`
 
 When two systems have different dimensionality, their coupling must account
-for the dimension mismatch. This is done by defining [`couple2`](@ref) methods
-that explicitly handle the extra dimensions, for example by using
+for the dimension mismatch. This is done by defining `EarthSciMLBase.couple2`
+methods that explicitly handle the extra dimensions, for example by using
 [`slice_variable`](@ref) to fix a spatial coordinate at a specific value.
 
 Here is a complete example where a 2D PDE system receives forcing from a 3D
@@ -154,7 +154,8 @@ promoted PDESystems, so we extract the 3D dependent variable and use
 function EarthSciMLBase.couple2(s::SurfaceCoupler, d::DataSource3DCoupler)
     a_sys, b_sys = s.sys, d.sys
     # Find the 3D dependent variable from the promoted data source system.
-    b_v = first(filter(dv -> occursin("b", string(dv)), b_sys.dvs))
+    # After promotion, the variable name includes the system prefix (e.g., "data3d₊v").
+    b_v = first(filter(dv -> occursin("v", string(dv)), b_sys.dvs))
     # Slice at z=0 to create a 2D variable and a defining equation.
     sliced_v, slice_eq = slice_variable(b_v, z, 0.0)
     # Add the sliced variable as a forcing term to u's equation.
@@ -170,8 +171,8 @@ nothing # hide
 Couple and convert:
 
 ```@example mixed_dim
-cs = couple(pde_2d, ode_3d_coupled, domain_2d)
-merged = convert(PDESystem, cs)
+cs2 = couple(pde_2d, ode_3d_coupled, domain_2d)
+merged2 = convert(PDESystem, cs2)
 ```
 
 Verify that the ground-level forcing appears in the equations. The merged
@@ -179,7 +180,7 @@ system contains the original diffusion and decay equations plus a slice
 equation that extracts the 3D variable at `z=0`:
 
 ```@example mixed_dim
-for eq in equations(merged)
+for eq in equations(merged2)
     println(eq)
 end
 ```
@@ -188,19 +189,19 @@ end
 
 The mixed-dimension coupling mechanism works through these steps:
 
-1. **Grouping**: [`_group_by_domaininfo`](@ref EarthSciMLBase._group_by_domaininfo)
+1. **Grouping**: `EarthSciMLBase._group_by_domaininfo`
    partitions ODE systems by their effective [`DomainInfo`](@ref). Systems with
    [`SysDomainInfo`](@ref) metadata use their own; others use the
    [`CoupledSystem`](@ref)'s default.
 
-2. **Same-group ODE coupling**: Within each group, [`couple2`](@ref) methods
+2. **Same-group ODE coupling**: Within each group, `EarthSciMLBase.couple2` methods
    run as normal, because all systems share the same dimensions.
 
 3. **Individual promotion**: Each group is composed into a flat `System` and
    promoted to a `PDESystem` via `system + domaininfo`. Metadata (including
    [`CoupleType`](@ref)) is preserved through this promotion.
 
-4. **Cross-group PDE coupling**: After promotion, [`couple2`](@ref) methods
+4. **Cross-group PDE coupling**: After promotion, `EarthSciMLBase.couple2` methods
    are checked between all `PDESystem` pairs (including across groups). These
    methods can handle dimension mismatches using tools like
    [`slice_variable`](@ref).
@@ -213,6 +214,4 @@ The mixed-dimension coupling mechanism works through these steps:
 
 ```@docs
 SysDomainInfo
-slice_variable
-merge_pdesystems
 ```
