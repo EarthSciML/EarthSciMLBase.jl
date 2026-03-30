@@ -232,18 +232,22 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
     systems = copy(sys.systems)
     for (i, a) in enumerate(systems)
         for (j, b) in enumerate(systems)
-            a_t, b_t = get_coupletype(a), get_coupletype(b)
-            if hasmethod(couple2, (a_t, b_t))
-                cs = couple2(a_t(a), b_t(b))
-                @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
-                                               "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
-                systems[i], a = cs.from, cs.from
-                systems[j], b = cs.to, cs.to
-                for eq in cs.eqs
-                    @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
+            i >= j && continue  # Each unordered pair only once, try both directions below.
+            for (x, y, xi, yi) in ((a, b, i, j), (b, a, j, i))
+                x_t, y_t = get_coupletype(x), get_coupletype(y)
+                if hasmethod(couple2, (x_t, y_t))
+                    cs = couple2(x_t(x), y_t(y))
+                    @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
+                                                   "This is not the case for $(nameof(x)) ($x_t) and $(nameof(y)) ($y_t); it is instead a $(typeof(cs))."
+                    systems[xi] = cs.from
+                    systems[yi] = cs.to
+                    for eq in cs.eqs
+                        @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
+                    end
+                    append!(connector_eqs, cs.eqs)
                 end
-                append!(connector_eqs, cs.eqs)
             end
+            a = systems[i]  # Re-sync after coupling (from/to may not match i/j order).
         end
         de = get_sys_discrete_event(a)
         (!isnothing(de)) && push!(discrete_event_fs, de)
