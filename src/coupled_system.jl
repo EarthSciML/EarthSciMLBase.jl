@@ -342,19 +342,26 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
     if has_ode
         groups = _group_by_domaininfo(sys.systems, sys.domaininfo)
 
+        # Precompute system index → group index lookup for O(1) access.
+        group_of = Vector{Int}(undef, length(sys.systems))
+        for (k, (_, indices)) in enumerate(groups)
+            for idx in indices
+                group_of[idx] = k
+            end
+        end
+
         # Phase 1: Run couple2 between ODE systems in the SAME DomainInfo group.
         # Cross-group coupling is deferred to the PDE-level couple2 loop below.
         systems = copy(sys.systems)
         group_connector_eqs = [Equation[] for _ in groups]
 
         for (i, a) in enumerate(systems)
+            gi = group_of[i]
+            a_t = get_coupletype(a)
             for (j, b) in enumerate(systems)
-                # Only couple systems within the same DomainInfo group.
-                gi = _find_group(i, groups)
-                gj = _find_group(j, groups)
-                gi != gj && continue
+                gi != group_of[j] && continue
 
-                a_t, b_t = get_coupletype(a), get_coupletype(b)
+                b_t = get_coupletype(b)
                 if hasmethod(couple2, (a_t, b_t))
                     cs = couple2(a_t(a), b_t(b))
                     @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
@@ -380,6 +387,7 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
             # group is composed into a single System, the parent connector
             # system needs to carry the metadata so that it survives
             # flatten and the subsequent ODE→PDE promotion.
+            # Note: merge! uses last-writer-wins for conflicting keys.
             group_meta = Dict{Any, Any}()
             for s in group_systems
                 m = ModelingToolkit.get_metadata(s)
@@ -444,7 +452,6 @@ where each tuple is `(domaininfo, system_indices)`.
 """
 function _group_by_domaininfo(
         systems::AbstractVector, default_di::Union{Nothing, DomainInfo})
-    # Maintain insertion order using a Vector of (objectid, DomainInfo, indices).
     groups = Tuple{DomainInfo, Vector{Int}}[]
     id_to_idx = Dict{UInt, Int}() # objectid(di) => index into groups
 
@@ -465,72 +472,6 @@ function _group_by_domaininfo(
     return groups
 end
 
-"""
-Find which group index a system belongs to, given the groups from
-[`_group_by_domaininfo`](@ref).
-"""
-function _find_group(sys_idx::Int,
-        groups::Vector{Tuple{DomainInfo, Vector{Int}}})::Int
-    for (k, (_, indices)) in enumerate(groups)
-        if sys_idx in indices
-            return k
-        end
-    end
-    error("System index $sys_idx not found in any group.")
-end
-
-"""
-Couple ODE systems together using the existing pipeline.
-This is extracted from `convert(System, ...)` to allow reuse
-when ODE systems need to be coupled before promotion to PDESystem.
-"""
-function _couple_ode_systems(sys::CoupledSystem; name = :ode_part, kwargs...)
-    connector_eqs = Equation[]
-    discrete_event_fs = []
-    systems = copy(sys.systems)
-    for (i, a) in enumerate(systems)
-        for (j, b) in enumerate(systems)
-            a_t, b_t = get_coupletype(a), get_coupletype(b)
-            if hasmethod(couple2, (a_t, b_t))
-                cs = couple2(a_t(a), b_t(b))
-                @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
-                                               "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
-                systems[i], a = cs.from, cs.from
-                systems[j], b = cs.to, cs.to
-                for eq in cs.eqs
-                    @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
-                end
-                append!(connector_eqs, cs.eqs)
-            end
-        end
-        de = get_sys_discrete_event(a)
-        (!isnothing(de)) && push!(discrete_event_fs, de)
-    end
-
-    iv = ModelingToolkit.get_iv(first(systems))
-
-    ics = ModelingToolkit.initial_conditions(ModelingToolkit.flatten(
-        System(Equation[], iv; name = :temp, systems = systems)))
-    if length(discrete_event_fs) > 0
-        temp_connectors = System(connector_eqs, iv; name = name,
-            initial_conditions = ics, kwargs...)
-        temp_sys = mtkcompile(ModelingToolkit.flatten(compose(
-            temp_connectors, systems...)))
-        de = filter(!isnothing, [f(temp_sys) for f in discrete_event_fs])
-        connectors = System(connector_eqs, iv; name = name,
-            discrete_events = de, initial_conditions = ics, kwargs...)
-    else
-        connectors = System(connector_eqs, iv; name = name,
-            initial_conditions = ics, kwargs...)
-    end
-
-    o = compose(connectors, systems...)
-
-    if !isnothing(sys.domaininfo) && !isempty(sys.domaininfo.partial_derivative_funcs)
-        o = extend(o, partialderivative_transform_eqs(o, sys.domaininfo))
-    end
-    ModelingToolkit.flatten(o)
-end
 
 """
 A connector for two systems.
