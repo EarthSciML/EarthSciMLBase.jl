@@ -24,6 +24,7 @@ makedocs(;
         "Initial and Boundary Conditions" => "icbc.md",
         "Advection" => "advection.md",
         "Coordinate Transforms" => "coord_transforms.md",
+        "Mixed-Dimension Coupling" => "mixed_dim_coupling.md",
         "Operators" => "operator.md",
         "Examples" => [
             "All Together" => "example_all_together.md"

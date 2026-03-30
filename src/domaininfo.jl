@@ -541,7 +541,8 @@ function Base.:(+)(
     eqs = substitute(equations(sys), Dict(zip(toreplace, replacements))) # Substitute local coordinate parameters for global ones.
     eqs = Vector{Equation}([add_dims(eq, allvars, dimensions) for eq in eqs]) # Add new dimensions to equations.
     PDESystem(
-        eqs, icbc(di, statevars), domains(di), dimensions, dvs, ps, name = nameof(sys))
+        eqs, icbc(di, statevars), domains(di), dimensions, dvs, ps,
+        name = nameof(sys), metadata = ModelingToolkit.get_metadata(sys))
 end
 
 Base.:(+)(

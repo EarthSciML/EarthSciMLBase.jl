@@ -1,0 +1,218 @@
+# Mixed-Dimension Coupling
+
+When building Earth science models, it is common to couple systems that operate
+in different numbers of spatial dimensions. For example, a 2D surface fire-spread
+model may need meteorological data from a 3D atmospheric data source that
+includes vertical pressure levels. EarthSciMLBase supports this through
+*per-system DomainInfo*, which allows individual ODE systems to carry their own
+[`DomainInfo`](@ref) and be promoted to PDESystems with only the spatial
+dimensions they need.
+
+## The Problem
+
+By default, all ODE systems in a [`CoupledSystem`](@ref) share a single
+[`DomainInfo`](@ref). When the coupled system is converted to a `PDESystem`,
+every ODE system is promoted using that shared DomainInfo, meaning every variable
+gets the same spatial dimensions.
+
+This creates a conflict when systems need different numbers of dimensions:
+- A 2D surface model needs `{t, x, y}`
+- A 3D data source needs `{t, x, y, lev}`
+
+If the shared DomainInfo is 2D, the 3D data source loses its vertical dimension.
+If it is 3D, the 2D model gets an unwanted `lev` dimension that doesn't appear in
+the original PDE system.
+
+## Solution: `SysDomainInfo` Metadata
+
+Systems that need a different DomainInfo than the default can declare their own
+by adding a [`SysDomainInfo`](@ref) entry to their metadata:
+
+```@example mixed_dim
+using ModelingToolkit, EarthSciMLBase, DomainSets
+using ModelingToolkit: t_nounits, D_nounits
+t = t_nounits
+D = D_nounits
+
+@parameters x y z
+
+# 2D DomainInfo (default for the coupled system)
+domain_2d = DomainInfo(
+    constIC(0.0, t ∈ Interval(0.0, 1.0)),
+    constBC(0.0, x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0))
+)
+
+# 3D DomainInfo (for a system that needs a vertical dimension)
+domain_3d = DomainInfo(
+    constIC(0.0, t ∈ Interval(0.0, 1.0)),
+    constBC(0.0, x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+            z ∈ Interval(0.0, 1.0))
+)
+
+nothing # hide
+```
+
+Create a 2D ODE system (e.g., a surface process) and a 3D ODE system
+(e.g., a data source) that carries its own DomainInfo:
+
+```@example mixed_dim
+@variables a(t) = 0.0
+@parameters p_a = 1.0
+
+# A normal ODE system -- will use the CoupledSystem's default 2D DomainInfo
+ode_2d = System([D(a) ~ p_a], t; name = :surface_proc)
+```
+
+```@example mixed_dim
+@variables b(t) = 0.0
+@parameters p_b = 2.0
+
+# An ODE system with its own 3D DomainInfo stored in metadata
+ode_3d = System([D(b) ~ p_b], t; name = :data_source_3d,
+    metadata = Dict(SysDomainInfo => domain_3d))
+```
+
+## Coupling and Conversion
+
+When these systems are coupled together, the default `domain_2d` is passed
+to the [`couple`](@ref) function. During conversion to a `PDESystem`, systems
+are automatically grouped by their DomainInfo and promoted independently:
+
+```@example mixed_dim
+cs = couple(ode_2d, ode_3d, domain_2d)
+```
+
+When multiple [`DomainInfo`](@ref) groups exist, the conversion logic:
+1. Groups ODE systems by their effective DomainInfo
+2. Couples systems within each group at the ODE level
+3. Promotes each group to a `PDESystem` with only its own dimensions
+4. Merges all PDESystems using [`merge_pdesystems`](@ref), which computes the
+   union of independent variables
+
+```@example mixed_dim
+merged = convert(PDESystem, cs)
+```
+
+The resulting merged system has the union of all independent variables
+(`{t, x, y, z}`), but each dependent variable retains only its own dimensions:
+
+```@example mixed_dim
+for dv in merged.dvs
+    println(dv)
+end
+```
+
+## Cross-Dimension Coupling with `couple2`
+
+When two systems have different dimensionality, their coupling must account
+for the dimension mismatch. This is done by defining [`couple2`](@ref) methods
+that explicitly handle the extra dimensions, for example by using
+[`slice_variable`](@ref) to fix a spatial coordinate at a specific value.
+
+Here is a complete example where a 2D PDE system receives forcing from a 3D
+ODE data source at ground level (`z=0`):
+
+```@example mixed_dim
+struct SurfaceCoupler
+    sys
+end
+struct DataSource3DCoupler
+    sys
+end
+
+@variables u(..)
+Dx = Differential(x)
+
+# A 2D PDE system with CoupleType metadata
+pde_2d = PDESystem(
+    [D(u(t, x, y)) ~ Dx(Dx(u(t, x, y)))],
+    [u(0, x, y) ~ 1.0,
+     u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+     u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0],
+    [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+    [t, x, y], [u(t, x, y)], [];
+    name = :surface,
+    metadata = Dict(CoupleType => SurfaceCoupler)
+)
+
+# A 3D ODE system with its own DomainInfo and CoupleType
+@variables v(t) = 0.0
+@parameters p_v = 3.0
+ode_3d_coupled = System([D(v) ~ p_v], t; name = :data3d,
+    metadata = Dict(
+        SysDomainInfo => domain_3d,
+        CoupleType => DataSource3DCoupler,
+    ))
+nothing # hide
+```
+
+Now define how the 2D and 3D systems couple. The `couple2` method receives the
+promoted PDESystems, so we extract the 3D dependent variable and use
+[`slice_variable`](@ref) to fix the vertical coordinate at ground level (`z=0`):
+
+```@example mixed_dim
+function EarthSciMLBase.couple2(s::SurfaceCoupler, d::DataSource3DCoupler)
+    a_sys, b_sys = s.sys, d.sys
+    # Find the 3D dependent variable from the promoted data source system.
+    b_v = first(filter(dv -> occursin("b", string(dv)), b_sys.dvs))
+    # Slice at z=0 to create a 2D variable and a defining equation.
+    sliced_v, slice_eq = slice_variable(b_v, z, 0.0)
+    # Add the sliced variable as a forcing term to u's equation.
+    coupling_eqs = [
+        D(u(t, x, y)) ~ sliced_v,
+        slice_eq,
+    ]
+    ConnectorSystem(coupling_eqs, a_sys, b_sys)
+end
+nothing # hide
+```
+
+Couple and convert:
+
+```@example mixed_dim
+cs = couple(pde_2d, ode_3d_coupled, domain_2d)
+merged = convert(PDESystem, cs)
+```
+
+Verify that the ground-level forcing appears in the equations. The merged
+system contains the original diffusion and decay equations plus a slice
+equation that extracts the 3D variable at `z=0`:
+
+```@example mixed_dim
+for eq in equations(merged)
+    println(eq)
+end
+```
+
+## How It Works Internally
+
+The mixed-dimension coupling mechanism works through these steps:
+
+1. **Grouping**: [`_group_by_domaininfo`](@ref EarthSciMLBase._group_by_domaininfo)
+   partitions ODE systems by their effective [`DomainInfo`](@ref). Systems with
+   [`SysDomainInfo`](@ref) metadata use their own; others use the
+   [`CoupledSystem`](@ref)'s default.
+
+2. **Same-group ODE coupling**: Within each group, [`couple2`](@ref) methods
+   run as normal, because all systems share the same dimensions.
+
+3. **Individual promotion**: Each group is composed into a flat `System` and
+   promoted to a `PDESystem` via `system + domaininfo`. Metadata (including
+   [`CoupleType`](@ref)) is preserved through this promotion.
+
+4. **Cross-group PDE coupling**: After promotion, [`couple2`](@ref) methods
+   are checked between all `PDESystem` pairs (including across groups). These
+   methods can handle dimension mismatches using tools like
+   [`slice_variable`](@ref).
+
+5. **Merging**: [`merge_pdesystems`](@ref) computes the union of all
+   independent variables and domains, keeping each dependent variable at its
+   original dimensionality.
+
+## API Reference
+
+```@docs
+SysDomainInfo
+slice_variable
+merge_pdesystems
+```

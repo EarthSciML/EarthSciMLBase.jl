@@ -463,3 +463,264 @@ end
     u_eq = equations(merged)[findfirst(eq -> occursin("u(t, x, y)", string(eq.lhs)), equations(merged))]
     @test occursin("v(t, x, y, 0.0)", string(u_eq.rhs))
 end
+
+@testset "SysDomainInfo metadata" begin
+    @parameters x_sdi y_sdi
+    @variables w_sdi(t_test) = 0.5
+    @parameters p_sdi = 1.0
+
+    domain_2d = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_sdi ∈ Interval(0.0, 1.0), y_sdi ∈ Interval(0.0, 1.0))
+    )
+
+    sys_no_meta = System([D_test(w_sdi) ~ p_sdi], t_test; name = :no_meta)
+    @test isnothing(EarthSciMLBase.get_sys_domaininfo(sys_no_meta))
+
+    sys_with_meta = System([D_test(w_sdi) ~ p_sdi], t_test; name = :with_meta,
+        metadata = Dict(SysDomainInfo => domain_2d))
+    di = EarthSciMLBase.get_sys_domaininfo(sys_with_meta)
+    @test di isa DomainInfo
+    @test di === domain_2d
+end
+
+@testset "metadata preserved through ODE-to-PDE promotion" begin
+    @parameters x_mp
+    @variables w_mp(t_test) = 0.5
+    @parameters p_mp = 1.0
+
+    struct PromotionTestCoupler
+        sys
+    end
+
+    domain = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_mp ∈ Interval(0.0, 1.0))
+    )
+
+    sys = System([D_test(w_mp) ~ p_mp], t_test; name = :test_promote,
+        metadata = Dict(CoupleType => PromotionTestCoupler))
+
+    pde = sys + domain
+    ct = EarthSciMLBase.get_coupletype(pde)
+    @test ct === PromotionTestCoupler
+end
+
+@testset "_group_by_domaininfo" begin
+    @parameters x_g y_g z_g
+    @variables a_g(t_test) = 0.0
+    @variables b_g(t_test) = 0.0
+    @variables c_g(t_test) = 0.0
+
+    domain_2d = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_g ∈ Interval(0.0, 1.0), y_g ∈ Interval(0.0, 1.0))
+    )
+    domain_3d = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_g ∈ Interval(0.0, 1.0), y_g ∈ Interval(0.0, 1.0),
+                z_g ∈ Interval(0.0, 1.0))
+    )
+
+    sys_a = System([D_test(a_g) ~ 1], t_test; name = :sys_a)
+    sys_b = System([D_test(b_g) ~ 1], t_test; name = :sys_b,
+        metadata = Dict(SysDomainInfo => domain_3d))
+    sys_c = System([D_test(c_g) ~ 1], t_test; name = :sys_c)
+
+    groups = EarthSciMLBase._group_by_domaininfo([sys_a, sys_b, sys_c], domain_2d)
+    @test length(groups) == 2
+
+    # sys_a and sys_c should be in the 2D group, sys_b in the 3D group
+    for (di, indices) in groups
+        if di === domain_2d
+            @test sort(indices) == [1, 3]
+        elseif di === domain_3d
+            @test indices == [2]
+        else
+            error("unexpected DomainInfo group")
+        end
+    end
+
+    # All same DomainInfo → single group
+    groups_same = EarthSciMLBase._group_by_domaininfo([sys_a, sys_c], domain_2d)
+    @test length(groups_same) == 1
+    @test first(groups_same)[2] == [1, 2]
+end
+
+@testset "couple() ODE systems with different DomainInfos + PDESystem" begin
+    @parameters x_md y_md z_md
+    @variables u_md(..) a_md(t_test) = 0.0 b_md(t_test) = 0.0
+    @parameters p_a_md = 1.0 p_b_md = 2.0
+
+    Dx = Differential(x_md)
+
+    # 2D PDE system
+    pde_2d = PDESystem(
+        [D_test(u_md(t_test, x_md, y_md)) ~ Dx(Dx(u_md(t_test, x_md, y_md)))],
+        [u_md(0, x_md, y_md) ~ 1.0,
+         u_md(t_test, 0, y_md) ~ 0.0, u_md(t_test, 1, y_md) ~ 0.0,
+         u_md(t_test, x_md, 0) ~ 0.0, u_md(t_test, x_md, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_md ∈ Interval(0.0, 1.0), y_md ∈ Interval(0.0, 1.0)],
+        [t_test, x_md, y_md], [u_md(t_test, x_md, y_md)], [];
+        name = :pde_2d
+    )
+
+    # 2D DomainInfo (default)
+    domain_2d = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_md ∈ Interval(0.0, 1.0), y_md ∈ Interval(0.0, 1.0))
+    )
+
+    # 3D DomainInfo (for the "data source" system)
+    domain_3d = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_md ∈ Interval(0.0, 1.0), y_md ∈ Interval(0.0, 1.0),
+                z_md ∈ Interval(0.0, 1.0))
+    )
+
+    # ODE system using default 2D domain
+    ode_2d = System([D_test(a_md) ~ p_a_md], t_test; name = :ode_2d)
+
+    # ODE system carrying its own 3D domain (like ERA5)
+    ode_3d = System([D_test(b_md) ~ p_b_md], t_test; name = :ode_3d,
+        metadata = Dict(SysDomainInfo => domain_3d))
+
+    cs = couple(pde_2d, ode_2d, ode_3d, domain_2d)
+    @test length(cs.pdesystems) == 1
+    @test length(cs.systems) == 2
+    @test cs.domaininfo === domain_2d
+
+    merged = convert(PDESystem, cs)
+
+    # The unified IVs should be the union: t, x_md, y_md, z_md
+    iv_syms = Symbol.(merged.ivs)
+    @test :t ∈ iv_syms
+    @test :x_md ∈ iv_syms
+    @test :y_md ∈ iv_syms
+    @test :z_md ∈ iv_syms
+    @test length(merged.ivs) == 4
+
+    # Should have u_md (2D), a_md (2D), b_md (3D) as dependent variables
+    dvs_str = string.(merged.dvs)
+    @test any(s -> occursin("u_md(t, x_md, y_md)", s), dvs_str)
+    @test any(s -> occursin("a_md(t, x_md, y_md)", s), dvs_str)
+    @test any(s -> occursin("b_md(t, x_md, y_md, z_md)", s), dvs_str)
+end
+
+@testset "backward compat: single DomainInfo fast path" begin
+    @parameters x_bc
+    @variables u_bc(..) a_bc(t_test) = 0.0 b_bc(t_test) = 0.0
+    @parameters p_a_bc = 1.0 p_b_bc = 2.0
+
+    Dx = Differential(x_bc)
+
+    pde = PDESystem(
+        [D_test(u_bc(t_test, x_bc)) ~ Dx(Dx(u_bc(t_test, x_bc)))],
+        [u_bc(0, x_bc) ~ 1.0, u_bc(t_test, 0) ~ 0.0, u_bc(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_bc ∈ Interval(0.0, 1.0)],
+        [t_test, x_bc], [u_bc(t_test, x_bc)], [];
+        name = :pde
+    )
+
+    domain = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_bc ∈ Interval(0.0, 1.0))
+    )
+
+    ode_a = System([D_test(a_bc) ~ p_a_bc], t_test; name = :ode_a)
+    ode_b = System([D_test(b_bc) ~ p_b_bc], t_test; name = :ode_b)
+
+    # Two ODE systems, no SysDomainInfo → single group fast path
+    cs = couple(pde, ode_a, ode_b, domain)
+    merged = convert(PDESystem, cs)
+
+    @test length(merged.ivs) == 2  # t, x_bc only
+    dvs_str = string.(merged.dvs)
+    @test any(s -> occursin("u_bc(t, x_bc)", s), dvs_str)
+    @test any(s -> occursin("a_bc(t, x_bc)", s), dvs_str)
+    @test any(s -> occursin("b_bc(t, x_bc)", s), dvs_str)
+end
+
+@testset "cross-group PDE-level coupling via couple2" begin
+    @parameters x_cg y_cg z_cg
+    @variables u_cg(..) v_cg(t_test) = 0.0
+    @parameters p_v_cg = 1.0
+
+    Dx = Differential(x_cg)
+
+    struct CrossGroup2DCoupler
+        sys
+    end
+    struct CrossGroup3DCoupler
+        sys
+    end
+
+    # 2D PDE system
+    pde_2d = PDESystem(
+        [D_test(u_cg(t_test, x_cg, y_cg)) ~ Dx(Dx(u_cg(t_test, x_cg, y_cg)))],
+        [u_cg(0, x_cg, y_cg) ~ 1.0,
+         u_cg(t_test, 0, y_cg) ~ 0.0, u_cg(t_test, 1, y_cg) ~ 0.0,
+         u_cg(t_test, x_cg, 0) ~ 0.0, u_cg(t_test, x_cg, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_cg ∈ Interval(0.0, 1.0), y_cg ∈ Interval(0.0, 1.0)],
+        [t_test, x_cg, y_cg], [u_cg(t_test, x_cg, y_cg)], [];
+        name = :pde_2d,
+        metadata = Dict(CoupleType => CrossGroup2DCoupler)
+    )
+
+    # 3D DomainInfo
+    domain_3d = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_cg ∈ Interval(0.0, 1.0), y_cg ∈ Interval(0.0, 1.0),
+                z_cg ∈ Interval(0.0, 1.0))
+    )
+
+    # ODE system with its own 3D DomainInfo, simulating a data source
+    ode_3d = System([D_test(v_cg) ~ p_v_cg], t_test; name = :ode_3d,
+        metadata = Dict(
+            SysDomainInfo => domain_3d,
+            CoupleType => CrossGroup3DCoupler,
+        ))
+
+    # 2D default domain
+    domain_2d = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_cg ∈ Interval(0.0, 1.0), y_cg ∈ Interval(0.0, 1.0))
+    )
+
+    # Define PDE-level cross-group coupling: add ground-level v_cg to u_cg's equation.
+    # The couple2 method receives the promoted PDESystems, so we extract the 3D
+    # variable from the DVs and use slice_variable to fix z_cg at ground level.
+    function EarthSciMLBase.couple2(a::CrossGroup2DCoupler, b::CrossGroup3DCoupler)
+        a_sys, b_sys = a.sys, b.sys
+        # Find the 3D dependent variable from the promoted data source system.
+        b_v = first(filter(dv -> occursin("v_cg", string(dv)), b_sys.dvs))
+        # Slice it at z_cg = 0 to get a 2D version and a defining equation.
+        sliced_v, slice_eq = slice_variable(b_v, z_cg, 0.0)
+        # Add the sliced variable as a forcing term to u_cg's equation.
+        coupling_eqs = [
+            D_test(u_cg(t_test, x_cg, y_cg)) ~ sliced_v,
+            slice_eq,
+        ]
+        ConnectorSystem(coupling_eqs, a_sys, b_sys)
+    end
+
+    cs = couple(pde_2d, ode_3d, domain_2d)
+    merged = convert(PDESystem, cs)
+
+    # Should have 4 IVs: t, x_cg, y_cg, z_cg
+    @test length(merged.ivs) == 4
+    iv_syms = Symbol.(merged.ivs)
+    @test :z_cg ∈ iv_syms
+
+    # Verify coupling: u_cg's equation should reference the sliced v_cg variable,
+    # and there should be a slice equation defining v_cg(t, x_cg, y_cg) ~ v_cg(t, x_cg, y_cg, 0.0).
+    eqs = equations(merged)
+    u_eq = eqs[findfirst(eq -> occursin("u_cg(t, x_cg, y_cg)", string(eq.lhs)) &&
+                                occursin("Differential(t", string(eq.lhs)), eqs)]
+    # The u_cg equation should have a coupling term (the sliced v_cg)
+    @test occursin("v_cg", string(u_eq.rhs))
+    # There should be a slice equation with 0.0 substituted
+    slice_eq = findfirst(eq -> occursin("0.0", string(eq.rhs)) &&
+                               occursin("v_cg", string(eq.rhs)), eqs)
+    @test !isnothing(slice_eq)
+end

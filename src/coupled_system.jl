@@ -1,4 +1,4 @@
-export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent, merge_pdesystems, slice_variable
+export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent, SysDomainInfo, merge_pdesystems, slice_variable
 
 """
 A system for composing together other systems using the [`couple`](@ref) function.
@@ -153,6 +153,36 @@ function get_sys_discrete_event(sys::ModelingToolkit.System)
 end
 
 """
+The DataType that should be used in the ModelingToolkit System
+metadata for specifying a system's own [`DomainInfo`](@ref).
+
+When a system has a `SysDomainInfo` entry in its metadata, that `DomainInfo`
+will be used for ODE→PDE promotion instead of the [`CoupledSystem`](@ref)'s
+`DomainInfo`. This allows systems with different spatial dimensionality
+(e.g., a 3D data source like ERA5 and a 2D surface model) to coexist in the
+same coupled system.
+
+See also: [`DomainInfo`](@ref), [`CoupleType`](@ref)
+"""
+struct SysDomainInfo end
+
+"""
+Returns the [`DomainInfo`](@ref) stored in the given system's metadata under
+the [`SysDomainInfo`](@ref) key, or `nothing` if none is set.
+"""
+function get_sys_domaininfo(sys::ModelingToolkit.AbstractSystem)
+    meta = ModelingToolkit.get_metadata(sys)
+    if isnothing(meta)
+        return nothing
+    end
+    di = get(meta, SysDomainInfo, nothing)
+    if !isnothing(di)
+        @assert di isa DomainInfo "SysDomainInfo metadata must be a DomainInfo, got $(typeof(di))."
+    end
+    return di
+end
+
+"""
 $(SIGNATURES)
 
 Perform bi-directional coupling for two
@@ -271,6 +301,14 @@ Get the ModelingToolkit PDESystem representation of a [`CoupledSystem`](@ref).
 If the CoupledSystem contains PDESystems, they are merged together into a single
 flat PDESystem. Any ODE Systems are first coupled together and promoted to a
 PDESystem using the provided DomainInfo, then merged with the existing PDESystems.
+
+ODE Systems may carry their own [`DomainInfo`](@ref) via [`SysDomainInfo`](@ref)
+metadata. When present, that system-specific DomainInfo is used for promotion
+instead of the CoupledSystem's DomainInfo. This enables coupling of systems with
+different spatial dimensionality (e.g., a 2D surface PDE with a 3D data source).
+Systems are grouped by DomainInfo, coupled within each group at the ODE level,
+then promoted and merged. Cross-group coupling is handled at the PDE level via
+[`couple2`](@ref) methods on the promoted PDESystems.
 """
 function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
         kwargs...)::ModelingToolkit.AbstractSystem
@@ -296,12 +334,78 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
     all_pdesystems = copy(sys.pdesystems)
     coupling_eqs = Equation[]
 
-    # If there are ODE Systems, couple them together and promote to PDESystem
+    # If there are ODE Systems, couple them together and promote to PDESystem.
+    # Systems may have their own DomainInfo (via SysDomainInfo metadata) that
+    # differs from the CoupledSystem's DomainInfo. In that case, we group systems
+    # by DomainInfo, couple within each group, and promote each group separately
+    # so that each system gets only the spatial dimensions it needs.
     if has_ode
-        @assert sys.domaininfo !== nothing "DomainInfo is required when coupling ODE Systems with PDESystems."
-        ode_coupled = _couple_ode_systems(sys; name = :ode_part, kwargs...)
-        promoted = ode_coupled + sys.domaininfo
-        push!(all_pdesystems, promoted)
+        groups = _group_by_domaininfo(sys.systems, sys.domaininfo)
+
+        # Phase 1: Run couple2 between ODE systems in the SAME DomainInfo group.
+        # Cross-group coupling is deferred to the PDE-level couple2 loop below.
+        systems = copy(sys.systems)
+        group_connector_eqs = [Equation[] for _ in groups]
+
+        for (i, a) in enumerate(systems)
+            for (j, b) in enumerate(systems)
+                # Only couple systems within the same DomainInfo group.
+                gi = _find_group(i, groups)
+                gj = _find_group(j, groups)
+                gi != gj && continue
+
+                a_t, b_t = get_coupletype(a), get_coupletype(b)
+                if hasmethod(couple2, (a_t, b_t))
+                    cs = couple2(a_t(a), b_t(b))
+                    @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
+                                                   "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
+                    systems[i], a = cs.from, cs.from
+                    systems[j], b = cs.to, cs.to
+                    for eq in cs.eqs
+                        @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
+                    end
+                    append!(group_connector_eqs[gi], cs.eqs)
+                end
+            end
+        end
+
+        # Phase 2: For each group, compose into a flat System and promote
+        # to PDESystem with the group's DomainInfo.
+        for (k, (di, indices)) in enumerate(groups)
+            @assert di !== nothing "DomainInfo is required when coupling ODE Systems with PDESystems."
+            group_systems = systems[indices]
+            connector_eqs_k = group_connector_eqs[k]
+
+            # Collect metadata from all systems in this group. When the
+            # group is composed into a single System, the parent connector
+            # system needs to carry the metadata so that it survives
+            # flatten and the subsequent ODE→PDE promotion.
+            group_meta = Dict{Any, Any}()
+            for s in group_systems
+                m = ModelingToolkit.get_metadata(s)
+                isnothing(m) && continue
+                merge!(group_meta, m)
+            end
+            # Remove SysDomainInfo from the merged metadata since it is
+            # consumed during promotion and should not leak into the PDE.
+            delete!(group_meta, SysDomainInfo)
+            meta_kwarg = isempty(group_meta) ? nothing : group_meta
+
+            iv = ModelingToolkit.get_iv(first(group_systems))
+            ics = ModelingToolkit.initial_conditions(ModelingToolkit.flatten(
+                System(Equation[], iv; name = :temp, systems = group_systems)))
+            connectors = System(connector_eqs_k, iv;
+                name = Symbol("ode_group_", k),
+                initial_conditions = ics,
+                metadata = meta_kwarg, kwargs...)
+            o = compose(connectors, group_systems...)
+            if !isempty(di.partial_derivative_funcs)
+                o = extend(o, partialderivative_transform_eqs(o, di))
+            end
+            o = ModelingToolkit.flatten(o)
+            promoted = o + di
+            push!(all_pdesystems, promoted)
+        end
     end
 
     # Run couple2 between all PDESystem pairs
@@ -329,6 +433,50 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
     end
 
     return merged
+end
+
+"""
+Group ODE systems by their effective [`DomainInfo`](@ref).
+
+Systems with [`SysDomainInfo`](@ref) metadata use their own `DomainInfo`;
+others use `default_di`. Returns a `Vector{Tuple{DomainInfo, Vector{Int}}}`
+where each tuple is `(domaininfo, system_indices)`.
+"""
+function _group_by_domaininfo(
+        systems::AbstractVector, default_di::Union{Nothing, DomainInfo})
+    # Maintain insertion order using a Vector of (objectid, DomainInfo, indices).
+    groups = Tuple{DomainInfo, Vector{Int}}[]
+    id_to_idx = Dict{UInt, Int}() # objectid(di) => index into groups
+
+    for (i, sys) in enumerate(systems)
+        di = get_sys_domaininfo(sys)
+        if isnothing(di)
+            di = default_di
+        end
+        @assert di !== nothing "DomainInfo is required for system $(nameof(sys))."
+        key = objectid(di)
+        if haskey(id_to_idx, key)
+            push!(groups[id_to_idx[key]][2], i)
+        else
+            push!(groups, (di, [i]))
+            id_to_idx[key] = length(groups)
+        end
+    end
+    return groups
+end
+
+"""
+Find which group index a system belongs to, given the groups from
+[`_group_by_domaininfo`](@ref).
+"""
+function _find_group(sys_idx::Int,
+        groups::Vector{Tuple{DomainInfo, Vector{Int}}})::Int
+    for (k, (_, indices)) in enumerate(groups)
+        if sys_idx in indices
+            return k
+        end
+    end
+    error("System index $sys_idx not found in any group.")
 end
 
 """
