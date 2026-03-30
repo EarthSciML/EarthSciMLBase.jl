@@ -52,65 +52,24 @@ domain_3d = DomainInfo(
 nothing # hide
 ```
 
-Create a 2D ODE system (e.g., a surface process) and a 3D ODE system
-(e.g., a data source) that carries its own DomainInfo:
+An ODE system declares its own DomainInfo by including `SysDomainInfo => domaininfo`
+in the metadata dictionary alongside the usual `CoupleType`:
 
-```@example mixed_dim
-@variables a(t) = 0.0
-@parameters p_a = 1.0
-
-# A normal ODE system -- will use the CoupledSystem's default 2D DomainInfo
-ode_2d = System([D(a) ~ p_a], t; name = :surface_proc)
+```julia
+# Example: a data source that needs 3 spatial dimensions
+System([D(v) ~ p_v], t; name = :data3d,
+    metadata = Dict(
+        SysDomainInfo => domain_3d,
+        CoupleType => MyDataCoupler,
+    ))
 ```
 
-```@example mixed_dim
-@variables b(t) = 0.0
-@parameters p_b = 2.0
-
-# An ODE system with its own 3D DomainInfo stored in metadata
-ode_3d = System([D(b) ~ p_b], t; name = :data_source_3d,
-    metadata = Dict(SysDomainInfo => domain_3d))
-```
-
-## Coupling and Conversion
-
-When these systems are coupled together, the default `domain_2d` is passed
-to the [`couple`](@ref) function. During conversion to a `PDESystem`, systems
-are automatically grouped by their DomainInfo and promoted independently:
-
-```@example mixed_dim
-cs = couple(ode_2d, ode_3d, domain_2d)
-```
-
-When multiple [`DomainInfo`](@ref) groups exist, the conversion logic:
-1. Groups ODE systems by their effective DomainInfo
-2. Couples systems within each group at the ODE level
-3. Promotes each group to a `PDESystem` with only its own dimensions
-4. Merges all PDESystems using [`merge_pdesystems`](@ref), which computes the
-   union of independent variables
-
-```@example mixed_dim
-merged = convert(PDESystem, cs)
-```
-
-The resulting merged system has the union of all independent variables
-(`{t, x, y, z}`), but each dependent variable retains only its own dimensions:
-
-```@example mixed_dim
-for dv in merged.dvs
-    println(dv)
-end
-```
-
-## Cross-Dimension Coupling with `couple2`
-
-When two systems have different dimensionality, their coupling must account
-for the dimension mismatch. This is done by defining `EarthSciMLBase.couple2`
-methods that explicitly handle the extra dimensions, for example by using
-[`slice_variable`](@ref) to fix a spatial coordinate at a specific value.
+## Cross-Dimension Coupling Example
 
 Here is a complete example where a 2D PDE system receives forcing from a 3D
-ODE data source at ground level (`z=0`):
+ODE data source at ground level (`z=0`).
+
+First, define coupler types and the systems:
 
 ```@example mixed_dim
 struct SurfaceCoupler
@@ -138,7 +97,7 @@ pde_2d = PDESystem(
 # A 3D ODE system with its own DomainInfo and CoupleType
 @variables v(t) = 0.0
 @parameters p_v = 3.0
-ode_3d_coupled = System([D(v) ~ p_v], t; name = :data3d,
+ode_3d = System([D(v) ~ p_v], t; name = :data3d,
     metadata = Dict(
         SysDomainInfo => domain_3d,
         CoupleType => DataSource3DCoupler,
@@ -146,8 +105,8 @@ ode_3d_coupled = System([D(v) ~ p_v], t; name = :data3d,
 nothing # hide
 ```
 
-Now define how the 2D and 3D systems couple. The `couple2` method receives the
-promoted PDESystems, so we extract the 3D dependent variable and use
+Define how the 2D and 3D systems couple. The `EarthSciMLBase.couple2` method
+receives the promoted PDESystems, so we extract the 3D dependent variable and use
 [`slice_variable`](@ref) to fix the vertical coordinate at ground level (`z=0`):
 
 ```@example mixed_dim
@@ -168,19 +127,28 @@ end
 nothing # hide
 ```
 
-Couple and convert:
+Couple and convert. The 2D PDE system, 3D ODE data source, and default 2D
+domain are all passed to [`couple`](@ref):
 
 ```@example mixed_dim
-cs2 = couple(pde_2d, ode_3d_coupled, domain_2d)
-merged2 = convert(PDESystem, cs2)
+cs = couple(pde_2d, ode_3d, domain_2d)
+merged = convert(PDESystem, cs)
 ```
 
-Verify that the ground-level forcing appears in the equations. The merged
-system contains the original diffusion and decay equations plus a slice
-equation that extracts the 3D variable at `z=0`:
+The merged system has the union of all independent variables (`{t, x, y, z}`),
+but each dependent variable retains only its own dimensions:
 
 ```@example mixed_dim
-for eq in equations(merged2)
+for dv in merged.dvs
+    println(dv)
+end
+```
+
+The equations include the original diffusion equation with the coupling term
+added, plus a slice equation extracting the 3D variable at `z=0`:
+
+```@example mixed_dim
+for eq in equations(merged)
     println(eq)
 end
 ```
@@ -189,9 +157,8 @@ end
 
 The mixed-dimension coupling mechanism works through these steps:
 
-1. **Grouping**: `EarthSciMLBase._group_by_domaininfo`
-   partitions ODE systems by their effective [`DomainInfo`](@ref). Systems with
-   [`SysDomainInfo`](@ref) metadata use their own; others use the
+1. **Grouping**: ODE systems are partitioned by their effective [`DomainInfo`](@ref).
+   Systems with [`SysDomainInfo`](@ref) metadata use their own; others use the
    [`CoupledSystem`](@ref)'s default.
 
 2. **Same-group ODE coupling**: Within each group, `EarthSciMLBase.couple2` methods
@@ -209,9 +176,3 @@ The mixed-dimension coupling mechanism works through these steps:
 5. **Merging**: [`merge_pdesystems`](@ref) computes the union of all
    independent variables and domains, keeping each dependent variable at its
    original dimensionality.
-
-## API Reference
-
-```@docs
-SysDomainInfo
-```
