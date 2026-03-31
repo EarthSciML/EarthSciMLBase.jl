@@ -366,6 +366,7 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
     # New path: PDESystem merging
     all_pdesystems = copy(sys.pdesystems)
     coupling_eqs = Equation[]
+    handled_cross_pairs = Set{Tuple{DataType, DataType}}()
 
     # If there are ODE Systems, couple them together and promote to PDESystem.
     # Systems may have their own DomainInfo (via SysDomainInfo metadata) that
@@ -409,6 +410,57 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
             end
         end
 
+        # Phase 1.5: Run cross-type couple2 between individual ODE systems
+        # and PDESystems BEFORE composition/promotion. At this point each
+        # ODE system is still individual (sys.varname works), and each
+        # PDESystem has its dedicated param_to_var overload.
+        # Store coupling equations per group for later transformation.
+        cross_coupling_eqs = [Equation[] for _ in groups]
+
+        for (i, ode_sys) in enumerate(systems)
+            gi = group_of[i]
+            ode_t = get_coupletype(ode_sys)
+            ode_t === Nothing && continue
+            for (j, pde_sys) in enumerate(all_pdesystems)
+                for pde_t in get_coupletypes(pde_sys)
+                    # Try both orderings.
+                    for (x_t, y_t, x_sys, y_sys) in [
+                        (ode_t, pde_t, ode_sys, pde_sys),
+                        (pde_t, ode_t, pde_sys, ode_sys),
+                    ]
+                        hasmethod(couple2, (x_t, y_t)) || continue
+                        # Try running couple2 with the individual ODE
+                        # System. If the method expects a promoted
+                        # PDESystem (e.g. accesses .dvs), it will error
+                        # here and we defer to PDE-phase dispatch.
+                        local cs
+                        try
+                            cs = couple2(x_t(x_sys), y_t(y_sys))
+                        catch
+                            continue
+                        end
+                        @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
+                                                       "This is not the case for ($x_t) and ($y_t); it is instead a $(typeof(cs))."
+                        # Update systems: determine which is ODE and which is PDE
+                        # based on type, since couple2 controls from/to assignment.
+                        for sys_out in (cs.from, cs.to)
+                            if sys_out isa ModelingToolkit.PDESystem
+                                all_pdesystems[j] = sys_out
+                            else
+                                systems[i], ode_sys = sys_out, sys_out
+                            end
+                        end
+                        for eq in cs.eqs
+                            @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
+                        end
+                        append!(cross_coupling_eqs[gi], cs.eqs)
+                        push!(handled_cross_pairs, (ode_t, pde_t))
+                        push!(handled_cross_pairs, (pde_t, ode_t))
+                    end
+                end
+            end
+        end
+
         # Phase 2: For each group, compose into a flat System and promote
         # to PDESystem with the group's DomainInfo.
         for (k, (di, indices)) in enumerate(groups)
@@ -416,29 +468,26 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
             group_systems = systems[indices]
             connector_eqs_k = group_connector_eqs[k]
 
-            # Collect metadata from all systems in this group. When the
-            # group is composed into a single System, the parent connector
-            # system needs to carry the metadata so that it survives
-            # flatten and the subsequent ODE→PDE promotion.
+            # Build a pre-composition variable registry so we can later
+            # map bare ODE variables in cross-type coupling equations to
+            # their promoted (namespaced + spatially-expanded) counterparts.
+            pre_comp_vars = Dict{Symbol, Tuple{Symbol, Any}}()
+            if !isempty(cross_coupling_eqs[k])
+                for s in group_systems
+                    sname = nameof(s)
+                    for var in unknowns(s)
+                        vname = Symbolics.tosymbol(var, escape = false)
+                        pre_comp_vars[vname] = (sname, var)
+                    end
+                end
+            end
+
+            # Collect metadata from all systems in this group.
             group_meta = Dict{Any, Any}()
-            # Collect ALL CoupleTypes as a vector so that cross-type
-            # couple2 methods can be discovered during the PDE coupling
-            # phase. Using merge! alone would keep only the last CoupleType
-            # per group (last-writer-wins).
-            group_coupletypes = DataType[]
             for s in group_systems
                 m = ModelingToolkit.get_metadata(s)
                 isnothing(m) && continue
-                ct = get(m, CoupleType, nothing)
-                if !isnothing(ct)
-                    push!(group_coupletypes, ct)
-                end
                 merge!(group_meta, m)
-            end
-            # Store CoupleTypes as a vector so get_coupletypes() returns
-            # all of them, not just the last one from merge!.
-            if !isempty(group_coupletypes)
-                group_meta[CoupleType] = group_coupletypes
             end
             # Remove SysDomainInfo from the merged metadata since it is
             # consumed during promotion and should not leak into the PDE.
@@ -458,18 +507,51 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
             end
             o = ModelingToolkit.flatten(o)
             promoted = o + di
+
+            # Transform cross-type coupling equations: replace bare ODE
+            # variables (e.g. R(t)) with their promoted counterparts
+            # (e.g. ode_group_1₊rothermel₊R(t,x,y)).
+            if !isempty(cross_coupling_eqs[k])
+                promoted_dvs = getfield(promoted, :dvs)
+                @variables 🔥_cross_couple_temp
+                for (eq_idx, eq) in enumerate(cross_coupling_eqs[k])
+                    new_lhs = eq.lhs
+                    new_rhs = eq.rhs
+                    for var in Symbolics.get_variables(eq)
+                        varname = Symbolics.tosymbol(var, escape = false)
+                        haskey(pre_comp_vars, varname) || continue
+                        sysname, _ = pre_comp_vars[varname]
+                        suffix = string("₊", sysname, "₊", varname)
+                        pidx = findfirst(promoted_dvs) do dv
+                            dvname = string(Symbolics.tosymbol(dv, escape = false))
+                            endswith(dvname, suffix)
+                        end
+                        pidx === nothing && continue
+                        promoted_var = promoted_dvs[pidx]
+                        # Use the two-step substitute_in_deriv pattern
+                        # (same as add_dims) to handle derivatives.
+                        new_lhs = Symbolics.substitute_in_deriv(new_lhs, Dict(var => 🔥_cross_couple_temp))
+                        new_lhs = Symbolics.substitute_in_deriv(new_lhs, Dict(🔥_cross_couple_temp => promoted_var))
+                        new_rhs = Symbolics.substitute_in_deriv(new_rhs, Dict(var => 🔥_cross_couple_temp))
+                        new_rhs = Symbolics.substitute_in_deriv(new_rhs, Dict(🔥_cross_couple_temp => promoted_var))
+                    end
+                    cross_coupling_eqs[k][eq_idx] = new_lhs ~ new_rhs
+                end
+                append!(coupling_eqs, cross_coupling_eqs[k])
+            end
+
             push!(all_pdesystems, promoted)
         end
     end
 
-    # Run couple2 between all PDESystem pairs.
-    # Use get_coupletypes (plural) to handle promoted systems that carry
-    # multiple CoupleTypes from their constituent ODE components.
+    # Run couple2 between all PDESystem pairs (PDE-PDE coupling).
+    # Skip cross-type pairs already handled in Phase 1.5.
     for (i, a) in enumerate(all_pdesystems)
         for (j, b) in enumerate(all_pdesystems)
             i == j && continue
             for a_t in get_coupletypes(a)
                 for b_t in get_coupletypes(b)
+                    (a_t, b_t) in handled_cross_pairs && continue
                     if hasmethod(couple2, (a_t, b_t))
                         cs = couple2(a_t(a), b_t(b))
                         @assert cs isa ConnectorSystem "The result of coupling two PDESystems together must be a EarthSciMLBase.ConnectorSystem. " *
