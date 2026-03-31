@@ -17,7 +17,7 @@ D = D_nounits
 function ExampleSys()
     @variables y(t)
     @parameters p=2.0 x=1
-    System([D(y) ~ p], t, [y, p, x]; name = :ExampleSys)
+    System([D(y) ~ p], t, [y], [p, x]; name = :ExampleSys)
 end
 
 ExampleSys()
@@ -40,21 +40,6 @@ sys_advection = couple(ExampleSys(), domain, ConstantWind(t, 1.0), Advection())
 sys_mtk = convert(PDESystem, sys_advection)
 ```
 
-Finally, we can discretize the system and solve it:
+!!! note
 
-```@example advection
-using MethodOfLines, DifferentialEquations, Plots
-discretization = MOLFiniteDifference([x => 10], t, approx_order = 2)
-@time prob = discretize(sys_mtk, discretization)
-@time sol = solve(prob, Tsit5(), saveat = 0.1)
-
-# Plot the solution.
-discrete_x = sol.x
-discrete_t = sol.t
-soly = sol.ExampleSys₊y
-anim = @animate for k in 1:length(discrete_t)
-    plot(discrete_x, soly[k, 1:end], title = "t=\$(discrete_t[k])",
-        ylim = (0, 2.5), lab = :none)
-end
-gif(anim, fps = 8)
-```
+    Discretization and numerical solution of this PDE system requires [MethodOfLines.jl](https://docs.sciml.ai/MethodOfLines/stable/), which is not currently compatible with the latest ModelingToolkit ecosystem.

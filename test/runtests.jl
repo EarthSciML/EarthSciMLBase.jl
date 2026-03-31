@@ -41,6 +41,9 @@ using Test, SafeTestsets
     @safetestset "Sensitivity" begin
         include("sensitivity_test.jl")
     end
+    @safetestset "PDESystem Coupling" begin
+        include("pdesystem_coupling_test.jl")
+    end
     @safetestset "Docs" begin
         using Documenter
         using EarthSciMLBase

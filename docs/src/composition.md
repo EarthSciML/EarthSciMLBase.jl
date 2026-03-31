@@ -61,9 +61,9 @@ function Chemistry(; name = :Chemistry)
     rxs = [
         Reaction(jNO2, [NO2], [], [1], [])
     ]
-    rsys = ReactionSystem(rxs, t, [NO2], [jNO2];
-        combinatoric_ratelaws = false, name = name)
-    convert(System, complete(rsys), metadata = Dict(CoupleType => ChemistryCoupler))
+    rsys = complete(ReactionSystem(rxs, t, [NO2], [jNO2];
+        combinatoric_ratelaws = false, name = name))
+    ode_model(rsys; metadata = Dict(CoupleType => ChemistryCoupler))
 end
 
 Chemistry()

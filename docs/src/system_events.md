@@ -22,8 +22,8 @@ using Plots
     y(t_nounits)
 end
 
-@named sys1 = System([D(x) ~ a], t_nounits, [x, a])
-@named sys2 = System([y ~ b], t_nounits, [y, b])
+@named sys1 = System([D(x) ~ a], t_nounits, [x], [a])
+@named sys2 = System([y ~ b], t_nounits, [y], [b])
 
 model1 = couple(sys1, sys2)
 sys = convert(System, model1)
@@ -41,7 +41,7 @@ However, the systems for $x$ and $y$ could be used in different ways, so we don'
 To handle this type of situation, `EarthSciML` includes the idea of "system events" which are associated with individual system components, but are configured after the fully coupled system is created.
 
 To create a system event, we need to create a function that takes a ModelingToolkit system as the argument and returns a ModelingToolkit event,
-and then associate that function with the `:sys_discrete_event` key in the metadata dictionary of the system component in question.
+and then associate that function with the `SysDiscreteEvent` key in the metadata dictionary of the system component in question.
 
 The code below does several things. First, it creates a function to determine whether a given variable is needed to solve the system or not.
 Then, it creates "system event functions" for our two component systems, directing each system to increment its parameter value during the simulation, but only if the corresponding variable is needed for the simulation.
@@ -63,25 +63,25 @@ end
 
 runcount1 = 0
 function sysevent1(sys)
-    function f1!(integ, u, p, ctx)
+    function f1!(mod, obs, ctx, integ)
         if is_var_needed(sys.sys1₊x, sys) # Only run if x is needed in the system.
             global runcount1 += 1
-            #runcount1 += 1
-            integ.ps[p.sys1₊a] = 1
+            return (sys1₊a = 1,)
         end
+        return (sys1₊a = mod.sys1₊a,)
     end
-    return [3.0] => (f1!, [], [sys.sys1₊a], [], nothing)
+    return [3.0] => (f = f1!, modified = (sys1₊a = sys.sys1₊a,))
 end
 runcount2 = 0
 function sysevent2(sys)
-    function f2!(integ, u, p, ctx)
+    function f2!(mod, obs, ctx, integ)
         if is_var_needed(sys.sys2₊y, sys) # Only run if y is needed in the system.
             global runcount2 += 1
-            #runcount2 += 1
-            integ.ps[p.sys2₊b] = 1
+            return (sys2₊b = 1,)
         end
+        return (sys2₊b = mod.sys2₊b,)
     end
-    return [5.0] => (f2!, [], [sys.sys2₊b], [], nothing)
+    return [5.0] => (f = f2!, modified = (sys2₊b = sys.sys2₊b,))
 end
 ```
 
@@ -90,13 +90,13 @@ Then, we can run the simulation:
 
 ```@example system_events
 sys1 = System([D(x) ~ a], t_nounits, [x], [a]; name = :sys1,
-    metadata = Dict(:sys_discrete_event => sysevent1))
+    metadata = Dict(SysDiscreteEvent => sysevent1))
 sys2 = System([y ~ b], t_nounits, [y], [b]; name = :sys2,
-    metadata = Dict(:sys_discrete_event => sysevent2))
+    metadata = Dict(SysDiscreteEvent => sysevent2))
 
 model1 = couple(sys1, sys2)
 sys = convert(System, model1)
-sol = solve(ODEProblem(sys), [], tspan = (0, 10))
+sol = solve(ODEProblem(sys, [], (0, 10)))
 ```
 
 If we plot the results, we can see that the system event did indeed update the parameter value for $a$, which changed the rate of change of $x$.

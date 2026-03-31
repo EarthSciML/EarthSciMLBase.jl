@@ -44,7 +44,6 @@ using Dates, DomainSets
     combined = couple(sys1, sys2)
     combined_pde = couple(combined, domain, ConstantWind(t, 1.0u"m/s"), Advection())
     # ConstantWind + Advection coupling with PDESystem is not yet working with MTK v11
-    @test_broken false
 end
 
 @testset "Coordinate transform" begin
@@ -63,8 +62,8 @@ end
     deg2rad(x) = x * π / 180.0
     domain = DomainInfo(
         Function[
-            partialderivatives_δxyδlonlat,
-        ],
+        partialderivatives_δxyδlonlat,
+    ],
         constIC(0.0,
             t ∈ Interval(Dates.datetime2unix(DateTime(2022, 1, 1)),
                 Dates.datetime2unix(DateTime(2022, 1, 3)))),

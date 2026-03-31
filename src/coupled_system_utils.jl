@@ -30,7 +30,6 @@ function observed_expression(eqs, x)
     if isnothing(expr)
         return nothing
     end
-    expr = expr # subs_constants removed in MTK v11
     for v in Symbolics.get_variables(expr)
         v_expr = observed_expression(eqs, v)
         if !isnothing(v_expr)
@@ -314,20 +313,28 @@ function remove_extra_defaults(original_sys, simplified_sys)
 end
 
 """
-Initialize the state variables.
+Initialize the state variable array.
 """
-function init_u(mtk_sys::System, d::DomainInfo{ET, AT}) where {ET, AT}
+function init_u(mtk_sys::System, d::DomainInfo{ET}) where {ET}
     vars = unknowns(mtk_sys)
     ics = ModelingToolkit.initial_conditions(mtk_sys)
     # Convert symbolic numeric values to concrete Float64
-    u0 = [Symbolics.value(Symbolics.Num(ics[u])) for u in vars]
+    u0_single = [Symbolics.value(Symbolics.Num(ics[u])) for u in vars]
 
-    g = grid(d)
-    # Set initial conditions
-    AT([u0[i]
-        for i in eachindex(u0), j in eachindex(g[1]),
-    k in eachindex(g[2]), l in eachindex(g[3])])
+    u0 = init_array(d, length(u0_single)*prod(size(d)))
+    u0_tmp = reshape(u0, length(u0_single), :)
+    for (i, u) in enumerate(u0_single)
+        @view(u0_tmp[i, :, :, :]) .= ET(u)
+    end
+    return u0
 end
+
+"""
+    $(SIGNATURES)
+
+Initialize an arrays with the given dimensions
+"""
+init_array(d::DomainInfo, sizes...) = similar(d.u_proto, sizes...)
 
 function default_params(mtk_sys::AbstractSystem)
     ics = ModelingToolkit.initial_conditions(mtk_sys)

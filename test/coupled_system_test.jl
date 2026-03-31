@@ -70,9 +70,12 @@ using OrdinaryDiffEqTsit5
 
     # Check that the expected equations are present (allowing for equivalent simplifications)
     have_str = string(have_eqs)
-    @test occursin("reqn₊γ", have_str) && occursin("reqn₊I", have_str) && occursin("reqn₊R", have_str)
-    @test occursin("seqn₊β", have_str) && occursin("seqn₊S", have_str) && occursin("seqn₊I", have_str)
-    @test occursin("ieqn₊β", have_str) && occursin("ieqn₊S", have_str) && occursin("ieqn₊I", have_str)
+    @test occursin("reqn₊γ", have_str) && occursin("reqn₊I", have_str) &&
+          occursin("reqn₊R", have_str)
+    @test occursin("seqn₊β", have_str) && occursin("seqn₊S", have_str) &&
+          occursin("seqn₊I", have_str)
+    @test occursin("ieqn₊β", have_str) && occursin("ieqn₊S", have_str) &&
+          occursin("ieqn₊I", have_str)
     @test length(have_eqs) == 3
 
     @testset "Graph" begin
@@ -258,9 +261,11 @@ end
     @variables x3(t_nounits)
 
     event1 = [1.0, 2, 3] => (f = update_affect!, modified = (p = p_1,))
-    event2 = [1.0, 2, 3] => (f = (mod, obs, ctx, integ) -> (p_2 = 1,), modified = (p_2 = p_2,))
+    event2 = [
+        1.0, 2, 3] => (f = (mod, obs, ctx, integ) -> (p_2 = 1,), modified = (p_2 = p_2,))
     event3 = [1.0, 2, 3] => (f = update_affect!, modified = (p = p_3,))
-    event4 = [1.0, 2, 3] => (f = (mod, obs, ctx, integ) -> (p_4 = 1,), modified = (p_4 = p_4,))
+    event4 = [
+        1.0, 2, 3] => (f = (mod, obs, ctx, integ) -> (p_4 = 1,), modified = (p_4 = p_4,))
 
     sys = System(
         [
@@ -446,4 +451,43 @@ end
     @test sol[sys.sys1₊x][end] ≈ 12
     @test runcount1 == 1
     @test runcount2 == 1
+end
+
+@testset "No duplicate connector equations" begin
+    struct DupACoupler
+        sys::Any
+    end
+    struct DupBCoupler
+        sys::Any
+    end
+
+    @component function DupA(; name = :DupA)
+        @variables x(t)
+        System([D_nounits(x) ~ 1], t_nounits; name, metadata = Dict(CoupleType => DupACoupler))
+    end
+
+    @component function DupB(; name = :DupB)
+        @parameters p
+        @variables y(t)
+        System([D_nounits(y) ~ p], t_nounits; name, metadata = Dict(CoupleType => DupBCoupler))
+    end
+
+    function EarthSciMLBase.couple2(a::DupACoupler, b::DupBCoupler)
+        a, b = a.sys, b.sys
+        b = EarthSciMLBase.param_to_var(b, :p)
+        ConnectorSystem([b.p ~ a.x], b, a)
+    end
+
+    cs = couple(DupA(), DupB())
+    sys = convert(System, cs; compile = false)
+
+    eq_strs = sort([string(eq) for eq in equations(sys)])
+    @test eq_strs == unique(eq_strs)
+
+    # Also verify both orderings produce no duplicates.
+    cs2 = couple(DupB(), DupA())
+    sys2 = convert(System, cs2; compile = false)
+
+    eq_strs2 = sort([string(eq) for eq in equations(sys2)])
+    @test eq_strs2 == unique(eq_strs2)
 end

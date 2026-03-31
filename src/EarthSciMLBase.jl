@@ -14,21 +14,27 @@ using LinearAlgebra
 using SymbolicIndexingInterface: setp
 using Accessors
 using Graphs
-using MacroTools, RuntimeGeneratedFunctions, ThreadsX
+using MacroTools, RuntimeGeneratedFunctions
+import SciMLOperators as SMO
+import ThreadsX
+import AcceleratedKernels as AK
 
 include("add_dims.jl")
 include("domaininfo.jl")
 include("operator.jl")
 include("coupled_system.jl")
+include("pdesystem_coupling.jl")
 include("coupled_system_utils.jl")
 include("operator_compose.jl")
 include("advection.jl")
 include("coord_trans.jl")
 include("param_to_var.jl")
 include("graph.jl")
+include("map_algorithm.jl")
+include("blockdiagonal.jl")
+include("jacobian.jl")
 include("mtk_grid_func.jl")
 include("solver_strategies.jl")
 include("solver_strategy_strang.jl")
-include("blockdiagonal.jl")
 
 end

@@ -50,7 +50,8 @@ end
 
     eqstr = replace(string(eq), "Symbolics." => "")
     # The simplified equation should be D(x) = p + sys2_xˍt, where sys2_xˍt is also equal to p.
-    @test eqstr == "Equation[Differential(t, 1)(sys1₊x(t)) ~ sys1₊p + sys1₊syscopy_ddt_xˍt(t)]"
+    @test eqstr ==
+          "Equation[Differential(t, 1)(sys1₊x(t)) ~ sys1₊p + sys1₊syscopy_ddt_xˍt(t)]"
 end
 
 @testset "translated" begin

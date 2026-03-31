@@ -140,7 +140,8 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = no
 
     grd = grid(dom)
     sparse = :sparse in keys(st.stiff_kwargs) ? st.stiff_kwargs[:sparse] : false
-    f_ode, u0_single, p = _strang_ode_func(sys_mtk, coord_args, (start, finish), grd;
+    f_ode, u0_single,
+    p = _strang_ode_func(sys_mtk, coord_args, (start, finish), grd;
         sparse = sparse)
 
     IIchunks, stiff_integrators = _strang_integrators(st, dom, f_ode, u0_single, start, p)
@@ -152,20 +153,24 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = no
         push!(cb, event_cb)
     end
     push!(cb, get_callbacks(s, sys_mtk, coord_args, dom, st.alg)...)
-    push!(cb, stiff_callback(u0, st, IIchunks, stiff_integrators))
+    push!(cb, stiff_callback(reshape(u0, :, size(dom)...), st, IIchunks,
+        stiff_integrators))
     if :callback in keys(kwargs)
         push!(cb, kwargs[:callback])
         kwargs = filter((p -> p.first ≠ :callback), kwargs)
     end
 
-    ODEProblem(nonstiff_op, view(u0, :), (start, finish), p; callback = CallbackSet(cb...),
+    # Attach sys_mtk so that users can query unknowns(prob.f.sys) to get the
+    # variable ordering that matches prob.u0 (same ordering as init_u uses).
+    nonstiff_fn = ODEFunction(nonstiff_op; sys = sys_mtk)
+    ODEProblem(nonstiff_fn, view(u0, :), (start, finish), p; callback = CallbackSet(cb...),
         dt = st.timestep, kwargs...)
 end
 
 """
 A callback to periodically run the stiff solver.
 """
-function stiff_callback(u0::AbstractArray{T}, st::SolverStrang,
+function stiff_callback(u0::AbstractArray{T, 4}, st::SolverStrang,
         IIchunks, integrators) where {T}
     sz = size(u0)
     function affect!(integrator)

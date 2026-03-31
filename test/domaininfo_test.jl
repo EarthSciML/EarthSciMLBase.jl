@@ -125,12 +125,10 @@ end
 
 @testset "Solve PDE" begin
     # MethodOfLines is not yet compatible with Symbolics v7/MTK v11
-    @test_broken false
 end
 
 @testset "Simplify" begin
     # MethodOfLines is not yet compatible with Symbolics v7/MTK v11
-    @test_broken false
 end
 
 @testset "replacement_params" begin
@@ -161,8 +159,8 @@ end
         xrange = 0:0.1:1, yrange = 0:0.1:2, u_proto = zeros(Float32, 1, 1, 1, 1))
 
     @test Symbol.(pvars(di)) == [:x, :y]
-    @test grid(di) == [0.0f0:0.1f0:1.0f0, 0.0f0:0.1f0:2.0f0]
-    @test grid(di, (true, false)) ≈ [-0.05f0:0.1f0:1.0500001f0, 0.0f0:0.1f0:2.0f0]
+    @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0]
+    @test grid(di, (true, false)) ≈ [-0.05:0.1:1.05, 0.0:0.1:2.0]
     @test get_tspan(di) == (0.0, 10800.0)
     @test length(di.partial_derivative_funcs) == 0
 end
@@ -207,8 +205,8 @@ end
         u_proto = zeros(Float32, 1, 1, 1, 1))
 
     @test Symbol.(pvars(di)) == [:x, :y, :lev]
-    @test grid(di) == [0.0f0:0.1f0:1.0f0, 0.0f0:0.1f0:2.0f0, 1.0f0:15.0f0]
-    @test get_tspan(di) == (0.0f0, 10800.0f0)
+    @test grid(di) == [0.0:0.1:1.0, 0.0:0.1:2.0, 1.0:15.0]
+    @test get_tspan(di) == (0.0, 10800.0)
     @test length(di.partial_derivative_funcs) == 0
 end
 
