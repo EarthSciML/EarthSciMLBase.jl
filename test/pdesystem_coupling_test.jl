@@ -724,3 +724,91 @@ end
                                occursin("v_cg", string(eq.rhs)), eqs)
     @test !isnothing(slice_eq)
 end
+
+@testset "cross-type ODE→PDE pre-coupling (WildlandFire pattern)" begin
+    # This test mimics WildlandFire.jl's Rothermel→LevelSet coupling pattern:
+    # - An ODE system computes a rate R (like Rothermel fire spread rate)
+    # - A PDESystem has a parameter S that drives propagation (like level-set speed)
+    # - couple2 uses param_to_var to convert S to a variable, then links S ~ R
+    #   using sys.varname dot access on the individual ODE system.
+
+    @parameters x_ct y_ct
+    @variables ψ_ct(..) [description = "Level-set function"]
+    @parameters S_ct = 1.0 [description = "Spread rate"]
+
+    Dx_ct = Differential(x_ct)
+    Dy_ct = Differential(y_ct)
+
+    # PDE system (like LevelSetFireSpread): ∂ψ/∂t + S‖∇ψ‖ = 0
+    struct LevelSetTestCoupler
+        sys
+    end
+
+    pde = PDESystem(
+        [D_test(ψ_ct(t_test, x_ct, y_ct)) ~ -S_ct * sqrt(
+            Dx_ct(ψ_ct(t_test, x_ct, y_ct))^2 + Dy_ct(ψ_ct(t_test, x_ct, y_ct))^2)],
+        [ψ_ct(0, x_ct, y_ct) ~ sqrt((x_ct - 0.5)^2 + (y_ct - 0.5)^2) - 0.1],
+        [t_test ∈ Interval(0.0, 1.0),
+         x_ct ∈ Interval(0.0, 1.0), y_ct ∈ Interval(0.0, 1.0)],
+        [t_test, x_ct, y_ct], [ψ_ct(t_test, x_ct, y_ct)], [S_ct];
+        name = :level_set,
+        metadata = Dict(CoupleType => LevelSetTestCoupler)
+    )
+
+    # ODE system (like RothermelFireSpread): computes rate R from inputs
+    struct RothermelTestCoupler
+        sys
+    end
+
+    @variables R_ct(t_test) = 0.5 [description = "Rate of spread"]
+    @parameters k_ct = 2.0 [description = "Rate constant"]
+
+    ode = System([D_test(R_ct) ~ k_ct * (1.0 - R_ct)], t_test; name = :rothermel,
+        metadata = Dict(CoupleType => RothermelTestCoupler))
+
+    # Cross-type couple2: follows the EXACT WildlandFire.jl pattern
+    # - Uses param_to_var on the PDE system
+    # - Accesses variables via sys.varname (dot notation) on the ODE system
+    # - Extracts the converted variable from PDE equations
+    function EarthSciMLBase.couple2(r::RothermelTestCoupler, ls::LevelSetTestCoupler)
+        r_sys, ls_sys = r.sys, ls.sys
+        ls_sys = param_to_var(ls_sys, :S_ct)
+        eq_vars = collect(Symbolics.get_variables(equations(ls_sys)[1]))
+        S_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :S_ct, eq_vars))
+        return ConnectorSystem([S_sym ~ r_sys.R_ct], ls_sys, r_sys)
+    end
+
+    domain = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_ct ∈ Interval(0.0, 1.0), y_ct ∈ Interval(0.0, 1.0))
+    )
+
+    cs = couple(pde, ode, domain)
+    merged = convert(PDESystem, cs)
+
+    eqs = equations(merged)
+    dvs_str = string.(merged.dvs)
+
+    # Both ψ_ct and R_ct should be dependent variables
+    @test any(s -> occursin("ψ_ct", s), dvs_str)
+    @test any(s -> occursin("R_ct", s), dvs_str)
+
+    # The PDE equation for ψ_ct should now contain S_ct as a variable, not parameter
+    ψ_eq = eqs[findfirst(eq -> occursin("ψ_ct", string(eq.lhs)) &&
+                                occursin("Differential(t", string(eq.lhs)), eqs)]
+    @test occursin("S_ct", string(ψ_eq.rhs))
+
+    # S_ct should NOT be a parameter (it was converted by param_to_var)
+    ps_str = string.(merged.ps)
+    @test !any(s -> occursin("S_ct", s), ps_str)
+
+    # There should be a coupling equation linking S_ct to the promoted R_ct
+    coupling_eq = findfirst(eqs) do eq
+        lhs_str = string(eq.lhs)
+        rhs_str = string(eq.rhs)
+        occursin("S_ct", lhs_str) && occursin("R_ct", rhs_str)
+    end
+    @test !isnothing(coupling_eq)
+    # The coupling equation's R_ct should have spatial dims from promotion
+    @test occursin("x_ct", string(eqs[coupling_eq]))
+end

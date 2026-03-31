@@ -81,10 +81,13 @@ function param_to_var(sys::ModelingToolkit.PDESystem, ps::Symbol...)
         @assert !isnothing(iparam) "Parameter `$p` not found in the PDESystem parameters $(Symbol.(params))"
         param = params[iparam]
 
-        iv = first(sys.ivs)  # Use the first independent variable (typically t)
-        newvar = only(@variables $p(iv))
+        # Create a variable with ALL independent variables so it has the
+        # same spatial dimensionality as the other dependent variables.
+        ivs = sys.ivs
+        newvar = only(@variables $p(..))
         newvar = add_metadata(newvar, param; exclude_default = true)
-        replace[Symbolics.unwrap(param)] = Symbolics.unwrap(newvar)
+        newvar_call = newvar(ivs...)
+        replace[Symbolics.unwrap(param)] = Symbolics.unwrap(newvar_call)
     end
 
     if isempty(replace)

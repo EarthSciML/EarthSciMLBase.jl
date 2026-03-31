@@ -76,11 +76,11 @@ end
     # S should no longer be a parameter
     @test length(pdesys2.ps) == 0
 
-    # The substituted equation should contain S(t) instead of S
-    @variables S(t) [unit = u"m/s", description = "S description"]
+    # The substituted equation should contain S(t, px, py) instead of S
+    # (param_to_var creates a variable with all IVs for PDESystem)
     eq_vars = Symbolics.get_variables(equations(pdesys2)[1])
-    has_S_t = any(v -> Symbolics.tosymbol(v, escape = false) == :S, eq_vars)
-    @test has_S_t
+    S_var = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :S, eq_vars))
+    @test length(Symbolics.arguments(Symbolics.unwrap(S_var))) == 3  # t, px, py
 
     # Metadata should be preserved
     @test pdesys2.metadata[CoupleType] == :pdemetatest
