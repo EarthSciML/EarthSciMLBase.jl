@@ -193,8 +193,17 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
                 cs = couple2(a_t(a), b_t(b))
                 @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
                                                "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
-                systems[i], a = cs.from, cs.from
-                systems[j], b = cs.to, cs.to
+                a_name = nameof(a)
+                if nameof(cs.from) == a_name
+                    systems[i], a = cs.from, cs.from
+                    systems[j], b = cs.to, cs.to
+                elseif nameof(cs.to) == a_name
+                    systems[i], a = cs.to, cs.to
+                    systems[j], b = cs.from, cs.from
+                else
+                    error("ConnectorSystem from/to system names ($(nameof(cs.from)), $(nameof(cs.to))) " *
+                          "don't match input system names ($a_name, $(nameof(b)))")
+                end
                 for eq in cs.eqs
                     @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
                 end
