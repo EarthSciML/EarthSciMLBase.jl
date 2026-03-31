@@ -724,3 +724,61 @@ end
                                occursin("v_cg", string(eq.rhs)), eqs)
     @test !isnothing(slice_eq)
 end
+
+@testset "couple() ODE + PDE with cross-type CoupleType" begin
+    @parameters x
+    @variables u(..) w(..)
+
+    Dx = Differential(x)
+
+    # ODE system with CoupleType
+    struct ODESourceCoupler
+        sys
+    end
+
+    @variables y(t_test) = 0.5
+    @parameters p_ode = 1.0
+    ode = System([D_test(y) ~ p_ode], t_test; name = :source,
+        metadata = Dict(CoupleType => ODESourceCoupler))
+
+    # PDE system with CoupleType
+    struct PDESinkCoupler
+        sys
+    end
+
+    pde = PDESystem(
+        [D_test(u(t_test, x)) ~ Dx(Dx(u(t_test, x)))],
+        [u(0, x) ~ 1.0, u(t_test, 0) ~ 0.0, u(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)],
+        [t_test, x], [u(t_test, x)], [];
+        name = :sink,
+        metadata = Dict(CoupleType => PDESinkCoupler)
+    )
+
+    # Cross-type couple2: ODE source drives PDE sink
+    function EarthSciMLBase.couple2(a::ODESourceCoupler, b::PDESinkCoupler)
+        coupling_eqs = [
+            D_test(u(t_test, x)) ~ w(t_test, x),
+        ]
+        ConnectorSystem(coupling_eqs, a.sys, b.sys)
+    end
+
+    domain = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x ∈ Interval(0.0, 1.0))
+    )
+
+    cs = couple(pde, ode, domain)
+    merged = convert(PDESystem, cs)
+
+    eqs = equations(merged)
+    # The merged system should have equations from both PDE and promoted ODE
+    @test length(eqs) >= 2
+    # Both u and y should be dependent variables
+    dvs_str = string.(merged.dvs)
+    @test any(occursin.("u", dvs_str))
+    @test any(occursin.("y", dvs_str))
+    # Verify that the cross-type coupling equation was applied
+    u_eq = eqs[findfirst(eq -> occursin("u(t, x)", string(eq.lhs)), eqs)]
+    @test occursin("w(t, x)", string(u_eq.rhs))
+end

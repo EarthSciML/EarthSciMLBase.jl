@@ -130,6 +130,35 @@ function get_coupletype(sys::ModelingToolkit.AbstractSystem)
 end
 
 """
+Return all coupling types associated with the given system as a vector.
+
+Unlike `get_coupletype` (which returns a single type or `Nothing`), this
+handles systems whose metadata stores multiple CoupleTypes in a vector,
+such as promoted ODE PDESystems that carry the CoupleTypes of their
+constituent ODE components.
+"""
+function get_coupletypes(sys::ModelingToolkit.AbstractSystem)
+    meta = ModelingToolkit.get_metadata(sys)
+    if isnothing(meta)
+        return DataType[]
+    end
+    val = get(meta, CoupleType, nothing)
+    if isnothing(val)
+        return DataType[]
+    end
+    if val isa AbstractVector
+        for T in val
+            @assert ((length(fieldnames(T)) == 1) && (only(fieldnames(T)) == :sys))
+            "The `couple_type` $T must have a single field named `:sys` and no other fields"
+        end
+        return val
+    end
+    @assert ((length(fieldnames(val)) == 1) && (only(fieldnames(val)) == :sys))
+    "The `couple_type` $val must have a single field named `:sys` and no other fields"
+    return DataType[val]
+end
+
+"""
 The DataType that should be used in the ModelingToolkit System
 metadata for specifying a discrete system event.
 """
@@ -391,12 +420,25 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
             # group is composed into a single System, the parent connector
             # system needs to carry the metadata so that it survives
             # flatten and the subsequent ODE→PDE promotion.
-            # Note: merge! uses last-writer-wins for conflicting keys.
             group_meta = Dict{Any, Any}()
+            # Collect ALL CoupleTypes as a vector so that cross-type
+            # couple2 methods can be discovered during the PDE coupling
+            # phase. Using merge! alone would keep only the last CoupleType
+            # per group (last-writer-wins).
+            group_coupletypes = DataType[]
             for s in group_systems
                 m = ModelingToolkit.get_metadata(s)
                 isnothing(m) && continue
+                ct = get(m, CoupleType, nothing)
+                if !isnothing(ct)
+                    push!(group_coupletypes, ct)
+                end
                 merge!(group_meta, m)
+            end
+            # Store CoupleTypes as a vector so get_coupletypes() returns
+            # all of them, not just the last one from merge!.
+            if !isempty(group_coupletypes)
+                group_meta[CoupleType] = group_coupletypes
             end
             # Remove SysDomainInfo from the merged metadata since it is
             # consumed during promotion and should not leak into the PDE.
@@ -420,18 +462,23 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
         end
     end
 
-    # Run couple2 between all PDESystem pairs
+    # Run couple2 between all PDESystem pairs.
+    # Use get_coupletypes (plural) to handle promoted systems that carry
+    # multiple CoupleTypes from their constituent ODE components.
     for (i, a) in enumerate(all_pdesystems)
         for (j, b) in enumerate(all_pdesystems)
             i == j && continue
-            a_t, b_t = get_coupletype(a), get_coupletype(b)
-            if hasmethod(couple2, (a_t, b_t))
-                cs = couple2(a_t(a), b_t(b))
-                @assert cs isa ConnectorSystem "The result of coupling two PDESystems together must be a EarthSciMLBase.ConnectorSystem. " *
-                                               "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
-                all_pdesystems[i], a = cs.from, cs.from
-                all_pdesystems[j], b = cs.to, cs.to
-                append!(coupling_eqs, cs.eqs)
+            for a_t in get_coupletypes(a)
+                for b_t in get_coupletypes(b)
+                    if hasmethod(couple2, (a_t, b_t))
+                        cs = couple2(a_t(a), b_t(b))
+                        @assert cs isa ConnectorSystem "The result of coupling two PDESystems together must be a EarthSciMLBase.ConnectorSystem. " *
+                                                       "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
+                        all_pdesystems[i], a = cs.from, cs.from
+                        all_pdesystems[j], b = cs.to, cs.to
+                        append!(coupling_eqs, cs.eqs)
+                    end
+                end
             end
         end
     end
