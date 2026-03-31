@@ -400,22 +400,33 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
 
         for (i, a) in enumerate(systems)
             gi = group_of[i]
-            a_t = get_coupletype(a)
             for (j, b) in enumerate(systems)
                 gi != group_of[j] && continue
-
-                b_t = get_coupletype(b)
-                if hasmethod(couple2, (a_t, b_t))
-                    cs = couple2(a_t(a), b_t(b))
-                    @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
-                                                   "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
-                    systems[i], a = cs.from, cs.from
-                    systems[j], b = cs.to, cs.to
-                    for eq in cs.eqs
-                        @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
+                i >= j && continue  # Each unordered pair only once, try both directions below.
+                for (x, y, xi, yi) in ((a, b, i, j), (b, a, j, i))
+                    x_t, y_t = get_coupletype(x), get_coupletype(y)
+                    if hasmethod(couple2, (x_t, y_t))
+                        cs = couple2(x_t(x), y_t(y))
+                        @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
+                                                       "This is not the case for $(nameof(x)) ($x_t) and $(nameof(y)) ($y_t); it is instead a $(typeof(cs))."
+                        x_name = nameof(x)
+                        if nameof(cs.from) == x_name
+                            systems[xi] = cs.from
+                            systems[yi] = cs.to
+                        elseif nameof(cs.to) == x_name
+                            systems[xi] = cs.to
+                            systems[yi] = cs.from
+                        else
+                            error("ConnectorSystem from/to system names ($(nameof(cs.from)), $(nameof(cs.to))) " *
+                                  "don't match input system names ($x_name, $(nameof(y)))")
+                        end
+                        for eq in cs.eqs
+                            @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
+                        end
+                        append!(group_connector_eqs[gi], cs.eqs)
                     end
-                    append!(group_connector_eqs[gi], cs.eqs)
                 end
+                a = systems[i]  # Re-sync after coupling (from/to may not match i/j order).
             end
         end
 
@@ -452,10 +463,14 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                                                        "This is not the case for ($x_t) and ($y_t); it is instead a $(typeof(cs))."
                         # Update systems: determine which is ODE and which is PDE
                         # based on type, since couple2 controls from/to assignment.
+                        ode_name, pde_name = nameof(ode_sys), nameof(pde_sys)
                         for sys_out in (cs.from, cs.to)
+                            out_name = nameof(sys_out)
                             if sys_out isa ModelingToolkit.PDESystem
+                                @assert out_name == pde_name "ConnectorSystem returned PDESystem named $out_name but expected $pde_name"
                                 all_pdesystems[j] = sys_out
                             else
+                                @assert out_name == ode_name "ConnectorSystem returned ODE System named $out_name but expected $ode_name"
                                 systems[i], ode_sys = sys_out, sys_out
                             end
                         end
@@ -565,8 +580,17 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                         cs = couple2(a_t(a), b_t(b))
                         @assert cs isa ConnectorSystem "The result of coupling two PDESystems together must be a EarthSciMLBase.ConnectorSystem. " *
                                                        "This is not the case for $(nameof(a)) ($a_t) and $(nameof(b)) ($b_t); it is instead a $(typeof(cs))."
-                        all_pdesystems[i], a = cs.from, cs.from
-                        all_pdesystems[j], b = cs.to, cs.to
+                        a_name = nameof(a)
+                        if nameof(cs.from) == a_name
+                            all_pdesystems[i], a = cs.from, cs.from
+                            all_pdesystems[j], b = cs.to, cs.to
+                        elseif nameof(cs.to) == a_name
+                            all_pdesystems[i], a = cs.to, cs.to
+                            all_pdesystems[j], b = cs.from, cs.from
+                        else
+                            error("ConnectorSystem from/to system names ($(nameof(cs.from)), $(nameof(cs.to))) " *
+                                  "don't match input system names ($a_name, $(nameof(b)))")
+                        end
                         append!(coupling_eqs, cs.eqs)
                     end
                 end
