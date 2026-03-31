@@ -174,6 +174,71 @@ end
     end
 end
 
+@testset "Composed System Swapped from/to" begin
+    # Test that couple2 works correctly when ConnectorSystem returns
+    # from/to in reverse order relative to the couple2 argument order.
+    # See https://github.com/EarthSciML/EarthSciMLBase.jl/issues/177
+
+    struct XCoupler
+        sys::Any
+    end
+    function X()
+        @parameters x_val=1.0
+        @variables x(t_nounits)
+        System([x ~ x_val], t_nounits, [x], [x_val]; name = :x,
+            metadata = Dict(CoupleType => XCoupler))
+    end
+
+    struct YCoupler
+        sys::Any
+    end
+    function Y()
+        @parameters y_p=0.0
+        @variables y(t_nounits)
+        System([D_nounits(y) ~ y_p], t_nounits, [y], [y_p]; name = :y,
+            metadata = Dict(CoupleType => YCoupler))
+    end
+
+    struct ZCoupler
+        sys::Any
+    end
+    function Z()
+        @parameters z_p=0.0
+        @variables z(t_nounits)
+        System([D_nounits(z) ~ z_p], t_nounits, [z], [z_p]; name = :z,
+            metadata = Dict(CoupleType => ZCoupler))
+    end
+
+    # Swapped: couple2(X, Y) returns ConnectorSystem(eqs, y_modified, x)
+    function EarthSciMLBase.couple2(xc::XCoupler, yc::YCoupler)
+        x, y = xc.sys, yc.sys
+        y = param_to_var(y, :y_p)
+        ConnectorSystem([y.y_p ~ x.x], y, x)  # from=y (2nd arg), to=x (1st arg)
+    end
+
+    # Normal order: couple2(X, Z) returns ConnectorSystem(eqs, x, z_modified)
+    function EarthSciMLBase.couple2(xc::XCoupler, zc::ZCoupler)
+        x, z = xc.sys, zc.sys
+        z = param_to_var(z, :z_p)
+        ConnectorSystem([z.z_p ~ x.x], x, z)  # from=x (1st arg), to=z (2nd arg)
+    end
+
+    models = [couple(X(), Y(), Z()),
+              couple(Z(), Y(), X()),
+              couple(Y(), X(), Z()),
+              couple(Z(), X(), Y()),
+              couple(X(), Z(), Y()),
+              couple(Y(), Z(), X())]
+    for (i, model) in enumerate(models)
+        @testset "permutation $i" begin
+            m = convert(System, model)
+            obs = string(ModelingToolkit.observed(m))
+            @test occursin("y₊y_p(t)", obs)
+            @test occursin("z₊z_p(t)", obs)
+        end
+    end
+end
+
 mutable struct ParamTest
     y::Any
 end
