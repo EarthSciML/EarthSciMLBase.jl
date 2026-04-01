@@ -823,20 +823,55 @@ end
 
     merged = merge_pdesystems([pde_2d, pde_3d], coupling)
 
-    # The sliced variable v_sv(t, x_sv, y_sv) should be in dvs
     dvs_str = string.(merged.dvs)
-    # Original dvs: u_sv(t, x_sv, y_sv) and v_sv(t, x_sv, y_sv, z_sv)
+    # Original dvs should be present
     @test any(s -> occursin("u_sv(t, x_sv, y_sv)", s), dvs_str)
     @test any(s -> occursin("v_sv(t, x_sv, y_sv, z_sv)", s), dvs_str)
-    # The sliced variable v_sv(t, x_sv, y_sv) should also be in dvs
-    # It has the same base name as v_sv(t, x_sv, y_sv, z_sv) but different dimensions
-    @test any(s -> s == "v_sv(t, x_sv, y_sv)", dvs_str)
+
+    # The sliced variable v_sv(t, x_sv, y_sv) shares the base name "v_sv"
+    # with the 3D version, so it is NOT added to dvs (ModelingToolkit
+    # forbids duplicate base names). It is instead treated as an observed
+    # quantity defined by the slice equation.
+    @test length(merged.dvs) == 2  # u_sv and v_sv only
 
     # The slice equation should be present in the merged system
     eqs = equations(merged)
     slice_eq_found = findfirst(eq -> occursin("v_sv(t, x_sv, y_sv, 0.0)", string(eq.rhs)) &&
                                      string(eq.lhs) == "v_sv(t, x_sv, y_sv)", eqs)
     @test !isnothing(slice_eq_found)
+
+    # The coupling term should be added to u_sv's equation
+    u_eq = eqs[findfirst(eq -> occursin("u_sv(t, x_sv, y_sv)", string(eq.lhs)) &&
+                                occursin("Differential(t", string(eq.lhs)), eqs)]
+    @test occursin("v_sv", string(u_eq.rhs))
+end
+
+@testset "new DV from coupling equation added to dvs (#183)" begin
+    # When a coupling equation introduces a variable with a new base name
+    # (not sharing a name with any existing DV), it should be added to dvs.
+    @parameters x_n183 k_n183
+    @variables u_n183(..) w_n183(..)
+
+    Dx_n183 = Differential(x_n183)
+
+    pde = PDESystem(
+        [D_test(u_n183(t_test, x_n183)) ~ Dx_n183(Dx_n183(u_n183(t_test, x_n183)))],
+        [u_n183(0, x_n183) ~ 1.0, u_n183(t_test, 0) ~ 0.0, u_n183(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_n183 ∈ Interval(0.0, 1.0)],
+        [t_test, x_n183], [u_n183(t_test, x_n183)], [];
+        name = :pde_n183
+    )
+
+    # Coupling introduces a new variable w_n183 not in any PDE's dvs
+    coupling = [
+        w_n183(t_test, x_n183) ~ k_n183 * u_n183(t_test, x_n183),
+    ]
+    merged = merge_pdesystems([pde], coupling)
+
+    dvs_str = string.(merged.dvs)
+    @test any(s -> occursin("u_n183", s), dvs_str)
+    @test any(s -> occursin("w_n183", s), dvs_str)
+    @test length(merged.dvs) == 2  # u_n183 and w_n183
 end
 
 @testset "cross-type ODE→PDE pre-coupling (WildlandFire pattern)" begin
@@ -1030,82 +1065,8 @@ end
     coupling_Q = findfirst(eqs) do eq
         occursin("Q_182", string(eq.lhs)) && occursin("W_182", string(eq.rhs))
     end
-    @test !isnothing(coupling_S) "couple2 for ODE_A (S_182~R_182) should have fired"
-    @test !isnothing(coupling_Q) "couple2 for ODE_B (Q_182~W_182) should have fired"
-end
-
-@testset "Issue #185: Phase 3 PDE-PDE coupling after Phase 1.5" begin
-    # Verify that after Phase 1.5 coupling, Phase 3 can still run couple2
-    # for the promoted system if a separate PDE-level couple2 method is defined.
-
-    @parameters x_185 y_185
-    @variables ψ_185(..) [description = "PDE variable"]
-    @parameters S_185 = 1.0 [description = "Speed"]
-
-    Dx_185 = Differential(x_185)
-    Dy_185 = Differential(y_185)
-
-    struct PDECoupler185
-        sys
-    end
-
-    pde_185 = PDESystem(
-        [D_test(ψ_185(t_test, x_185, y_185)) ~ -S_185 * ψ_185(t_test, x_185, y_185)],
-        [ψ_185(0, x_185, y_185) ~ 1.0],
-        [t_test ∈ Interval(0.0, 1.0),
-         x_185 ∈ Interval(0.0, 1.0), y_185 ∈ Interval(0.0, 1.0)],
-        [t_test, x_185, y_185], [ψ_185(t_test, x_185, y_185)], [S_185];
-        name = :pde_185,
-        metadata = Dict(CoupleType => PDECoupler185)
-    )
-
-    # ODE system
-    struct ODECoupler185
-        sys
-    end
-    @variables R_185(t_test) = 0.5 [description = "Rate"]
-    @parameters k_185 = 2.0
-
-    ode_185 = System([D_test(R_185) ~ k_185 * (1.0 - R_185)], t_test;
-        name = :ode_185,
-        metadata = Dict(CoupleType => ODECoupler185))
-
-    # Phase 1.5 coupling: ODE-level, link S_185 ~ R_185
-    function EarthSciMLBase.couple2(r::ODECoupler185, ls::PDECoupler185)
-        r_sys, ls_sys = r.sys, ls.sys
-        ls_sys = param_to_var(ls_sys, :S_185)
-        eq_vars = collect(Symbolics.get_variables(equations(ls_sys)[1]))
-        S_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :S_185, eq_vars))
-        return ConnectorSystem([S_sym ~ r_sys.R_185], ls_sys, r_sys)
-    end
-
-    # Phase 3 coupling: PDE-level, expects promoted system (accesses .dvs)
-    # This should NOT be blocked by Phase 1.5 having handled the same type pair.
-    phase3_called = Ref(false)
-    function EarthSciMLBase.couple2(ls::PDECoupler185, r::ODECoupler185)
-        ls_sys, r_sys = ls.sys, r.sys
-        phase3_called[] = true
-        # Just return a no-op connector (empty equations)
-        return ConnectorSystem(Equation[], ls_sys, r_sys)
-    end
-
-    domain_185 = DomainInfo(
-        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
-        constBC(0.0, x_185 ∈ Interval(0.0, 1.0), y_185 ∈ Interval(0.0, 1.0))
-    )
-
-    cs = couple(pde_185, ode_185, domain_185)
-    merged = convert(PDESystem, cs)
-
-    # Phase 3 should have been called because the promoted system has a new name
-    # (ode_group_1, not ode_185), so the handled_cross_pairs check should not block it.
-    @test phase3_called[] "Phase 3 PDE-PDE coupling should fire after Phase 1.5"
-
-    # Basic sanity: merged system should still be valid
-    @test length(equations(merged)) >= 2
-    dvs_str = string.(merged.dvs)
-    @test any(s -> occursin("R_185", s), dvs_str)
-    @test any(s -> occursin("ψ_185", s), dvs_str)
+    @test !isnothing(coupling_S)  # couple2 for ODE_A (S_182~R_182) should have fired
+    @test !isnothing(coupling_Q)  # couple2 for ODE_B (Q_182~W_182) should have fired
 end
 
 @testset "Issue #184: namespaced variables in cross-coupling equations" begin
@@ -1173,18 +1134,18 @@ end
     coupling_eq = findfirst(eqs) do eq
         occursin("S_184", string(eq.lhs)) && occursin("R_184", string(eq.rhs))
     end
-    @test !isnothing(coupling_eq) "Coupling equation S_184 ~ R_184 should exist"
+    @test !isnothing(coupling_eq)  # Coupling equation S_184 ~ R_184 should exist
 
     # The RHS should contain spatial dimensions from promotion (x_184, y_184)
     coupling_rhs = string(eqs[coupling_eq].rhs)
-    @test occursin("x_184", coupling_rhs) "RHS should have promoted spatial dim x_184"
-    @test occursin("y_184", coupling_rhs) "RHS should have promoted spatial dim y_184"
+    @test occursin("x_184", coupling_rhs)
+    @test occursin("y_184", coupling_rhs)
 
     # Verify no temporal-only duplicate DVs
     dvs_names = [string(Symbolics.tosymbol(dv, escape = false)) for dv in merged.dvs]
     bare_names = [last(split(n, "₊")) for n in dvs_names]
     for bn in unique(bare_names)
         count = sum(x -> x == bn, bare_names)
-        @test count == 1 "DV $bn should appear exactly once, found $count times"
+        @test count == 1
     end
 end

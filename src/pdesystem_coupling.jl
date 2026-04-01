@@ -163,15 +163,25 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
         [_collect_ps(p.ps) for p in pdesystems]...))
 
     # Ensure all LHS dependent variables are registered in dvs.
-    # This handles variables created by slice_variable in coupling equations.
-    existing_dv_strs = Set(string(dv) for dv in all_dvs)
+    # This handles variables created by coupling equations whose base
+    # name is not already present (e.g., a new variable introduced by
+    # the coupling).  Note: slice_variable creates lower-dimensional
+    # variants that share the same base name as an existing DV; these
+    # are intentionally NOT added to dvs because ModelingToolkit's
+    # PDESystem constructor forbids duplicate base names.  The sliced
+    # variable is treated as an observed quantity defined by its
+    # equation (e.g., v(t,x,y) ~ v(t,x,y,0.0)).
+    existing_dv_names = Set(Symbol(Symbolics.tosymbol(dv, escape = false)) for dv in all_dvs)
     for eq in all_eqs
         for var in Symbolics.get_variables(eq.lhs)
-            if Symbolics.iscall(Symbolics.unwrap(var))
-                v_str = string(var)
-                if v_str ∉ existing_dv_strs
+            uvar = Symbolics.unwrap(var)
+            # Only consider callable terms whose operator is NOT a Differential
+            # (derivatives show up as callable but are not dependent variables).
+            if Symbolics.iscall(uvar) && !(Symbolics.operation(uvar) isa Differential)
+                vname = Symbol(Symbolics.tosymbol(var, escape = false))
+                if vname ∉ existing_dv_names
                     push!(all_dvs, var)
-                    push!(existing_dv_strs, v_str)
+                    push!(existing_dv_names, vname)
                 end
             end
         end

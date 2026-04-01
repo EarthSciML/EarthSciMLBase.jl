@@ -375,7 +375,7 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
     # New path: PDESystem merging
     all_pdesystems = copy(sys.pdesystems)
     coupling_eqs = Equation[]
-    handled_cross_pairs = Set{Tuple{DataType, DataType, Symbol, Symbol}}()
+    handled_cross_pairs = Set{Tuple{DataType, DataType}}()
 
     # If there are ODE Systems, couple them together and promote to PDESystem.
     # Systems may have their own DomainInfo (via SysDomainInfo metadata) that
@@ -478,8 +478,8 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                             @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
                         end
                         append!(cross_coupling_eqs[gi], cs.eqs)
-                        push!(handled_cross_pairs, (ode_t, pde_t, nameof(ode_sys), nameof(pde_sys)))
-                        push!(handled_cross_pairs, (pde_t, ode_t, nameof(pde_sys), nameof(ode_sys)))
+                        push!(handled_cross_pairs, (ode_t, pde_t))
+                        push!(handled_cross_pairs, (pde_t, ode_t))
                     end
                 end
             end
@@ -577,10 +577,15 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                         end
                         matched_key === nothing && continue
                         sysname, _ = pre_comp_vars[matched_key]
-                        suffix = string("₊", sysname, "₊", matched_key)
+                        # Match the promoted DV whose name ends with
+                        # "sysname₊varname".  Use the form WITHOUT a
+                        # leading ₊ so that single-system groups (where
+                        # the DV name IS "sysname₊varname" with no outer
+                        # prefix) are also matched.
+                        target = string(sysname, "₊", matched_key)
                         pidx = findfirst(promoted_dvs) do dv
                             dvname = string(Symbolics.tosymbol(dv, escape = false))
-                            endswith(dvname, suffix)
+                            endswith(dvname, target)
                         end
                         if pidx === nothing
                             @warn "Cross-coupling equation transformation: could not find promoted counterpart for variable $(varname) (system $(sysname)) in group $k"
@@ -610,7 +615,7 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
             i == j && continue
             for a_t in get_coupletypes(a)
                 for b_t in get_coupletypes(b)
-                    (a_t, b_t, nameof(a), nameof(b)) in handled_cross_pairs && continue
+                    (a_t, b_t) in handled_cross_pairs && continue
                     if hasmethod(couple2, (a_t, b_t))
                         cs = couple2(a_t(a), b_t(b))
                         @assert cs isa ConnectorSystem "The result of coupling two PDESystems together must be a EarthSciMLBase.ConnectorSystem. " *
