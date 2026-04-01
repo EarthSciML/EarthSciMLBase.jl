@@ -163,14 +163,8 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
         [_collect_ps(p.ps) for p in pdesystems]...))
 
     # Ensure all LHS dependent variables are registered in dvs.
-    # This handles variables created by coupling equations whose base
-    # name is not already present (e.g., a new variable introduced by
-    # the coupling).  Note: slice_variable creates lower-dimensional
-    # variants that share the same base name as an existing DV; these
-    # are intentionally NOT added to dvs because ModelingToolkit's
-    # PDESystem constructor forbids duplicate base names.  The sliced
-    # variable is treated as an observed quantity defined by its
-    # equation (e.g., v(t,x,y) ~ v(t,x,y,0.0)).
+    # This handles variables introduced by coupling equations, such as
+    # slice_variable outputs (which have distinct names like v_at_z_0ₓ0).
     existing_dv_names = Set(Symbol(Symbolics.tosymbol(dv, escape = false)) for dv in all_dvs)
     for eq in all_eqs
         for var in Symbolics.get_variables(eq.lhs)
@@ -252,9 +246,11 @@ coupling systems with different numbers of spatial dimensions, e.g.,
 extracting ground-level data from a 3D atmospheric variable for use in a
 2D surface model.
 
-Returns `(new_dv, equation)` where `new_dv` is the sliced dependent variable
-(with the fixed dimension removed from its arguments) and `equation` defines
+Returns `(new_dv, equation)` where `new_dv` is a new dependent variable with a
+distinct name (encoding the slice dimension and value) and `equation` defines
 `new_dv` in terms of the original variable evaluated at `slice_value`.
+The distinct name avoids conflicts with the original variable in the PDESystem
+`dvs` list.
 
 # Arguments
 - `var`: A symbolic dependent variable call, e.g., `U(t, x, y, lev)`
@@ -266,8 +262,8 @@ Returns `(new_dv, equation)` where `new_dv` is the sliced dependent variable
 @parameters x y lev
 @variables U(..)
 new_dv, eq = slice_variable(U(t, x, y, lev), lev, 1.0)
-# new_dv = U(t, x, y)
-# eq: U(t, x, y) ~ U(t, x, y, 1.0)
+# new_dv = U_at_lev_1ₓ0(t, x, y)
+# eq: U_at_lev_1ₓ0(t, x, y) ~ U(t, x, y, 1.0)
 ```
 """
 function slice_variable(var, slice_dim, slice_value)
@@ -279,7 +275,17 @@ function slice_variable(var, slice_dim, slice_value)
     reduced_args = [a for a in args if Symbol(a) != slice_sym]
     fixed_args = [Symbol(a) == slice_sym ? slice_value : a for a in args]
 
-    new_dv = Symbolics.wrap(op)(reduced_args...)
+    # Create a new operator with a distinct name so the sliced variable
+    # can coexist with the original in the PDESystem dvs list (MTK
+    # forbids duplicate base names).
+    base_name = Symbolics.tosymbol(var, escape = false)
+    # Encode the slice value in the name, replacing '.' with 'ₓ' to keep
+    # it a valid identifier (e.g., U_at_lev_1ₓ0).
+    val_str = replace(string(slice_value), '.' => 'ₓ', '-' => 'm')
+    new_name = Symbol(base_name, "_at_", slice_sym, "_", val_str)
+    new_op = only(@variables $new_name(..))
+    new_op = add_metadata(new_op, var)
+    new_dv = new_op(reduced_args...)
     fixed_var = Symbolics.wrap(op)(fixed_args...)
 
     return (new_dv, new_dv ~ fixed_var)

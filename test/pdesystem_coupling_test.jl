@@ -404,8 +404,8 @@ end
 
     # Equation RHS should have lev replaced with 1.0
     @test occursin("1.0", string(eq.rhs))
-    # The equation should have the correct form
-    @test string(eq.lhs) == "U(t, x, y)"
+    # The new DV should have a distinct name encoding the slice
+    @test occursin("U_at_lev_1", string(eq.lhs))
     @test string(eq.rhs) == "U(t, x, y, 1.0)"
 end
 
@@ -828,16 +828,15 @@ end
     @test any(s -> occursin("u_sv(t, x_sv, y_sv)", s), dvs_str)
     @test any(s -> occursin("v_sv(t, x_sv, y_sv, z_sv)", s), dvs_str)
 
-    # The sliced variable v_sv(t, x_sv, y_sv) shares the base name "v_sv"
-    # with the 3D version, so it is NOT added to dvs (ModelingToolkit
-    # forbids duplicate base names). It is instead treated as an observed
-    # quantity defined by the slice equation.
-    @test length(merged.dvs) == 2  # u_sv and v_sv only
+    # The sliced variable has a distinct name (v_sv_at_z_sv_0ₓ0) and should
+    # be added to dvs since it doesn't collide with the original v_sv.
+    @test any(s -> occursin("v_sv_at_z_sv", s), dvs_str)
+    @test length(merged.dvs) == 3  # u_sv, v_sv, and the sliced variant
 
     # The slice equation should be present in the merged system
     eqs = equations(merged)
     slice_eq_found = findfirst(eq -> occursin("v_sv(t, x_sv, y_sv, 0.0)", string(eq.rhs)) &&
-                                     string(eq.lhs) == "v_sv(t, x_sv, y_sv)", eqs)
+                                     occursin("v_sv_at_z_sv", string(eq.lhs)), eqs)
     @test !isnothing(slice_eq_found)
 
     # The coupling term should be added to u_sv's equation
