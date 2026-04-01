@@ -85,3 +85,32 @@ end
     result = EarthSciMLBase.add_dims(eq_mixed, [u, v_spatial], [x, y, t])
     @test isequal(result, wanteq)
 end
+
+@testset "Extend 2D variable to 3D" begin
+    @variables w(..)
+    w_2d = w(t, x)
+
+    result = EarthSciMLBase.add_dims([w_2d], [x, y, t])
+    # w(t, x) should become w(t, x, y) — existing args preserved, missing y appended
+    @test length(result) == 1
+    result_args = Symbolics.arguments(Symbolics.unwrap(result[1]))
+    @test length(result_args) == 3
+    @test Set(Symbol.(result_args)) == Set([:t, :x, :y])
+end
+
+@testset "Variable with all target dims unchanged" begin
+    @variables v(..)
+    v_full = v(t, x, y)
+
+    result = EarthSciMLBase.add_dims([v_full], [x, y, t])
+    @test length(result) == 1
+    @test isequal(result[1], v_full)
+end
+
+@testset "1-arg variable still expanded" begin
+    result = EarthSciMLBase.add_dims([u], [x, y, t])
+    @test length(result) == 1
+    result_args = Symbolics.arguments(Symbolics.unwrap(result[1]))
+    @test length(result_args) == 3
+    @test Set(Symbol.(result_args)) == Set([:x, :y, :t])
+end

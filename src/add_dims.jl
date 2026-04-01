@@ -7,10 +7,12 @@ add_dims(equation, vars, dims)
 Add the given dimensions to each variable in `vars` in the given expression
 or equation.
 
-Variables that already have multiple dimensions (i.e., defined like
-`@variables v(..)` and called as `v(t, x, y)`) are left unchanged.
-This allows components that construct spatially-varying variables directly
-to be composed with components that rely on automatic dimension expansion.
+Variables that already have some spatial dimensions are extended with any
+missing target dimensions. For example, a variable `v(t, x)` promoted
+with dims `[t, x, y]` becomes `v(t, x, y)`. Variables that already have
+all target dimensions are left unchanged. This allows components that
+construct spatially-varying variables directly to be composed with
+components that rely on automatic dimension expansion.
 
 # Example:
 
@@ -43,11 +45,32 @@ end
 
 function add_dims(vars::AbstractVector, dims::AbstractVector)
     o = Num[]
+    dim_syms = Set(Symbol.(dims))
     for var in vars
-        nargs = length(Symbolics.arguments(Symbolics.unwrap(var)))
+        args = Symbolics.arguments(Symbolics.unwrap(var))
+        nargs = length(args)
         if nargs > 1
-            # Variable already has spatial dimensions — keep it as-is.
-            push!(o, var)
+            # Variable already has some spatial dimensions.
+            # Check if it already has ALL target dimensions.
+            var_arg_syms = Set(Symbol.(args))
+            missing_dims = setdiff(dim_syms, var_arg_syms)
+            if isempty(missing_dims)
+                # All target dims present — keep as-is
+                push!(o, var)
+            else
+                # Some dims missing — extend with missing ones
+                sym = Symbolics.tosymbol(var, escape = false)
+                newvar = (@variables $sym(..))[1]
+                newvar = add_metadata(newvar, var)
+                # Preserve existing arg order, append missing dims in the order they appear in dims
+                new_args = Any[args...]
+                for d in dims
+                    if Symbol(d) in missing_dims
+                        push!(new_args, d)
+                    end
+                end
+                push!(o, newvar(new_args...))
+            end
         else
             sym = Symbolics.tosymbol(var, escape = false)
             newvar = (@variables $sym(..))[1]
