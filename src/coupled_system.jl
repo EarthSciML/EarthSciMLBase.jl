@@ -375,7 +375,7 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
     # New path: PDESystem merging
     all_pdesystems = copy(sys.pdesystems)
     coupling_eqs = Equation[]
-    handled_cross_pairs = Set{Tuple{DataType, DataType}}()
+    handled_cross_pairs = Set{Tuple{DataType, DataType, Symbol, Symbol}}()
 
     # If there are ODE Systems, couple them together and promote to PDESystem.
     # Systems may have their own DomainInfo (via SysDomainInfo metadata) that
@@ -478,8 +478,8 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                             @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
                         end
                         append!(cross_coupling_eqs[gi], cs.eqs)
-                        push!(handled_cross_pairs, (ode_t, pde_t))
-                        push!(handled_cross_pairs, (pde_t, ode_t))
+                        push!(handled_cross_pairs, (ode_t, pde_t, nameof(ode_sys), nameof(pde_sys)))
+                        push!(handled_cross_pairs, (pde_t, ode_t, nameof(pde_sys), nameof(ode_sys)))
                     end
                 end
             end
@@ -507,11 +507,28 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
             end
 
             # Collect metadata from all systems in this group.
+            # Use special handling for CoupleType to avoid overwriting:
+            # collect all CoupleTypes into a vector so that the promoted
+            # PDE carries the coupling identity of every constituent ODE.
             group_meta = Dict{Any, Any}()
+            all_couple_types = DataType[]
             for s in group_systems
                 m = ModelingToolkit.get_metadata(s)
                 isnothing(m) && continue
-                merge!(group_meta, m)
+                for (k, v) in m
+                    if k == CoupleType
+                        if v isa AbstractVector
+                            append!(all_couple_types, v)
+                        else
+                            push!(all_couple_types, v)
+                        end
+                    else
+                        group_meta[k] = v
+                    end
+                end
+            end
+            if !isempty(all_couple_types)
+                group_meta[CoupleType] = all_couple_types
             end
             # Remove SysDomainInfo from the merged metadata since it is
             # consumed during promotion and should not leak into the PDE.
@@ -543,14 +560,32 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                     new_rhs = eq.rhs
                     for var in Symbolics.get_variables(eq)
                         varname = Symbolics.tosymbol(var, escape = false)
-                        haskey(pre_comp_vars, varname) || continue
-                        sysname, _ = pre_comp_vars[varname]
-                        suffix = string("₊", sysname, "₊", varname)
+                        # Try exact match first, then suffix match for namespaced variables
+                        # (e.g. rothermel₊R_ct from sys.R_ct dot-notation access).
+                        matched_key = if haskey(pre_comp_vars, varname)
+                            varname
+                        else
+                            found = nothing
+                            varname_str = string(varname)
+                            for (k2, _) in pre_comp_vars
+                                if endswith(varname_str, string("₊", k2))
+                                    found = k2
+                                    break
+                                end
+                            end
+                            found
+                        end
+                        matched_key === nothing && continue
+                        sysname, _ = pre_comp_vars[matched_key]
+                        suffix = string("₊", sysname, "₊", matched_key)
                         pidx = findfirst(promoted_dvs) do dv
                             dvname = string(Symbolics.tosymbol(dv, escape = false))
                             endswith(dvname, suffix)
                         end
-                        pidx === nothing && continue
+                        if pidx === nothing
+                            @warn "Cross-coupling equation transformation: could not find promoted counterpart for variable $(varname) (system $(sysname)) in group $k"
+                            continue
+                        end
                         promoted_var = promoted_dvs[pidx]
                         # Use the two-step substitute_in_deriv pattern
                         # (same as add_dims) to handle derivatives.
@@ -575,7 +610,7 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
             i == j && continue
             for a_t in get_coupletypes(a)
                 for b_t in get_coupletypes(b)
-                    (a_t, b_t) in handled_cross_pairs && continue
+                    (a_t, b_t, nameof(a), nameof(b)) in handled_cross_pairs && continue
                     if hasmethod(couple2, (a_t, b_t))
                         cs = couple2(a_t(a), b_t(b))
                         @assert cs isa ConnectorSystem "The result of coupling two PDESystems together must be a EarthSciMLBase.ConnectorSystem. " *
