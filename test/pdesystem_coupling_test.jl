@@ -404,8 +404,8 @@ end
 
     # Equation RHS should have lev replaced with 1.0
     @test occursin("1.0", string(eq.rhs))
-    # The new DV should have a distinct name encoding the slice
-    @test occursin("U_at_lev_1", string(eq.lhs))
+    # The new DV should have a distinct name encoding the sliced dimension
+    @test occursin("U_at_lev", string(eq.lhs))
     @test string(eq.rhs) == "U(t, x, y, 1.0)"
 end
 

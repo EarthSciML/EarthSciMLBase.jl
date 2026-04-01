@@ -247,26 +247,27 @@ extracting ground-level data from a 3D atmospheric variable for use in a
 2D surface model.
 
 Returns `(new_dv, equation)` where `new_dv` is a new dependent variable with a
-distinct name (encoding the slice dimension and value) and `equation` defines
-`new_dv` in terms of the original variable evaluated at `slice_value`.
-The distinct name avoids conflicts with the original variable in the PDESystem
-`dvs` list.
+distinct name and `equation` defines `new_dv` in terms of the original variable
+evaluated at `slice_value`. The distinct name avoids conflicts with the original
+variable in the PDESystem `dvs` list.
 
 # Arguments
 - `var`: A symbolic dependent variable call, e.g., `U(t, x, y, lev)`
 - `slice_dim`: The independent variable to fix, e.g., `lev`
 - `slice_value`: The numeric value at which to evaluate `slice_dim`
+- `name`: (keyword) Optional `Symbol` for the new variable. Defaults to
+  `Symbol(varname, "_at_", dim)`, e.g., `:U_at_lev`.
 
 # Example
 ```julia
 @parameters x y lev
 @variables U(..)
 new_dv, eq = slice_variable(U(t, x, y, lev), lev, 1.0)
-# new_dv = U_at_lev_1ₓ0(t, x, y)
-# eq: U_at_lev_1ₓ0(t, x, y) ~ U(t, x, y, 1.0)
+# new_dv = U_at_lev(t, x, y)
+# eq: U_at_lev(t, x, y) ~ U(t, x, y, 1.0)
 ```
 """
-function slice_variable(var, slice_dim, slice_value)
+function slice_variable(var, slice_dim, slice_value; name = nothing)
     args = Symbolics.arguments(Symbolics.unwrap(var))
     op = Symbolics.operation(Symbolics.unwrap(var))
     slice_sym = Symbol(slice_dim)
@@ -278,11 +279,11 @@ function slice_variable(var, slice_dim, slice_value)
     # Create a new operator with a distinct name so the sliced variable
     # can coexist with the original in the PDESystem dvs list (MTK
     # forbids duplicate base names).
-    base_name = Symbolics.tosymbol(var, escape = false)
-    # Encode the slice value in the name, replacing '.' with 'ₓ' to keep
-    # it a valid identifier (e.g., U_at_lev_1ₓ0).
-    val_str = replace(string(slice_value), '.' => 'ₓ', '-' => 'm')
-    new_name = Symbol(base_name, "_at_", slice_sym, "_", val_str)
+    if isnothing(name)
+        base_name = Symbolics.tosymbol(var, escape = false)
+        name = Symbol(base_name, "_at_", slice_sym)
+    end
+    new_name = name
     new_op = only(@variables $new_name(..))
     new_op = add_metadata(new_op, var)
     new_dv = new_op(reduced_args...)
