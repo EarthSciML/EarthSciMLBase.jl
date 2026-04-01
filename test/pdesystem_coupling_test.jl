@@ -725,6 +725,120 @@ end
     @test !isnothing(slice_eq)
 end
 
+@testset "validate_and_unify_domains - unit mismatch (#187)" begin
+    # Create two parameters with the same base name (:x) but different units.
+    # We need separate scopes so that the @parameters macro creates distinct objects.
+    x_m = let
+        @parameters x [unit = u"m"]
+        x
+    end
+    x_km = let
+        @parameters x [unit = u"km"]
+        x
+    end
+    @variables u_um(..) v_um(..)
+
+    pde1 = PDESystem(
+        [D_test(u_um(t_test, x_m)) ~ -u_um(t_test, x_m)],
+        [u_um(0, x_m) ~ 1.0, u_um(t_test, 0) ~ 0.0, u_um(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_m ∈ Interval(0.0, 1.0)],
+        [t_test, x_m], [u_um(t_test, x_m)], [];
+        name = :pde1_um
+    )
+    pde2 = PDESystem(
+        [D_test(v_um(t_test, x_km)) ~ -v_um(t_test, x_km)],
+        [v_um(0, x_km) ~ 1.0, v_um(t_test, 0) ~ 0.0, v_um(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_km ∈ Interval(0.0, 1.0)],
+        [t_test, x_km], [v_um(t_test, x_km)], [];
+        name = :pde2_um
+    )
+
+    @test_throws ErrorException EarthSciMLBase.validate_and_unify_domains([pde1, pde2])
+
+    # Verify the error message mentions "Unit mismatch"
+    try
+        EarthSciMLBase.validate_and_unify_domains([pde1, pde2])
+        @test false  # Should not reach here
+    catch e
+        @test occursin("Unit mismatch", e.msg)
+        @test occursin("x", e.msg)
+    end
+end
+
+@testset "unique_syms - different dimensions same name (#188)" begin
+    @parameters x_us y_us
+    @variables u_us(..)
+    # u_us(t, x_us) and u_us(t, x_us, y_us) have the same base name but different dimensions
+    syms = [u_us(t_test, x_us), u_us(t_test, x_us, y_us)]
+    result = EarthSciMLBase.unique_syms(syms)
+    @test length(result) == 2  # Both should be kept
+    result_strs = string.(result)
+    @test any(s -> occursin("u_us(t, x_us)", s) && !occursin("y_us", s), result_strs)
+    @test any(s -> occursin("u_us(t, x_us, y_us)", s), result_strs)
+
+    # True duplicates should still be removed
+    syms_dup = [u_us(t_test, x_us), u_us(t_test, x_us)]
+    result_dup = EarthSciMLBase.unique_syms(syms_dup)
+    @test length(result_dup) == 1
+end
+
+@testset "slice_variable dvs in merged PDESystem (#183)" begin
+    @parameters x_sv y_sv z_sv
+    @variables u_sv(..) v_sv(..)
+
+    Dx_sv = Differential(x_sv)
+
+    # 2D system: u_sv(t, x_sv, y_sv)
+    pde_2d = PDESystem(
+        [D_test(u_sv(t_test, x_sv, y_sv)) ~ Dx_sv(Dx_sv(u_sv(t_test, x_sv, y_sv)))],
+        [u_sv(0, x_sv, y_sv) ~ 1.0,
+         u_sv(t_test, 0, y_sv) ~ 0.0, u_sv(t_test, 1, y_sv) ~ 0.0,
+         u_sv(t_test, x_sv, 0) ~ 0.0, u_sv(t_test, x_sv, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_sv ∈ Interval(0.0, 1.0), y_sv ∈ Interval(0.0, 1.0)],
+        [t_test, x_sv, y_sv], [u_sv(t_test, x_sv, y_sv)], [];
+        name = :pde_2d_sv
+    )
+
+    # 3D system: v_sv(t, x_sv, y_sv, z_sv)
+    pde_3d = PDESystem(
+        [D_test(v_sv(t_test, x_sv, y_sv, z_sv)) ~ -v_sv(t_test, x_sv, y_sv, z_sv)],
+        [v_sv(0, x_sv, y_sv, z_sv) ~ 0.0,
+         v_sv(t_test, 0, y_sv, z_sv) ~ 0.0, v_sv(t_test, 1, y_sv, z_sv) ~ 0.0,
+         v_sv(t_test, x_sv, 0, z_sv) ~ 0.0, v_sv(t_test, x_sv, 1, z_sv) ~ 0.0,
+         v_sv(t_test, x_sv, y_sv, 0) ~ 0.0, v_sv(t_test, x_sv, y_sv, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_sv ∈ Interval(0.0, 1.0),
+         y_sv ∈ Interval(0.0, 1.0), z_sv ∈ Interval(0.0, 1.0)],
+        [t_test, x_sv, y_sv, z_sv], [v_sv(t_test, x_sv, y_sv, z_sv)], [];
+        name = :pde_3d_sv
+    )
+
+    # Use slice_variable to create a 2D view of the 3D variable
+    sliced_v, slice_eq = slice_variable(v_sv(t_test, x_sv, y_sv, z_sv), z_sv, 0.0)
+
+    # Coupling: add sliced v_sv to u_sv's equation, plus the slice equation
+    coupling = [
+        D_test(u_sv(t_test, x_sv, y_sv)) ~ sliced_v,
+        slice_eq,
+    ]
+
+    merged = merge_pdesystems([pde_2d, pde_3d], coupling)
+
+    # The sliced variable v_sv(t, x_sv, y_sv) should be in dvs
+    dvs_str = string.(merged.dvs)
+    # Original dvs: u_sv(t, x_sv, y_sv) and v_sv(t, x_sv, y_sv, z_sv)
+    @test any(s -> occursin("u_sv(t, x_sv, y_sv)", s), dvs_str)
+    @test any(s -> occursin("v_sv(t, x_sv, y_sv, z_sv)", s), dvs_str)
+    # The sliced variable v_sv(t, x_sv, y_sv) should also be in dvs
+    # It has the same base name as v_sv(t, x_sv, y_sv, z_sv) but different dimensions
+    @test any(s -> s == "v_sv(t, x_sv, y_sv)", dvs_str)
+
+    # The slice equation should be present in the merged system
+    eqs = equations(merged)
+    slice_eq_found = findfirst(eq -> occursin("v_sv(t, x_sv, y_sv, 0.0)", string(eq.rhs)) &&
+                                     string(eq.lhs) == "v_sv(t, x_sv, y_sv)", eqs)
+    @test !isnothing(slice_eq_found)
+end
+
 @testset "cross-type ODE→PDE pre-coupling (WildlandFire pattern)" begin
     # This test mimics WildlandFire.jl's Rothermel→LevelSet coupling pattern:
     # - An ODE system computes a rate R (like Rothermel fire spread rate)
@@ -809,6 +923,268 @@ end
         occursin("S_ct", lhs_str) && occursin("R_ct", rhs_str)
     end
     @test !isnothing(coupling_eq)
-    # The coupling equation's R_ct should have spatial dims from promotion
-    @test occursin("x_ct", string(eqs[coupling_eq]))
+    # The coupling equation's R_ct should have spatial dims from promotion (check RHS specifically)
+    coupling_eq_rhs = string(eqs[coupling_eq].rhs)
+    @test occursin("x_ct", coupling_eq_rhs)
+
+    # Verify no temporal-only duplicate DVs (issue #181)
+    dvs_names = [string(Symbolics.tosymbol(dv, escape = false)) for dv in merged.dvs]
+    # Count occurrences of each bare variable name (ignoring namespace prefix)
+    bare_names = [last(split(n, "₊")) for n in dvs_names]
+    for bn in unique(bare_names)
+        count = sum(x -> x == bn, bare_names)
+        @test count == 1 || @warn "Duplicate DV with bare name $bn: found $count times"
+    end
+end
+
+@testset "Issue #182: metadata merge preserves multiple CoupleTypes" begin
+    # Two ODE systems with DIFFERENT CoupleTypes in the same DomainInfo group,
+    # coupled with a PDE. Verify that couple2 methods for BOTH types fire.
+
+    @parameters x_182 y_182
+    @variables ψ_182(..) [description = "PDE variable"]
+    @parameters S_182 = 1.0 [description = "PDE parameter 1"]
+    @parameters Q_182 = 1.0 [description = "PDE parameter 2"]
+
+    Dx_182 = Differential(x_182)
+    Dy_182 = Differential(y_182)
+
+    struct PDECoupler182
+        sys
+    end
+
+    pde_182 = PDESystem(
+        [D_test(ψ_182(t_test, x_182, y_182)) ~ -S_182 * ψ_182(t_test, x_182, y_182) - Q_182],
+        [ψ_182(0, x_182, y_182) ~ 1.0],
+        [t_test ∈ Interval(0.0, 1.0),
+         x_182 ∈ Interval(0.0, 1.0), y_182 ∈ Interval(0.0, 1.0)],
+        [t_test, x_182, y_182], [ψ_182(t_test, x_182, y_182)], [S_182, Q_182];
+        name = :pde_182,
+        metadata = Dict(CoupleType => PDECoupler182)
+    )
+
+    # ODE system A with CoupleType A
+    struct ODE_A_Coupler182
+        sys
+    end
+    @variables R_182(t_test) = 0.5 [description = "Rate A"]
+    @parameters k_182 = 2.0
+
+    ode_a_182 = System([D_test(R_182) ~ k_182 * (1.0 - R_182)], t_test;
+        name = :ode_a_182,
+        metadata = Dict(CoupleType => ODE_A_Coupler182))
+
+    # ODE system B with CoupleType B
+    struct ODE_B_Coupler182
+        sys
+    end
+    @variables W_182(t_test) = 0.3 [description = "Rate B"]
+    @parameters m_182 = 3.0
+
+    ode_b_182 = System([D_test(W_182) ~ m_182 * (1.0 - W_182)], t_test;
+        name = :ode_b_182,
+        metadata = Dict(CoupleType => ODE_B_Coupler182))
+
+    # couple2 for ODE_A × PDE: link S_182 ~ R_182
+    function EarthSciMLBase.couple2(a::ODE_A_Coupler182, b::PDECoupler182)
+        a_sys, b_sys = a.sys, b.sys
+        b_sys = param_to_var(b_sys, :S_182)
+        eq_vars = collect(Symbolics.get_variables(equations(b_sys)[1]))
+        S_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :S_182, eq_vars))
+        return ConnectorSystem([S_sym ~ a_sys.R_182], b_sys, a_sys)
+    end
+
+    # couple2 for ODE_B × PDE: link Q_182 ~ W_182
+    function EarthSciMLBase.couple2(b::ODE_B_Coupler182, p::PDECoupler182)
+        b_sys, p_sys = b.sys, p.sys
+        p_sys = param_to_var(p_sys, :Q_182)
+        eq_vars = collect(Symbolics.get_variables(equations(p_sys)[1]))
+        Q_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :Q_182, eq_vars))
+        return ConnectorSystem([Q_sym ~ b_sys.W_182], p_sys, b_sys)
+    end
+
+    domain_182 = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_182 ∈ Interval(0.0, 1.0), y_182 ∈ Interval(0.0, 1.0))
+    )
+
+    cs = couple(pde_182, ode_a_182, ode_b_182, domain_182)
+    merged = convert(PDESystem, cs)
+
+    eqs = equations(merged)
+    dvs_str = string.(merged.dvs)
+
+    # Both R_182 and W_182 should be dependent variables (both ODE systems promoted)
+    @test any(s -> occursin("R_182", s), dvs_str)
+    @test any(s -> occursin("W_182", s), dvs_str)
+
+    # The PDE equation should reference both S_182 and Q_182 as variables (not parameters)
+    ps_str = string.(merged.ps)
+    @test !any(s -> occursin("S_182", s), ps_str)
+    @test !any(s -> occursin("Q_182", s), ps_str)
+
+    # There should be coupling equations for BOTH: S_182 ~ R_182 and Q_182 ~ W_182
+    coupling_S = findfirst(eqs) do eq
+        occursin("S_182", string(eq.lhs)) && occursin("R_182", string(eq.rhs))
+    end
+    coupling_Q = findfirst(eqs) do eq
+        occursin("Q_182", string(eq.lhs)) && occursin("W_182", string(eq.rhs))
+    end
+    @test !isnothing(coupling_S) "couple2 for ODE_A (S_182~R_182) should have fired"
+    @test !isnothing(coupling_Q) "couple2 for ODE_B (Q_182~W_182) should have fired"
+end
+
+@testset "Issue #185: Phase 3 PDE-PDE coupling after Phase 1.5" begin
+    # Verify that after Phase 1.5 coupling, Phase 3 can still run couple2
+    # for the promoted system if a separate PDE-level couple2 method is defined.
+
+    @parameters x_185 y_185
+    @variables ψ_185(..) [description = "PDE variable"]
+    @parameters S_185 = 1.0 [description = "Speed"]
+
+    Dx_185 = Differential(x_185)
+    Dy_185 = Differential(y_185)
+
+    struct PDECoupler185
+        sys
+    end
+
+    pde_185 = PDESystem(
+        [D_test(ψ_185(t_test, x_185, y_185)) ~ -S_185 * ψ_185(t_test, x_185, y_185)],
+        [ψ_185(0, x_185, y_185) ~ 1.0],
+        [t_test ∈ Interval(0.0, 1.0),
+         x_185 ∈ Interval(0.0, 1.0), y_185 ∈ Interval(0.0, 1.0)],
+        [t_test, x_185, y_185], [ψ_185(t_test, x_185, y_185)], [S_185];
+        name = :pde_185,
+        metadata = Dict(CoupleType => PDECoupler185)
+    )
+
+    # ODE system
+    struct ODECoupler185
+        sys
+    end
+    @variables R_185(t_test) = 0.5 [description = "Rate"]
+    @parameters k_185 = 2.0
+
+    ode_185 = System([D_test(R_185) ~ k_185 * (1.0 - R_185)], t_test;
+        name = :ode_185,
+        metadata = Dict(CoupleType => ODECoupler185))
+
+    # Phase 1.5 coupling: ODE-level, link S_185 ~ R_185
+    function EarthSciMLBase.couple2(r::ODECoupler185, ls::PDECoupler185)
+        r_sys, ls_sys = r.sys, ls.sys
+        ls_sys = param_to_var(ls_sys, :S_185)
+        eq_vars = collect(Symbolics.get_variables(equations(ls_sys)[1]))
+        S_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :S_185, eq_vars))
+        return ConnectorSystem([S_sym ~ r_sys.R_185], ls_sys, r_sys)
+    end
+
+    # Phase 3 coupling: PDE-level, expects promoted system (accesses .dvs)
+    # This should NOT be blocked by Phase 1.5 having handled the same type pair.
+    phase3_called = Ref(false)
+    function EarthSciMLBase.couple2(ls::PDECoupler185, r::ODECoupler185)
+        ls_sys, r_sys = ls.sys, r.sys
+        phase3_called[] = true
+        # Just return a no-op connector (empty equations)
+        return ConnectorSystem(Equation[], ls_sys, r_sys)
+    end
+
+    domain_185 = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_185 ∈ Interval(0.0, 1.0), y_185 ∈ Interval(0.0, 1.0))
+    )
+
+    cs = couple(pde_185, ode_185, domain_185)
+    merged = convert(PDESystem, cs)
+
+    # Phase 3 should have been called because the promoted system has a new name
+    # (ode_group_1, not ode_185), so the handled_cross_pairs check should not block it.
+    @test phase3_called[] "Phase 3 PDE-PDE coupling should fire after Phase 1.5"
+
+    # Basic sanity: merged system should still be valid
+    @test length(equations(merged)) >= 2
+    dvs_str = string.(merged.dvs)
+    @test any(s -> occursin("R_185", s), dvs_str)
+    @test any(s -> occursin("ψ_185", s), dvs_str)
+end
+
+@testset "Issue #184: namespaced variables in cross-coupling equations" begin
+    # Test that coupling equations using dot-notation (sys.varname) work correctly
+    # when the variable names are namespaced (e.g. rothermel₊R_ct).
+    # This is a more specific version of the WildlandFire pattern test above,
+    # verifying that the RHS of coupling equations contains promoted spatial vars.
+
+    @parameters x_184 y_184
+    @variables ψ_184(..) [description = "PDE variable"]
+    @parameters S_184 = 1.0 [description = "Speed"]
+
+    Dx_184 = Differential(x_184)
+    Dy_184 = Differential(y_184)
+
+    struct PDECoupler184
+        sys
+    end
+
+    pde_184 = PDESystem(
+        [D_test(ψ_184(t_test, x_184, y_184)) ~ -S_184 * ψ_184(t_test, x_184, y_184)],
+        [ψ_184(0, x_184, y_184) ~ 1.0],
+        [t_test ∈ Interval(0.0, 1.0),
+         x_184 ∈ Interval(0.0, 1.0), y_184 ∈ Interval(0.0, 1.0)],
+        [t_test, x_184, y_184], [ψ_184(t_test, x_184, y_184)], [S_184];
+        name = :pde_184,
+        metadata = Dict(CoupleType => PDECoupler184)
+    )
+
+    struct ODECoupler184
+        sys
+    end
+    @variables R_184(t_test) = 0.5 [description = "Rate"]
+    @parameters k_184 = 2.0
+
+    ode_184 = System([D_test(R_184) ~ k_184 * (1.0 - R_184)], t_test;
+        name = :ode_184,
+        metadata = Dict(CoupleType => ODECoupler184))
+
+    # couple2 uses dot-notation: r_sys.R_184 produces a namespaced variable
+    function EarthSciMLBase.couple2(r::ODECoupler184, ls::PDECoupler184)
+        r_sys, ls_sys = r.sys, ls.sys
+        ls_sys = param_to_var(ls_sys, :S_184)
+        eq_vars = collect(Symbolics.get_variables(equations(ls_sys)[1]))
+        S_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :S_184, eq_vars))
+        # r_sys.R_184 creates a namespaced variable (ode_184₊R_184)
+        return ConnectorSystem([S_sym ~ r_sys.R_184], ls_sys, r_sys)
+    end
+
+    domain_184 = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_184 ∈ Interval(0.0, 1.0), y_184 ∈ Interval(0.0, 1.0))
+    )
+
+    cs = couple(pde_184, ode_184, domain_184)
+    merged = convert(PDESystem, cs)
+
+    eqs = equations(merged)
+    dvs_str = string.(merged.dvs)
+
+    # R_184 should be a DV (promoted to PDE)
+    @test any(s -> occursin("R_184", s), dvs_str)
+
+    # Find the coupling equation S_184 ~ (promoted R_184)
+    coupling_eq = findfirst(eqs) do eq
+        occursin("S_184", string(eq.lhs)) && occursin("R_184", string(eq.rhs))
+    end
+    @test !isnothing(coupling_eq) "Coupling equation S_184 ~ R_184 should exist"
+
+    # The RHS should contain spatial dimensions from promotion (x_184, y_184)
+    coupling_rhs = string(eqs[coupling_eq].rhs)
+    @test occursin("x_184", coupling_rhs) "RHS should have promoted spatial dim x_184"
+    @test occursin("y_184", coupling_rhs) "RHS should have promoted spatial dim y_184"
+
+    # Verify no temporal-only duplicate DVs
+    dvs_names = [string(Symbolics.tosymbol(dv, escape = false)) for dv in merged.dvs]
+    bare_names = [last(split(n, "₊")) for n in dvs_names]
+    for bn in unique(bare_names)
+        count = sum(x -> x == bn, bare_names)
+        @test count == 1 "DV $bn should appear exactly once, found $count times"
+    end
 end

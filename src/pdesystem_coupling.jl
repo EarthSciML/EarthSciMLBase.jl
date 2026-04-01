@@ -28,6 +28,8 @@ function validate_and_unify_domains(pdesystems::AbstractVector{<:ModelingToolkit
     unified_domains = []
     # Maps Symbol => domain spec for validation of shared IVs.
     domain_map = Dict{Symbol, Any}()
+    # Maps Symbol => IV for unit validation.
+    iv_map = Dict{Symbol, Any}()
 
     for k in sorted_idx
         pdesys = pdesystems[k]
@@ -45,11 +47,20 @@ function validate_and_unify_domains(pdesystems::AbstractVector{<:ModelingToolkit
                     error("Domain range mismatch for $sym: [$lo1, $hi1] vs [$lo2, $hi2] " *
                           "(in system $k).")
                 end
+                # Validate unit compatibility.
+                existing_iv = iv_map[sym]
+                existing_unit = ModelingToolkit.get_unit(existing_iv)
+                new_unit = ModelingToolkit.get_unit(iv)
+                if !isequal(existing_unit, new_unit)
+                    error("Unit mismatch for independent variable $sym: " *
+                          "$existing_unit vs $new_unit (in system $k).")
+                end
             else
                 push!(seen, sym)
                 push!(unified_ivs, iv)
                 push!(unified_domains, dom)
                 domain_map[sym] = dom
+                iv_map[sym] = iv
             end
         end
     end
@@ -61,14 +72,20 @@ end
 Deduplicate symbolic variables by comparing their symbol names.
 """
 function unique_syms(syms::AbstractVector)
-    seen = Set{Symbol}()
+    seen = Dict{Symbol, Any}()  # name => first occurrence string representation
     result = eltype(syms)[]
     for s in syms
         sym = Symbol(Symbolics.tosymbol(s, escape = false))
-        if sym ∉ seen
-            push!(seen, sym)
+        s_str = string(s)
+        if !haskey(seen, sym)
+            seen[sym] = s_str
             push!(result, s)
+        elseif seen[sym] != s_str
+            # Same name but different representation — keep both
+            push!(result, s)
+            @warn "Variables with same base name but different representations: $(seen[sym]) and $s_str"
         end
+        # If seen[sym] == s_str, it's a true duplicate — skip
     end
     result
 end
@@ -144,6 +161,21 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
     all_dvs = unique_syms(vcat([p.dvs for p in pdesystems]...))
     all_ps = unique_syms(vcat(
         [_collect_ps(p.ps) for p in pdesystems]...))
+
+    # Ensure all LHS dependent variables are registered in dvs.
+    # This handles variables created by slice_variable in coupling equations.
+    existing_dv_strs = Set(string(dv) for dv in all_dvs)
+    for eq in all_eqs
+        for var in Symbolics.get_variables(eq.lhs)
+            if Symbolics.iscall(Symbolics.unwrap(var))
+                v_str = string(var)
+                if v_str ∉ existing_dv_strs
+                    push!(all_dvs, var)
+                    push!(existing_dv_strs, v_str)
+                end
+            end
+        end
+    end
 
     PDESystem(all_eqs, all_bcs, unified_domains, unified_ivs, all_dvs, all_ps; name = name)
 end
