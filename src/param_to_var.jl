@@ -78,7 +78,12 @@ function param_to_var(sys::ModelingToolkit.PDESystem, ps::Symbol...)
             continue
         end
         iparam = findfirst(isequal(p), Symbol.(params))
-        @assert !isnothing(iparam) "Parameter `$p` not found in the PDESystem parameters $(Symbol.(params))"
+        if isnothing(iparam)
+            # Parameter not found — it may have already been converted to a
+            # variable by a prior call to param_to_var (e.g. when couple2 is
+            # invoked at both Phase 1.5 and Phase 3).  Skip silently.
+            continue
+        end
         param = params[iparam]
 
         # Create a variable with ALL independent variables so it has the

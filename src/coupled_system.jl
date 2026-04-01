@@ -507,11 +507,28 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
             end
 
             # Collect metadata from all systems in this group.
+            # Use special handling for CoupleType to avoid overwriting:
+            # collect all CoupleTypes into a vector so that the promoted
+            # PDE carries the coupling identity of every constituent ODE.
             group_meta = Dict{Any, Any}()
+            all_couple_types = DataType[]
             for s in group_systems
                 m = ModelingToolkit.get_metadata(s)
                 isnothing(m) && continue
-                merge!(group_meta, m)
+                for (k, v) in m
+                    if k == CoupleType
+                        if v isa AbstractVector
+                            append!(all_couple_types, v)
+                        else
+                            push!(all_couple_types, v)
+                        end
+                    else
+                        group_meta[k] = v
+                    end
+                end
+            end
+            if !isempty(all_couple_types)
+                group_meta[CoupleType] = all_couple_types
             end
             # Remove SysDomainInfo from the merged metadata since it is
             # consumed during promotion and should not leak into the PDE.
@@ -543,14 +560,37 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                     new_rhs = eq.rhs
                     for var in Symbolics.get_variables(eq)
                         varname = Symbolics.tosymbol(var, escape = false)
-                        haskey(pre_comp_vars, varname) || continue
-                        sysname, _ = pre_comp_vars[varname]
-                        suffix = string("₊", sysname, "₊", varname)
+                        # Try exact match first, then suffix match for namespaced variables
+                        # (e.g. rothermel₊R_ct from sys.R_ct dot-notation access).
+                        matched_key = if haskey(pre_comp_vars, varname)
+                            varname
+                        else
+                            found = nothing
+                            varname_str = string(varname)
+                            for (k2, _) in pre_comp_vars
+                                if endswith(varname_str, string("₊", k2))
+                                    found = k2
+                                    break
+                                end
+                            end
+                            found
+                        end
+                        matched_key === nothing && continue
+                        sysname, _ = pre_comp_vars[matched_key]
+                        # Match the promoted DV whose name ends with
+                        # "sysname₊varname".  Use the form WITHOUT a
+                        # leading ₊ so that single-system groups (where
+                        # the DV name IS "sysname₊varname" with no outer
+                        # prefix) are also matched.
+                        target = string(sysname, "₊", matched_key)
                         pidx = findfirst(promoted_dvs) do dv
                             dvname = string(Symbolics.tosymbol(dv, escape = false))
-                            endswith(dvname, suffix)
+                            endswith(dvname, target)
                         end
-                        pidx === nothing && continue
+                        if pidx === nothing
+                            @warn "Cross-coupling equation transformation: could not find promoted counterpart for variable $(varname) (system $(sysname)) in group $k"
+                            continue
+                        end
                         promoted_var = promoted_dvs[pidx]
                         # Use the two-step substitute_in_deriv pattern
                         # (same as add_dims) to handle derivatives.
