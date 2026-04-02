@@ -187,6 +187,40 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
         end
     end
 
+    # Resolve connector equations between same-named DVs that were deduplicated.
+    # When unique_syms drops a DV (same name AND same string representation),
+    # equations referencing the dropped symbolic object become orphaned.
+    # Build a substitution map mirroring unique_syms's logic, apply it to all
+    # equations and BCs, then drop trivial equations (LHS == RHS).
+    all_dvs_raw = vcat([p.dvs for p in pdesystems]...)
+    seen_dv_syms = Dict{Symbol, String}()      # symbol → first string repr
+    surviving_dv = Dict{String, Any}()          # string repr → surviving DV
+    dv_subs = Dict{Any, Any}()
+    for dv in all_dvs_raw
+        sym = Symbol(Symbolics.tosymbol(dv, escape = false))
+        s_str = string(dv)
+        if !haskey(seen_dv_syms, sym)
+            seen_dv_syms[sym] = s_str
+            surviving_dv[s_str] = dv
+        elseif seen_dv_syms[sym] == s_str
+            # True duplicate dropped by unique_syms — map to surviving version
+            dv_subs[Symbolics.unwrap(dv)] = Symbolics.unwrap(surviving_dv[s_str])
+        end
+        # Different representation with same name: kept by unique_syms, no sub needed
+    end
+    if !isempty(dv_subs)
+        all_eqs = map(all_eqs) do eq
+            Symbolics.substitute(eq.lhs, dv_subs) ~ Symbolics.substitute(eq.rhs, dv_subs)
+        end
+        all_eqs = filter(eq -> !isequal(eq.lhs, eq.rhs), all_eqs)
+        all_eqs = unique_eqs(all_eqs)
+
+        all_bcs = map(all_bcs) do bc
+            Symbolics.substitute(bc.lhs, dv_subs) ~ Symbolics.substitute(bc.rhs, dv_subs)
+        end
+        all_bcs = unique_eqs(all_bcs)
+    end
+
     PDESystem(all_eqs, all_bcs, unified_domains, unified_ivs, all_dvs, all_ps; name = name)
 end
 

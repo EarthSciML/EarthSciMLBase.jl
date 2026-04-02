@@ -1149,3 +1149,51 @@ end
         @test count == 1
     end
 end
+
+@testset "Issue #190: param_to_var connector resolved by merge" begin
+    # When param_to_var promotes a parameter to a DV with the same name as a DV
+    # in another system, the connector equation linking them should be resolved
+    # by merge_pdesystems (substituted to trivial, then removed).
+    # This is the pattern that WildlandFire.jl uses for FireSpreadDirection→LevelSet.
+
+    @parameters x_190 y_190
+    @variables u_190(..) [description = "PDE state"]
+    @parameters R_190 = 1.0 [description = "Rate parameter"]
+    Dx_190 = Differential(x_190)
+
+    # PDE system with parameter R_190
+    pde_190 = PDESystem(
+        [D_test(u_190(t_test, x_190, y_190)) ~ -R_190 * u_190(t_test, x_190, y_190)],
+        [u_190(0, x_190, y_190) ~ 1.0],
+        [t_test ∈ Interval(0.0, 1.0),
+         x_190 ∈ Interval(0.0, 1.0), y_190 ∈ Interval(0.0, 1.0)],
+        [t_test, x_190, y_190], [u_190(t_test, x_190, y_190)], [R_190];
+        name = :pde_190
+    )
+
+    # Another PDE system that defines R_190 as a DV (simulates promoted ODE group)
+    @variables R_190_src(..) [description = "Rate from ODE"]
+    @parameters k_190 = 2.0
+    pde_src = PDESystem(
+        [R_190_src(t_test, x_190, y_190) ~ k_190],
+        [R_190_src(0, x_190, y_190) ~ 2.0],
+        [t_test ∈ Interval(0.0, 1.0),
+         x_190 ∈ Interval(0.0, 1.0), y_190 ∈ Interval(0.0, 1.0)],
+        [t_test, x_190, y_190], [R_190_src(t_test, x_190, y_190)], [k_190];
+        name = :src_190
+    )
+
+    # Use param_to_var to convert R_190 to a variable, then create a connector
+    pde_190_mod = param_to_var(pde_190, :R_190)
+    @test length(pde_190_mod.dvs) == 2  # u_190 + R_190
+
+    # The connector links R_190 (now a DV in pde_190) to R_190_src
+    eq_vars = Symbolics.get_variables(equations(pde_190_mod)[1])
+    R_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :R_190, eq_vars))
+    connector = [R_sym ~ R_190_src(t_test, x_190, y_190)]
+
+    merged = merge_pdesystems([pde_src, pde_190_mod], connector)
+
+    # Key assertion: equation count must equal DV count
+    @test length(equations(merged)) == length(merged.dvs)
+end
