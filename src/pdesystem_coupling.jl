@@ -187,26 +187,23 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
         end
     end
 
-    # Resolve connector equations between same-named DVs that were deduplicated.
-    # When unique_syms drops a DV (same name AND same string representation),
-    # equations referencing the dropped symbolic object become orphaned.
-    # Build a substitution map mirroring unique_syms's logic, apply it to all
-    # equations and BCs, then drop trivial equations (LHS == RHS).
+    # Resolve same-named DVs from different systems (e.g., param_to_var creates
+    # R_H(t,x,y) in the LevelSet while the promoted ODE group has
+    # FireSpreadDirection₊R_H(t,x,y)).  Match by (base symbol, arg count) so
+    # that namespace-prefixed variants and non-prefixed variants are unified,
+    # while genuinely different-dimension variants (issue #188) are kept.
     all_dvs_raw = vcat([p.dvs for p in pdesystems]...)
-    seen_dv_syms = Dict{Symbol, String}()      # symbol → first string repr
-    surviving_dv = Dict{String, Any}()          # string repr → surviving DV
+    _dv_nargs(dv) = length(Symbolics.arguments(Symbolics.unwrap(dv)))
+    surviving_dv = Dict{Tuple{Symbol, Int}, Any}()
     dv_subs = Dict{Any, Any}()
     for dv in all_dvs_raw
         sym = Symbol(Symbolics.tosymbol(dv, escape = false))
-        s_str = string(dv)
-        if !haskey(seen_dv_syms, sym)
-            seen_dv_syms[sym] = s_str
-            surviving_dv[s_str] = dv
-        elseif seen_dv_syms[sym] == s_str
-            # True duplicate dropped by unique_syms — map to surviving version
-            dv_subs[Symbolics.unwrap(dv)] = Symbolics.unwrap(surviving_dv[s_str])
+        key = (sym, _dv_nargs(dv))
+        if haskey(surviving_dv, key)
+            dv_subs[Symbolics.unwrap(dv)] = Symbolics.unwrap(surviving_dv[key])
+        else
+            surviving_dv[key] = dv
         end
-        # Different representation with same name: kept by unique_syms, no sub needed
     end
     if !isempty(dv_subs)
         all_eqs = map(all_eqs) do eq
@@ -219,6 +216,9 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
             Symbolics.substitute(bc.lhs, dv_subs) ~ Symbolics.substitute(bc.rhs, dv_subs)
         end
         all_bcs = unique_eqs(all_bcs)
+
+        # Rebuild DVs: keep only surviving variants
+        all_dvs = collect(values(surviving_dv))
     end
 
     PDESystem(all_eqs, all_bcs, unified_domains, unified_ivs, all_dvs, all_ps; name = name)
