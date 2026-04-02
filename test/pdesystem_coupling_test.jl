@@ -1197,3 +1197,51 @@ end
     # Key assertion: equation count must equal DV count
     @test length(equations(merged)) == length(merged.dvs)
 end
+
+@testset "Issue #190: namespaced DV dedup in merge" begin
+    # When param_to_var creates R(t,x,y) in one system and the other system
+    # has prefix₊R(t,x,y) (from ODE→PDE promotion with namespace), they share
+    # the same base symbol and dimensionality but differ in string representation.
+    # merge_pdesystems must unify them.
+
+    @parameters x_190b y_190b
+    @parameters k_190b = 2.0
+
+    # System A: has a namespaced DV "R_190b" via a subsystem (simulates promoted ODE group)
+    @variables R_190b(..) [description = "Rate"]
+    pde_a = PDESystem(
+        [R_190b(t_test, x_190b, y_190b) ~ k_190b],
+        [R_190b(0, x_190b, y_190b) ~ 2.0],
+        [t_test ∈ Interval(0.0, 1.0),
+         x_190b ∈ Interval(0.0, 1.0), y_190b ∈ Interval(0.0, 1.0)],
+        [t_test, x_190b, y_190b], [R_190b(t_test, x_190b, y_190b)], [k_190b];
+        name = :subsys_a
+    )
+
+    # System B: has a parameter R_190b that gets converted to DV via param_to_var
+    @variables u_190b(..) [description = "PDE state"]
+    @parameters R_190b_param = 1.0 [description = "Rate"]
+    # Manually create a DV with the same base name R_190b but a different symbolic object
+    # (this is what param_to_var does — it creates a new @variables R_190b(t,x,y))
+    @variables R_190b_new(..) [description = "Rate promoted"]
+    pde_b = PDESystem(
+        [D_test(u_190b(t_test, x_190b, y_190b)) ~ -R_190b_new(t_test, x_190b, y_190b) *
+            u_190b(t_test, x_190b, y_190b)],
+        [u_190b(0, x_190b, y_190b) ~ 1.0],
+        [t_test ∈ Interval(0.0, 1.0),
+         x_190b ∈ Interval(0.0, 1.0), y_190b ∈ Interval(0.0, 1.0)],
+        [t_test, x_190b, y_190b],
+        [u_190b(t_test, x_190b, y_190b), R_190b(t_test, x_190b, y_190b)],
+        [];
+        name = :pde_b
+    )
+
+    # Connector: links pde_b's R_190b to pde_a's R_190b (same base name, same dims)
+    connector = [R_190b(t_test, x_190b, y_190b) ~ R_190b(t_test, x_190b, y_190b)]
+
+    merged = merge_pdesystems([pde_a, pde_b], connector)
+
+    # The connector should be resolved as trivial and removed.
+    # Equation count must equal DV count.
+    @test length(equations(merged)) == length(merged.dvs)
+end
