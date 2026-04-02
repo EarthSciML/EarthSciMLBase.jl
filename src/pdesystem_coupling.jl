@@ -187,22 +187,37 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
         end
     end
 
-    # Resolve same-named DVs from different systems (e.g., param_to_var creates
-    # R_H(t,x,y) in the LevelSet while the promoted ODE group has
-    # FireSpreadDirection₊R_H(t,x,y)).  Match by (base symbol, arg count) so
-    # that namespace-prefixed variants and non-prefixed variants are unified,
-    # while genuinely different-dimension variants (issue #188) are kept.
+    # Resolve DVs created by param_to_var that duplicate existing namespaced DVs.
+    # param_to_var creates bare variables like R_H(t,x,y), while the promoted ODE
+    # group has namespaced versions like FireSpreadDirection₊R_H(t,x,y).  We
+    # substitute the bare version with the namespaced one (which has the defining
+    # equation), then drop trivial connector equations (LHS == RHS).
+    # Two namespaced DVs with the same base name (e.g., Rothermel₊β_ratio and
+    # FireSpreadDirection₊β_ratio) are genuinely different variables and are kept.
     all_dvs_raw = vcat([p.dvs for p in pdesystems]...)
     _dv_nargs(dv) = length(Symbolics.arguments(Symbolics.unwrap(dv)))
-    surviving_dv = Dict{Tuple{Symbol, Int}, Any}()
+    _dv_base(dv) = Symbol(last(split(string(Symbolics.tosymbol(dv, escape = false)), "₊")))
+    _dv_is_namespaced(dv) = occursin("₊", string(Symbolics.tosymbol(dv, escape = false)))
+
+    # Index namespaced DVs by (base_name, nargs)
+    namespaced_dvs = Dict{Tuple{Symbol, Int}, Any}()
+    for dv in all_dvs_raw
+        if _dv_is_namespaced(dv)
+            key = (_dv_base(dv), _dv_nargs(dv))
+            if !haskey(namespaced_dvs, key)
+                namespaced_dvs[key] = dv
+            end
+        end
+    end
+
+    # Substitute non-namespaced DVs that match a namespaced counterpart
     dv_subs = Dict{Any, Any}()
     for dv in all_dvs_raw
-        sym = Symbol(Symbolics.tosymbol(dv, escape = false))
-        key = (sym, _dv_nargs(dv))
-        if haskey(surviving_dv, key)
-            dv_subs[Symbolics.unwrap(dv)] = Symbolics.unwrap(surviving_dv[key])
-        else
-            surviving_dv[key] = dv
+        if !_dv_is_namespaced(dv)
+            key = (_dv_base(dv), _dv_nargs(dv))
+            if haskey(namespaced_dvs, key)
+                dv_subs[Symbolics.unwrap(dv)] = Symbolics.unwrap(namespaced_dvs[key])
+            end
         end
     end
     if !isempty(dv_subs)
@@ -217,8 +232,8 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
         end
         all_bcs = unique_eqs(all_bcs)
 
-        # Rebuild DVs: keep only surviving variants
-        all_dvs = collect(values(surviving_dv))
+        # Remove substituted DVs
+        all_dvs = filter(dv -> Symbolics.unwrap(dv) ∉ keys(dv_subs), all_dvs)
     end
 
     PDESystem(all_eqs, all_bcs, unified_domains, unified_ivs, all_dvs, all_ps; name = name)
