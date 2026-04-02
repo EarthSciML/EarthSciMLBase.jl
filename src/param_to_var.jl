@@ -110,6 +110,12 @@ function param_to_var(sys::ModelingToolkit.PDESystem, ps::Symbol...)
     # Remove converted parameters
     new_ps = [p for p in params if !(Symbolics.unwrap(p) in keys(replace))]
 
-    PDESystem(new_eqs, new_bcs, sys.domain, sys.ivs, sys.dvs, new_ps;
+    # Add promoted variables to the dependent variables list
+    new_dvs = copy(sys.dvs)
+    for newvar_unwrapped in values(replace)
+        push!(new_dvs, Symbolics.wrap(newvar_unwrapped))
+    end
+
+    PDESystem(new_eqs, new_bcs, sys.domain, sys.ivs, new_dvs, new_ps;
         name = nameof(sys), metadata = sys.metadata)
 end

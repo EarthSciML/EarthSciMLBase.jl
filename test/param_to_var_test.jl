@@ -89,7 +89,11 @@ end
     @test length(equations(pdesys2)) == 1
     @test length(pdesys2.bcs) == 1
     @test length(pdesys2.ivs) == 3
-    @test length(pdesys2.dvs) == 1
+    # S was promoted from parameter to DV
+    @test length(pdesys2.dvs) == 2
+    dv_names = [Symbolics.tosymbol(dv, escape = false) for dv in pdesys2.dvs]
+    @test :S ∈ dv_names
+    @test :ψ ∈ dv_names
 end
 
 @testset "PDESystem param_to_var - skip existing variable" begin
