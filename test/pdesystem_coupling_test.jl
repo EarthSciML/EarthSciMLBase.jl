@@ -1244,3 +1244,142 @@ end
     # Equation count must equal DV count.
     @test length(equations(merged)) == length(merged.dvs)
 end
+
+@testset "cross-group ODE-ODE coupling with same spatial dimensions (#194)" begin
+    # Two ODE systems in different DomainInfo groups (same 1D spatial dimension)
+    # with a couple2 method that uses param_to_var.
+    @parameters x_194
+    @variables a_194(t_test) = 0.0 b_194(t_test) = 0.0
+    @parameters p_a_194 = 1.0 p_b_194 = 2.0
+
+    struct CrossGroupA194
+        sys
+    end
+    struct CrossGroupB194
+        sys
+    end
+
+    # Two separate 1D DomainInfos (same extent, but distinct objects → different groups).
+    domain_A = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_194 ∈ Interval(0.0, 1.0))
+    )
+    domain_B = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_194 ∈ Interval(0.0, 1.0))
+    )
+
+    ode_a = System([D_test(a_194) ~ -p_a_194 * a_194], t_test; name = :ode_a_194,
+        metadata = Dict(
+            SysDomainInfo => domain_A,
+            CoupleType => CrossGroupA194,
+        ))
+    ode_b = System([D_test(b_194) ~ -p_b_194], t_test; name = :ode_b_194,
+        metadata = Dict(
+            SysDomainInfo => domain_B,
+            CoupleType => CrossGroupB194,
+        ))
+
+    # couple2: convert p_a_194 in ode_a to a variable and link it to b_194.
+    function EarthSciMLBase.couple2(a::CrossGroupA194, b::CrossGroupB194)
+        a_sys = param_to_var(a.sys, :p_a_194)
+        ConnectorSystem([a_sys.p_a_194 ~ b.sys.b_194], a_sys, b.sys)
+    end
+
+    # Need a PDESystem or DomainInfo to trigger the PDE conversion path.
+    # Use a simple PDE so the PDESystem path is exercised.
+    Dx194 = Differential(x_194)
+    @variables u_194(..)
+    pde_194 = PDESystem(
+        [D_test(u_194(t_test, x_194)) ~ Dx194(Dx194(u_194(t_test, x_194)))],
+        [u_194(0, x_194) ~ 1.0, u_194(t_test, 0) ~ 0.0, u_194(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_194 ∈ Interval(0.0, 1.0)],
+        [t_test, x_194], [u_194(t_test, x_194)], [];
+        name = :pde_194
+    )
+
+    cs = couple(pde_194, ode_a, ode_b, domain_A)
+    merged = convert(PDESystem, cs)
+
+    # Both ODE systems should be promoted and present in DVs.
+    dvs_str = string.(merged.dvs)
+    @test any(s -> occursin("a_194", s), dvs_str)
+    @test any(s -> occursin("b_194", s), dvs_str)
+
+    # The coupling equation should appear: p_a_194 should be linked to b_194.
+    eqs_str = [string(eq) for eq in equations(merged)]
+    # Find the a_194 equation — its RHS should reference b_194 (the coupling).
+    a_eq_idx = findfirst(eq -> occursin("a_194", string(eq.lhs)) &&
+                                occursin("Differential(t", string(eq.lhs)),
+                         equations(merged))
+    @test !isnothing(a_eq_idx)
+    a_eq = equations(merged)[a_eq_idx]
+    # The coupling should have added b_194 as a forcing term (via p_a_194 ~ b_194).
+    @test occursin("b_194", string(a_eq.rhs))
+end
+
+@testset "cross-group ODE-ODE coupling with different dimensions errors (#194)" begin
+    # Two ODE systems in groups with different spatial dimensions (1D vs 2D).
+    # The couple2 method creates a connector at the ODE level, but after
+    # promotion the variables have different numbers of spatial dimensions.
+    # This should produce a helpful error.
+    @parameters x_194d y_194d
+    @variables c_194d(t_test) = 0.0 d_194d(t_test) = 0.0
+    @parameters p_c_194d = 1.0 p_d_194d = 2.0
+
+    struct CrossGroupC194d
+        sys
+    end
+    struct CrossGroupD194d
+        sys
+    end
+
+    # 1D domain
+    domain_1d = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_194d ∈ Interval(0.0, 1.0))
+    )
+    # 2D domain
+    domain_2d = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_194d ∈ Interval(0.0, 1.0), y_194d ∈ Interval(0.0, 1.0))
+    )
+
+    ode_c = System([D_test(c_194d) ~ -p_c_194d * c_194d], t_test; name = :ode_c_194d,
+        metadata = Dict(
+            SysDomainInfo => domain_1d,
+            CoupleType => CrossGroupC194d,
+        ))
+    ode_d = System([D_test(d_194d) ~ -p_d_194d], t_test; name = :ode_d_194d,
+        metadata = Dict(
+            SysDomainInfo => domain_2d,
+            CoupleType => CrossGroupD194d,
+        ))
+
+    function EarthSciMLBase.couple2(a::CrossGroupC194d, b::CrossGroupD194d)
+        a_sys = param_to_var(a.sys, :p_c_194d)
+        ConnectorSystem([a_sys.p_c_194d ~ b.sys.d_194d], a_sys, b.sys)
+    end
+
+    # Simple PDE to trigger the PDE path.
+    Dx194d = Differential(x_194d)
+    @variables w_194d(..)
+    pde_194d = PDESystem(
+        [D_test(w_194d(t_test, x_194d)) ~ Dx194d(Dx194d(w_194d(t_test, x_194d)))],
+        [w_194d(0, x_194d) ~ 1.0, w_194d(t_test, 0) ~ 0.0, w_194d(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_194d ∈ Interval(0.0, 1.0)],
+        [t_test, x_194d], [w_194d(t_test, x_194d)], [];
+        name = :pde_194d
+    )
+
+    cs = couple(pde_194d, ode_c, ode_d, domain_1d)
+    @test_throws ErrorException convert(PDESystem, cs)
+    # Verify the error message is helpful.
+    try
+        convert(PDESystem, cs)
+        @test false  # Should not reach here
+    catch e
+        @test occursin("mismatched", string(e.msg))
+        @test occursin("slice_variable", string(e.msg))
+    end
+end
