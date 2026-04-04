@@ -1,4 +1,5 @@
-export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent, SysDomainInfo, merge_pdesystems, slice_variable
+export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent, SysDomainInfo,
+       merge_pdesystems, slice_variable
 
 """
 A system for composing together other systems using the [`couple`](@ref) function.
@@ -487,7 +488,7 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                     # Try both orderings.
                     for (x_t, y_t, x_sys, y_sys) in [
                         (ode_t, pde_t, ode_sys, pde_sys),
-                        (pde_t, ode_t, pde_sys, ode_sys),
+                        (pde_t, ode_t, pde_sys, ode_sys)
                     ]
                         hasmethod(couple2, (x_t, y_t)) || continue
                         # Try running couple2 with the individual ODE
@@ -651,9 +652,11 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                         # Use the two-step substitute_in_deriv pattern
                         # (same as add_dims) to handle derivatives.
                         new_lhs = Symbolics.substitute_in_deriv(new_lhs, Dict(var => 🔥_cross_couple_temp))
-                        new_lhs = Symbolics.substitute_in_deriv(new_lhs, Dict(🔥_cross_couple_temp => promoted_var))
+                        new_lhs = Symbolics.substitute_in_deriv(
+                            new_lhs, Dict(🔥_cross_couple_temp => promoted_var))
                         new_rhs = Symbolics.substitute_in_deriv(new_rhs, Dict(var => 🔥_cross_couple_temp))
-                        new_rhs = Symbolics.substitute_in_deriv(new_rhs, Dict(🔥_cross_couple_temp => promoted_var))
+                        new_rhs = Symbolics.substitute_in_deriv(
+                            new_rhs, Dict(🔥_cross_couple_temp => promoted_var))
                     end
                     cross_coupling_eqs[k][eq_idx] = new_lhs ~ new_rhs
                 end
@@ -717,7 +720,8 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                 ndims_set = Set{Int}()
                 for var in Symbolics.get_variables(eq)
                     uvar = Symbolics.unwrap(var)
-                    if Symbolics.iscall(uvar) && !(Symbolics.operation(uvar) isa Differential)
+                    if Symbolics.iscall(uvar) &&
+                       !(Symbolics.operation(uvar) isa Differential)
                         nargs = length(Symbolics.arguments(uvar))
                         if nargs > 1  # Has spatial dimensions (more than just t)
                             push!(ndims_set, nargs)
@@ -805,7 +809,6 @@ function _group_by_domaininfo(
     end
     return groups
 end
-
 
 """
 A connector for two systems.

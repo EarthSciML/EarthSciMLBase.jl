@@ -132,7 +132,7 @@ end
     # Coupling: add +v to u's equation and -u to v's equation
     coupling = [
         D_test(u(t_test, x)) ~ v(t_test, x),
-        D_test(v(t_test, x)) ~ -u(t_test, x),
+        D_test(v(t_test, x)) ~ -u(t_test, x)
     ]
 
     merged = merge_pdesystems([pde1, pde2], coupling)
@@ -200,7 +200,7 @@ end
         # Add +v to u's equation and -u to v's equation
         coupling_eqs = [
             D_test(u(t_test, x)) ~ v(t_test, x),
-            D_test(v(t_test, x)) ~ -u(t_test, x),
+            D_test(v(t_test, x)) ~ -u(t_test, x)
         ]
         ConnectorSystem(coupling_eqs, a_sys, b_sys)
     end
@@ -309,8 +309,8 @@ end
     pde_2d = PDESystem(
         [D_test(u(t_test, x, y)) ~ Dx(Dx(u(t_test, x, y))) + Dy(Dy(u(t_test, x, y)))],
         [u(0, x, y) ~ 1.0,
-         u(t_test, 0, y) ~ 0.0, u(t_test, 1, y) ~ 0.0,
-         u(t_test, x, 0) ~ 0.0, u(t_test, x, 1) ~ 0.0],
+            u(t_test, 0, y) ~ 0.0, u(t_test, 1, y) ~ 0.0,
+            u(t_test, x, 0) ~ 0.0, u(t_test, x, 1) ~ 0.0],
         [t_test ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
         [t_test, x, y], [u(t_test, x, y)], [];
         name = :pde_2d
@@ -320,11 +320,11 @@ end
     pde_3d = PDESystem(
         [D_test(v(t_test, x, y, z)) ~ Dz(Dz(v(t_test, x, y, z))) - k * v(t_test, x, y, z)],
         [v(0, x, y, z) ~ 0.0,
-         v(t_test, 0, y, z) ~ 0.0, v(t_test, 1, y, z) ~ 0.0,
-         v(t_test, x, 0, z) ~ 0.0, v(t_test, x, 1, z) ~ 0.0,
-         v(t_test, x, y, 0) ~ 0.0, v(t_test, x, y, 1) ~ 0.0],
+            v(t_test, 0, y, z) ~ 0.0, v(t_test, 1, y, z) ~ 0.0,
+            v(t_test, x, 0, z) ~ 0.0, v(t_test, x, 1, z) ~ 0.0,
+            v(t_test, x, y, 0) ~ 0.0, v(t_test, x, y, 1) ~ 0.0],
         [t_test ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0),
-         y ∈ Interval(0.0, 1.0), z ∈ Interval(0.0, 1.0)],
+            y ∈ Interval(0.0, 1.0), z ∈ Interval(0.0, 1.0)],
         [t_test, x, y, z], [v(t_test, x, y, z)], [k];
         name = :pde_3d
     )
@@ -360,8 +360,8 @@ end
     pde_2d = PDESystem(
         [D_test(u(t_test, x, y)) ~ Dx(Dx(u(t_test, x, y)))],
         [u(0, x, y) ~ 1.0,
-         u(t_test, 0, y) ~ 0.0, u(t_test, 1, y) ~ 0.0,
-         u(t_test, x, 0) ~ 0.0, u(t_test, x, 1) ~ 0.0],
+            u(t_test, 0, y) ~ 0.0, u(t_test, 1, y) ~ 0.0,
+            u(t_test, x, 0) ~ 0.0, u(t_test, x, 1) ~ 0.0],
         [t_test ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
         [t_test, x, y], [u(t_test, x, y)], [];
         name = :pde_2d
@@ -371,11 +371,11 @@ end
     pde_3d = PDESystem(
         [D_test(v(t_test, x, y, z)) ~ -v(t_test, x, y, z)],
         [v(0, x, y, z) ~ 0.0,
-         v(t_test, 0, y, z) ~ 0.0, v(t_test, 1, y, z) ~ 0.0,
-         v(t_test, x, 0, z) ~ 0.0, v(t_test, x, 1, z) ~ 0.0,
-         v(t_test, x, y, 0) ~ 0.0, v(t_test, x, y, 1) ~ 0.0],
+            v(t_test, 0, y, z) ~ 0.0, v(t_test, 1, y, z) ~ 0.0,
+            v(t_test, x, 0, z) ~ 0.0, v(t_test, x, 1, z) ~ 0.0,
+            v(t_test, x, y, 0) ~ 0.0, v(t_test, x, y, 1) ~ 0.0],
         [t_test ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0),
-         y ∈ Interval(0.0, 1.0), z ∈ Interval(0.0, 1.0)],
+            y ∈ Interval(0.0, 1.0), z ∈ Interval(0.0, 1.0)],
         [t_test, x, y, z], [v(t_test, x, y, z)], [];
         name = :pde_3d
     )
@@ -387,7 +387,8 @@ end
     @test length(equations(merged)) == 2
     @test length(merged.ivs) == 4  # t, x, y, z
     # Verify coupling term was added to u's equation
-    u_eq = equations(merged)[findfirst(eq -> occursin("u(t, x, y)", string(eq.lhs)), equations(merged))]
+    u_eq = equations(merged)[findfirst(
+        eq -> occursin("u(t, x, y)", string(eq.lhs)), equations(merged))]
     @test occursin("v(t, x, y, 0.0)", string(u_eq.rhs))
 end
 
@@ -424,8 +425,8 @@ end
     pde_2d = PDESystem(
         [D_test(u(t_test, x, y)) ~ Dx(Dx(u(t_test, x, y)))],
         [u(0, x, y) ~ 1.0,
-         u(t_test, 0, y) ~ 0.0, u(t_test, 1, y) ~ 0.0,
-         u(t_test, x, 0) ~ 0.0, u(t_test, x, 1) ~ 0.0],
+            u(t_test, 0, y) ~ 0.0, u(t_test, 1, y) ~ 0.0,
+            u(t_test, x, 0) ~ 0.0, u(t_test, x, 1) ~ 0.0],
         [t_test ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
         [t_test, x, y], [u(t_test, x, y)], [];
         name = :pde_2d,
@@ -435,11 +436,11 @@ end
     pde_3d = PDESystem(
         [D_test(v(t_test, x, y, z)) ~ -v(t_test, x, y, z)],
         [v(0, x, y, z) ~ 2.0,
-         v(t_test, 0, y, z) ~ 0.0, v(t_test, 1, y, z) ~ 0.0,
-         v(t_test, x, 0, z) ~ 0.0, v(t_test, x, 1, z) ~ 0.0,
-         v(t_test, x, y, 0) ~ 0.0, v(t_test, x, y, 1) ~ 0.0],
+            v(t_test, 0, y, z) ~ 0.0, v(t_test, 1, y, z) ~ 0.0,
+            v(t_test, x, 0, z) ~ 0.0, v(t_test, x, 1, z) ~ 0.0,
+            v(t_test, x, y, 0) ~ 0.0, v(t_test, x, y, 1) ~ 0.0],
         [t_test ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0),
-         y ∈ Interval(0.0, 1.0), z ∈ Interval(0.0, 1.0)],
+            y ∈ Interval(0.0, 1.0), z ∈ Interval(0.0, 1.0)],
         [t_test, x, y, z], [v(t_test, x, y, z)], [];
         name = :pde_3d,
         metadata = Dict(CoupleType => MixedPDE3DCoupler)
@@ -460,7 +461,8 @@ end
     @test length(merged.dvs) == 2
 
     # Verify coupling term in u's equation
-    u_eq = equations(merged)[findfirst(eq -> occursin("u(t, x, y)", string(eq.lhs)), equations(merged))]
+    u_eq = equations(merged)[findfirst(
+        eq -> occursin("u(t, x, y)", string(eq.lhs)), equations(merged))]
     @test occursin("v(t, x, y, 0.0)", string(u_eq.rhs))
 end
 
@@ -519,7 +521,7 @@ end
     domain_3d = DomainInfo(
         constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
         constBC(0.0, x_g ∈ Interval(0.0, 1.0), y_g ∈ Interval(0.0, 1.0),
-                z_g ∈ Interval(0.0, 1.0))
+            z_g ∈ Interval(0.0, 1.0))
     )
 
     sys_a = System([D_test(a_g) ~ 1], t_test; name = :sys_a)
@@ -549,8 +551,8 @@ end
 
 @testset "couple() ODE systems with different DomainInfos + PDESystem" begin
     @parameters x_md y_md z_md
-    @variables u_md(..) a_md(t_test) = 0.0 b_md(t_test) = 0.0
-    @parameters p_a_md = 1.0 p_b_md = 2.0
+    @variables u_md(..) a_md(t_test)=0.0 b_md(t_test)=0.0
+    @parameters p_a_md=1.0 p_b_md=2.0
 
     Dx = Differential(x_md)
 
@@ -558,8 +560,8 @@ end
     pde_2d = PDESystem(
         [D_test(u_md(t_test, x_md, y_md)) ~ Dx(Dx(u_md(t_test, x_md, y_md)))],
         [u_md(0, x_md, y_md) ~ 1.0,
-         u_md(t_test, 0, y_md) ~ 0.0, u_md(t_test, 1, y_md) ~ 0.0,
-         u_md(t_test, x_md, 0) ~ 0.0, u_md(t_test, x_md, 1) ~ 0.0],
+            u_md(t_test, 0, y_md) ~ 0.0, u_md(t_test, 1, y_md) ~ 0.0,
+            u_md(t_test, x_md, 0) ~ 0.0, u_md(t_test, x_md, 1) ~ 0.0],
         [t_test ∈ Interval(0.0, 1.0), x_md ∈ Interval(0.0, 1.0), y_md ∈ Interval(0.0, 1.0)],
         [t_test, x_md, y_md], [u_md(t_test, x_md, y_md)], [];
         name = :pde_2d
@@ -575,7 +577,7 @@ end
     domain_3d = DomainInfo(
         constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
         constBC(0.0, x_md ∈ Interval(0.0, 1.0), y_md ∈ Interval(0.0, 1.0),
-                z_md ∈ Interval(0.0, 1.0))
+            z_md ∈ Interval(0.0, 1.0))
     )
 
     # ODE system using default 2D domain
@@ -609,8 +611,8 @@ end
 
 @testset "backward compat: single DomainInfo fast path" begin
     @parameters x_bc
-    @variables u_bc(..) a_bc(t_test) = 0.0 b_bc(t_test) = 0.0
-    @parameters p_a_bc = 1.0 p_b_bc = 2.0
+    @variables u_bc(..) a_bc(t_test)=0.0 b_bc(t_test)=0.0
+    @parameters p_a_bc=1.0 p_b_bc=2.0
 
     Dx = Differential(x_bc)
 
@@ -659,8 +661,8 @@ end
     pde_2d = PDESystem(
         [D_test(u_cg(t_test, x_cg, y_cg)) ~ Dx(Dx(u_cg(t_test, x_cg, y_cg)))],
         [u_cg(0, x_cg, y_cg) ~ 1.0,
-         u_cg(t_test, 0, y_cg) ~ 0.0, u_cg(t_test, 1, y_cg) ~ 0.0,
-         u_cg(t_test, x_cg, 0) ~ 0.0, u_cg(t_test, x_cg, 1) ~ 0.0],
+            u_cg(t_test, 0, y_cg) ~ 0.0, u_cg(t_test, 1, y_cg) ~ 0.0,
+            u_cg(t_test, x_cg, 0) ~ 0.0, u_cg(t_test, x_cg, 1) ~ 0.0],
         [t_test ∈ Interval(0.0, 1.0), x_cg ∈ Interval(0.0, 1.0), y_cg ∈ Interval(0.0, 1.0)],
         [t_test, x_cg, y_cg], [u_cg(t_test, x_cg, y_cg)], [];
         name = :pde_2d,
@@ -671,14 +673,14 @@ end
     domain_3d = DomainInfo(
         constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
         constBC(0.0, x_cg ∈ Interval(0.0, 1.0), y_cg ∈ Interval(0.0, 1.0),
-                z_cg ∈ Interval(0.0, 1.0))
+            z_cg ∈ Interval(0.0, 1.0))
     )
 
     # ODE system with its own 3D DomainInfo, simulating a data source
     ode_3d = System([D_test(v_cg) ~ p_v_cg], t_test; name = :ode_3d,
         metadata = Dict(
             SysDomainInfo => domain_3d,
-            CoupleType => CrossGroup3DCoupler,
+            CoupleType => CrossGroup3DCoupler
         ))
 
     # 2D default domain
@@ -699,7 +701,7 @@ end
         # Add the sliced variable as a forcing term to u_cg's equation.
         coupling_eqs = [
             D_test(u_cg(t_test, x_cg, y_cg)) ~ sliced_v,
-            slice_eq,
+            slice_eq
         ]
         ConnectorSystem(coupling_eqs, a_sys, b_sys)
     end
@@ -715,13 +717,16 @@ end
     # Verify coupling: u_cg's equation should reference the sliced v_cg variable,
     # and there should be a slice equation defining v_cg(t, x_cg, y_cg) ~ v_cg(t, x_cg, y_cg, 0.0).
     eqs = equations(merged)
-    u_eq = eqs[findfirst(eq -> occursin("u_cg(t, x_cg, y_cg)", string(eq.lhs)) &&
-                                occursin("Differential(t", string(eq.lhs)), eqs)]
+    u_eq = eqs[findfirst(
+        eq -> occursin("u_cg(t, x_cg, y_cg)", string(eq.lhs)) &&
+              occursin("Differential(t", string(eq.lhs)),
+        eqs)]
     # The u_cg equation should have a coupling term (the sliced v_cg)
     @test occursin("v_cg", string(u_eq.rhs))
     # There should be a slice equation with 0.0 substituted
-    slice_eq = findfirst(eq -> occursin("0.0", string(eq.rhs)) &&
-                               occursin("v_cg", string(eq.rhs)), eqs)
+    slice_eq = findfirst(
+        eq -> occursin("0.0", string(eq.rhs)) &&
+              occursin("v_cg", string(eq.rhs)), eqs)
     @test !isnothing(slice_eq)
 end
 
@@ -792,8 +797,8 @@ end
     pde_2d = PDESystem(
         [D_test(u_sv(t_test, x_sv, y_sv)) ~ Dx_sv(Dx_sv(u_sv(t_test, x_sv, y_sv)))],
         [u_sv(0, x_sv, y_sv) ~ 1.0,
-         u_sv(t_test, 0, y_sv) ~ 0.0, u_sv(t_test, 1, y_sv) ~ 0.0,
-         u_sv(t_test, x_sv, 0) ~ 0.0, u_sv(t_test, x_sv, 1) ~ 0.0],
+            u_sv(t_test, 0, y_sv) ~ 0.0, u_sv(t_test, 1, y_sv) ~ 0.0,
+            u_sv(t_test, x_sv, 0) ~ 0.0, u_sv(t_test, x_sv, 1) ~ 0.0],
         [t_test ∈ Interval(0.0, 1.0), x_sv ∈ Interval(0.0, 1.0), y_sv ∈ Interval(0.0, 1.0)],
         [t_test, x_sv, y_sv], [u_sv(t_test, x_sv, y_sv)], [];
         name = :pde_2d_sv
@@ -803,11 +808,11 @@ end
     pde_3d = PDESystem(
         [D_test(v_sv(t_test, x_sv, y_sv, z_sv)) ~ -v_sv(t_test, x_sv, y_sv, z_sv)],
         [v_sv(0, x_sv, y_sv, z_sv) ~ 0.0,
-         v_sv(t_test, 0, y_sv, z_sv) ~ 0.0, v_sv(t_test, 1, y_sv, z_sv) ~ 0.0,
-         v_sv(t_test, x_sv, 0, z_sv) ~ 0.0, v_sv(t_test, x_sv, 1, z_sv) ~ 0.0,
-         v_sv(t_test, x_sv, y_sv, 0) ~ 0.0, v_sv(t_test, x_sv, y_sv, 1) ~ 0.0],
+            v_sv(t_test, 0, y_sv, z_sv) ~ 0.0, v_sv(t_test, 1, y_sv, z_sv) ~ 0.0,
+            v_sv(t_test, x_sv, 0, z_sv) ~ 0.0, v_sv(t_test, x_sv, 1, z_sv) ~ 0.0,
+            v_sv(t_test, x_sv, y_sv, 0) ~ 0.0, v_sv(t_test, x_sv, y_sv, 1) ~ 0.0],
         [t_test ∈ Interval(0.0, 1.0), x_sv ∈ Interval(0.0, 1.0),
-         y_sv ∈ Interval(0.0, 1.0), z_sv ∈ Interval(0.0, 1.0)],
+            y_sv ∈ Interval(0.0, 1.0), z_sv ∈ Interval(0.0, 1.0)],
         [t_test, x_sv, y_sv, z_sv], [v_sv(t_test, x_sv, y_sv, z_sv)], [];
         name = :pde_3d_sv
     )
@@ -818,7 +823,7 @@ end
     # Coupling: add sliced v_sv to u_sv's equation, plus the slice equation
     coupling = [
         D_test(u_sv(t_test, x_sv, y_sv)) ~ sliced_v,
-        slice_eq,
+        slice_eq
     ]
 
     merged = merge_pdesystems([pde_2d, pde_3d], coupling)
@@ -835,13 +840,17 @@ end
 
     # The slice equation should be present in the merged system
     eqs = equations(merged)
-    slice_eq_found = findfirst(eq -> occursin("v_sv(t, x_sv, y_sv, 0.0)", string(eq.rhs)) &&
-                                     occursin("v_sv_at_z_sv", string(eq.lhs)), eqs)
+    slice_eq_found = findfirst(
+        eq -> occursin("v_sv(t, x_sv, y_sv, 0.0)", string(eq.rhs)) &&
+              occursin("v_sv_at_z_sv", string(eq.lhs)),
+        eqs)
     @test !isnothing(slice_eq_found)
 
     # The coupling term should be added to u_sv's equation
-    u_eq = eqs[findfirst(eq -> occursin("u_sv(t, x_sv, y_sv)", string(eq.lhs)) &&
-                                occursin("Differential(t", string(eq.lhs)), eqs)]
+    u_eq = eqs[findfirst(
+        eq -> occursin("u_sv(t, x_sv, y_sv)", string(eq.lhs)) &&
+              occursin("Differential(t", string(eq.lhs)),
+        eqs)]
     @test occursin("v_sv", string(u_eq.rhs))
 end
 
@@ -893,11 +902,12 @@ end
     end
 
     pde = PDESystem(
-        [D_test(ψ_ct(t_test, x_ct, y_ct)) ~ -S_ct * sqrt(
+        [D_test(ψ_ct(t_test, x_ct, y_ct)) ~
+         -S_ct * sqrt(
             Dx_ct(ψ_ct(t_test, x_ct, y_ct))^2 + Dy_ct(ψ_ct(t_test, x_ct, y_ct))^2)],
         [ψ_ct(0, x_ct, y_ct) ~ sqrt((x_ct - 0.5)^2 + (y_ct - 0.5)^2) - 0.1],
         [t_test ∈ Interval(0.0, 1.0),
-         x_ct ∈ Interval(0.0, 1.0), y_ct ∈ Interval(0.0, 1.0)],
+            x_ct ∈ Interval(0.0, 1.0), y_ct ∈ Interval(0.0, 1.0)],
         [t_test, x_ct, y_ct], [ψ_ct(t_test, x_ct, y_ct)], [S_ct];
         name = :level_set,
         metadata = Dict(CoupleType => LevelSetTestCoupler)
@@ -942,8 +952,9 @@ end
     @test any(s -> occursin("R_ct", s), dvs_str)
 
     # The PDE equation for ψ_ct should now contain S_ct as a variable, not parameter
-    ψ_eq = eqs[findfirst(eq -> occursin("ψ_ct", string(eq.lhs)) &&
-                                occursin("Differential(t", string(eq.lhs)), eqs)]
+    ψ_eq = eqs[findfirst(
+        eq -> occursin("ψ_ct", string(eq.lhs)) &&
+              occursin("Differential(t", string(eq.lhs)), eqs)]
     @test occursin("S_ct", string(ψ_eq.rhs))
 
     # S_ct should NOT be a parameter (it was converted by param_to_var)
@@ -988,10 +999,11 @@ end
     end
 
     pde_182 = PDESystem(
-        [D_test(ψ_182(t_test, x_182, y_182)) ~ -S_182 * ψ_182(t_test, x_182, y_182) - Q_182],
+        [D_test(ψ_182(t_test, x_182, y_182)) ~
+         -S_182 * ψ_182(t_test, x_182, y_182) - Q_182],
         [ψ_182(0, x_182, y_182) ~ 1.0],
         [t_test ∈ Interval(0.0, 1.0),
-         x_182 ∈ Interval(0.0, 1.0), y_182 ∈ Interval(0.0, 1.0)],
+            x_182 ∈ Interval(0.0, 1.0), y_182 ∈ Interval(0.0, 1.0)],
         [t_test, x_182, y_182], [ψ_182(t_test, x_182, y_182)], [S_182, Q_182];
         name = :pde_182,
         metadata = Dict(CoupleType => PDECoupler182)
@@ -1089,7 +1101,7 @@ end
         [D_test(ψ_184(t_test, x_184, y_184)) ~ -S_184 * ψ_184(t_test, x_184, y_184)],
         [ψ_184(0, x_184, y_184) ~ 1.0],
         [t_test ∈ Interval(0.0, 1.0),
-         x_184 ∈ Interval(0.0, 1.0), y_184 ∈ Interval(0.0, 1.0)],
+            x_184 ∈ Interval(0.0, 1.0), y_184 ∈ Interval(0.0, 1.0)],
         [t_test, x_184, y_184], [ψ_184(t_test, x_184, y_184)], [S_184];
         name = :pde_184,
         metadata = Dict(CoupleType => PDECoupler184)
@@ -1165,7 +1177,7 @@ end
         [D_test(u_190(t_test, x_190, y_190)) ~ -R_190 * u_190(t_test, x_190, y_190)],
         [u_190(0, x_190, y_190) ~ 1.0],
         [t_test ∈ Interval(0.0, 1.0),
-         x_190 ∈ Interval(0.0, 1.0), y_190 ∈ Interval(0.0, 1.0)],
+            x_190 ∈ Interval(0.0, 1.0), y_190 ∈ Interval(0.0, 1.0)],
         [t_test, x_190, y_190], [u_190(t_test, x_190, y_190)], [R_190];
         name = :pde_190
     )
@@ -1177,7 +1189,7 @@ end
         [R_190_src(t_test, x_190, y_190) ~ k_190],
         [R_190_src(0, x_190, y_190) ~ 2.0],
         [t_test ∈ Interval(0.0, 1.0),
-         x_190 ∈ Interval(0.0, 1.0), y_190 ∈ Interval(0.0, 1.0)],
+            x_190 ∈ Interval(0.0, 1.0), y_190 ∈ Interval(0.0, 1.0)],
         [t_test, x_190, y_190], [R_190_src(t_test, x_190, y_190)], [k_190];
         name = :src_190
     )
@@ -1212,7 +1224,7 @@ end
         [R_190b(t_test, x_190b, y_190b) ~ k_190b],
         [R_190b(0, x_190b, y_190b) ~ 2.0],
         [t_test ∈ Interval(0.0, 1.0),
-         x_190b ∈ Interval(0.0, 1.0), y_190b ∈ Interval(0.0, 1.0)],
+            x_190b ∈ Interval(0.0, 1.0), y_190b ∈ Interval(0.0, 1.0)],
         [t_test, x_190b, y_190b], [R_190b(t_test, x_190b, y_190b)], [k_190b];
         name = :subsys_a
     )
@@ -1224,11 +1236,12 @@ end
     # (this is what param_to_var does — it creates a new @variables R_190b(t,x,y))
     @variables R_190b_new(..) [description = "Rate promoted"]
     pde_b = PDESystem(
-        [D_test(u_190b(t_test, x_190b, y_190b)) ~ -R_190b_new(t_test, x_190b, y_190b) *
-            u_190b(t_test, x_190b, y_190b)],
+        [D_test(u_190b(t_test, x_190b, y_190b)) ~
+         -R_190b_new(t_test, x_190b, y_190b) *
+         u_190b(t_test, x_190b, y_190b)],
         [u_190b(0, x_190b, y_190b) ~ 1.0],
         [t_test ∈ Interval(0.0, 1.0),
-         x_190b ∈ Interval(0.0, 1.0), y_190b ∈ Interval(0.0, 1.0)],
+            x_190b ∈ Interval(0.0, 1.0), y_190b ∈ Interval(0.0, 1.0)],
         [t_test, x_190b, y_190b],
         [u_190b(t_test, x_190b, y_190b), R_190b(t_test, x_190b, y_190b)],
         [];
@@ -1249,8 +1262,8 @@ end
     # Two ODE systems in different DomainInfo groups (same 1D spatial dimension)
     # with a couple2 method that uses param_to_var.
     @parameters x_194
-    @variables a_194(t_test) = 0.0 b_194(t_test) = 0.0
-    @parameters p_a_194 = 1.0 p_b_194 = 2.0
+    @variables a_194(t_test)=0.0 b_194(t_test)=0.0
+    @parameters p_a_194=1.0 p_b_194=2.0
 
     struct CrossGroupA194
         sys
@@ -1272,12 +1285,12 @@ end
     ode_a = System([D_test(a_194) ~ -p_a_194 * a_194], t_test; name = :ode_a_194,
         metadata = Dict(
             SysDomainInfo => domain_A,
-            CoupleType => CrossGroupA194,
+            CoupleType => CrossGroupA194
         ))
     ode_b = System([D_test(b_194) ~ -p_b_194], t_test; name = :ode_b_194,
         metadata = Dict(
             SysDomainInfo => domain_B,
-            CoupleType => CrossGroupB194,
+            CoupleType => CrossGroupB194
         ))
 
     # couple2: convert p_a_194 in ode_a to a variable and link it to b_194.
@@ -1309,9 +1322,10 @@ end
     # The coupling equation should appear: p_a_194 should be linked to b_194.
     eqs_str = [string(eq) for eq in equations(merged)]
     # Find the a_194 equation — its RHS should reference b_194 (the coupling).
-    a_eq_idx = findfirst(eq -> occursin("a_194", string(eq.lhs)) &&
-                                occursin("Differential(t", string(eq.lhs)),
-                         equations(merged))
+    a_eq_idx = findfirst(
+        eq -> occursin("a_194", string(eq.lhs)) &&
+              occursin("Differential(t", string(eq.lhs)),
+        equations(merged))
     @test !isnothing(a_eq_idx)
     a_eq = equations(merged)[a_eq_idx]
     # The coupling should have added b_194 as a forcing term (via p_a_194 ~ b_194).
@@ -1324,8 +1338,8 @@ end
     # promotion the variables have different numbers of spatial dimensions.
     # This should produce a helpful error.
     @parameters x_194d y_194d
-    @variables c_194d(t_test) = 0.0 d_194d(t_test) = 0.0
-    @parameters p_c_194d = 1.0 p_d_194d = 2.0
+    @variables c_194d(t_test)=0.0 d_194d(t_test)=0.0
+    @parameters p_c_194d=1.0 p_d_194d=2.0
 
     struct CrossGroupC194d
         sys
@@ -1348,12 +1362,12 @@ end
     ode_c = System([D_test(c_194d) ~ -p_c_194d * c_194d], t_test; name = :ode_c_194d,
         metadata = Dict(
             SysDomainInfo => domain_1d,
-            CoupleType => CrossGroupC194d,
+            CoupleType => CrossGroupC194d
         ))
     ode_d = System([D_test(d_194d) ~ -p_d_194d], t_test; name = :ode_d_194d,
         metadata = Dict(
             SysDomainInfo => domain_2d,
-            CoupleType => CrossGroupD194d,
+            CoupleType => CrossGroupD194d
         ))
 
     function EarthSciMLBase.couple2(a::CrossGroupC194d, b::CrossGroupD194d)
