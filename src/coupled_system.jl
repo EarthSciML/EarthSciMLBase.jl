@@ -1,4 +1,5 @@
-export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent, SysDomainInfo, merge_pdesystems, slice_variable
+export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent, SysDomainInfo,
+       merge_pdesystems, slice_variable
 
 """
 A system for composing together other systems using the [`couple`](@ref) function.
@@ -430,6 +431,47 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
             end
         end
 
+        # Phase 1.25: Run couple2 between ODE systems in DIFFERENT DomainInfo groups.
+        # At this point systems are still individual (un-composed) ODEs, so
+        # param_to_var and simple variable access work correctly.
+        # Connector equations are stored separately and transformed after
+        # all groups are promoted to PDESystems (Phase 2.5).
+        cross_group_ode_eqs = Equation[]
+
+        for (i, a) in enumerate(systems)
+            gi = group_of[i]
+            for (j, b) in enumerate(systems)
+                group_of[j] == gi && continue  # Same group handled in Phase 1.
+                i >= j && continue  # Each unordered pair only once, try both directions below.
+                for (x, y, xi, yi) in ((a, b, i, j), (b, a, j, i))
+                    x_t, y_t = get_coupletype(x), get_coupletype(y)
+                    if hasmethod(couple2, (x_t, y_t))
+                        cs = couple2(x_t(x), y_t(y))
+                        @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
+                                                       "This is not the case for $(nameof(x)) ($x_t) and $(nameof(y)) ($y_t); it is instead a $(typeof(cs))."
+                        x_name = nameof(x)
+                        if nameof(cs.from) == x_name
+                            systems[xi] = cs.from
+                            systems[yi] = cs.to
+                        elseif nameof(cs.to) == x_name
+                            systems[xi] = cs.to
+                            systems[yi] = cs.from
+                        else
+                            error("ConnectorSystem from/to system names ($(nameof(cs.from)), $(nameof(cs.to))) " *
+                                  "don't match input system names ($x_name, $(nameof(y)))")
+                        end
+                        for eq in cs.eqs
+                            @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
+                        end
+                        append!(cross_group_ode_eqs, cs.eqs)
+                        push!(handled_cross_pairs, (x_t, y_t))
+                        push!(handled_cross_pairs, (y_t, x_t))
+                    end
+                end
+                a = systems[i]  # Re-sync after coupling.
+            end
+        end
+
         # Phase 1.5: Run cross-type couple2 between individual ODE systems
         # and PDESystems BEFORE composition/promotion. At this point each
         # ODE system is still individual (sys.varname works), and each
@@ -446,7 +488,7 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                     # Try both orderings.
                     for (x_t, y_t, x_sys, y_sys) in [
                         (ode_t, pde_t, ode_sys, pde_sys),
-                        (pde_t, ode_t, pde_sys, ode_sys),
+                        (pde_t, ode_t, pde_sys, ode_sys)
                     ]
                         hasmethod(couple2, (x_t, y_t)) || continue
                         # Try running couple2 with the individual ODE
@@ -481,6 +523,21 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                         push!(handled_cross_pairs, (ode_t, pde_t))
                         push!(handled_cross_pairs, (pde_t, ode_t))
                     end
+                end
+            end
+        end
+
+        # Build a global pre-composition variable registry for cross-group
+        # equation transformation (Phase 2.5). Maps each ODE variable name
+        # to its system name and group index.
+        global_pre_comp_vars = Dict{Symbol, Tuple{Symbol, Int}}()
+        if !isempty(cross_group_ode_eqs)
+            for (i, s) in enumerate(systems)
+                sname = nameof(s)
+                gi = group_of[i]
+                for var in unknowns(s)
+                    vname = Symbolics.tosymbol(var, escape = false)
+                    global_pre_comp_vars[vname] = (sname, gi)
                 end
             end
         end
@@ -595,9 +652,11 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                         # Use the two-step substitute_in_deriv pattern
                         # (same as add_dims) to handle derivatives.
                         new_lhs = Symbolics.substitute_in_deriv(new_lhs, Dict(var => 🔥_cross_couple_temp))
-                        new_lhs = Symbolics.substitute_in_deriv(new_lhs, Dict(🔥_cross_couple_temp => promoted_var))
+                        new_lhs = Symbolics.substitute_in_deriv(
+                            new_lhs, Dict(🔥_cross_couple_temp => promoted_var))
                         new_rhs = Symbolics.substitute_in_deriv(new_rhs, Dict(var => 🔥_cross_couple_temp))
-                        new_rhs = Symbolics.substitute_in_deriv(new_rhs, Dict(🔥_cross_couple_temp => promoted_var))
+                        new_rhs = Symbolics.substitute_in_deriv(
+                            new_rhs, Dict(🔥_cross_couple_temp => promoted_var))
                     end
                     cross_coupling_eqs[k][eq_idx] = new_lhs ~ new_rhs
                 end
@@ -605,6 +664,79 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
             end
 
             push!(all_pdesystems, promoted)
+        end
+
+        # Phase 2.5: Transform cross-group ODE-ODE coupling equations.
+        # Replace bare ODE variables with their promoted counterparts from
+        # the respective groups' promoted PDESystems.
+        if !isempty(cross_group_ode_eqs)
+            n_original_pde = length(sys.pdesystems)
+            @variables 🔥_cross_group_temp
+            for (eq_idx, eq) in enumerate(cross_group_ode_eqs)
+                new_lhs = eq.lhs
+                new_rhs = eq.rhs
+                for var in Symbolics.get_variables(eq)
+                    varname = Symbolics.tosymbol(var, escape = false)
+                    # Try exact match first, then suffix match for namespaced variables.
+                    matched_key = if haskey(global_pre_comp_vars, varname)
+                        varname
+                    else
+                        found = nothing
+                        varname_str = string(varname)
+                        for (k2, _) in global_pre_comp_vars
+                            if endswith(varname_str, string("₊", k2))
+                                found = k2
+                                break
+                            end
+                        end
+                        found
+                    end
+                    matched_key === nothing && continue
+                    sysname, group_idx = global_pre_comp_vars[matched_key]
+                    # The promoted PDE for group_idx is at index
+                    # n_original_pde + group_idx in all_pdesystems.
+                    promoted_pde = all_pdesystems[n_original_pde + group_idx]
+                    promoted_dvs = getfield(promoted_pde, :dvs)
+                    target = string(sysname, "₊", matched_key)
+                    pidx = findfirst(promoted_dvs) do dv
+                        dvname = string(Symbolics.tosymbol(dv, escape = false))
+                        endswith(dvname, target)
+                    end
+                    if pidx === nothing
+                        @warn "Cross-group ODE coupling: could not find promoted counterpart for variable $(varname) (system $(sysname)) in group $group_idx"
+                        continue
+                    end
+                    promoted_var = promoted_dvs[pidx]
+                    new_lhs = Symbolics.substitute_in_deriv(new_lhs, Dict(var => 🔥_cross_group_temp))
+                    new_lhs = Symbolics.substitute_in_deriv(new_lhs, Dict(🔥_cross_group_temp => promoted_var))
+                    new_rhs = Symbolics.substitute_in_deriv(new_rhs, Dict(var => 🔥_cross_group_temp))
+                    new_rhs = Symbolics.substitute_in_deriv(new_rhs, Dict(🔥_cross_group_temp => promoted_var))
+                end
+                cross_group_ode_eqs[eq_idx] = new_lhs ~ new_rhs
+            end
+
+            # Check for dimension mismatches in transformed equations.
+            for eq in cross_group_ode_eqs
+                ndims_set = Set{Int}()
+                for var in Symbolics.get_variables(eq)
+                    uvar = Symbolics.unwrap(var)
+                    if Symbolics.iscall(uvar) &&
+                       !(Symbolics.operation(uvar) isa Differential)
+                        nargs = length(Symbolics.arguments(uvar))
+                        if nargs > 1  # Has spatial dimensions (more than just t)
+                            push!(ndims_set, nargs)
+                        end
+                    end
+                end
+                if length(ndims_set) > 1
+                    error("Cross-group ODE-ODE coupling produced equation with mismatched " *
+                          "spatial dimensions: $eq. When coupling systems with different " *
+                          "spatial dimensions, define a PDE-level couple2 method using " *
+                          "slice_variable instead.")
+                end
+            end
+
+            append!(coupling_eqs, cross_group_ode_eqs)
         end
     end
 
@@ -677,7 +809,6 @@ function _group_by_domaininfo(
     end
     return groups
 end
-
 
 """
 A connector for two systems.
