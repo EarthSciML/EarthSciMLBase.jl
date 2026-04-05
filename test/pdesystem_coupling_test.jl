@@ -1319,17 +1319,26 @@ end
     @test any(s -> occursin("a_194", s), dvs_str)
     @test any(s -> occursin("b_194", s), dvs_str)
 
-    # The coupling equation should appear: p_a_194 should be linked to b_194.
-    eqs_str = [string(eq) for eq in equations(merged)]
-    # Find the a_194 equation — its RHS should reference b_194 (the coupling).
+    # The coupling should produce an algebraic equation linking p_a_194 to b_194.
+    # param_to_var converts p_a_194 from parameter to variable, and the connector
+    # equation p_a_194 ~ b_194 becomes a separate algebraic equation in the merged PDE.
+    eqs = equations(merged)
+
+    # The a_194 equation should reference p_a_194 (the promoted parameter) in its RHS.
     a_eq_idx = findfirst(
         eq -> occursin("a_194", string(eq.lhs)) &&
               occursin("Differential(t", string(eq.lhs)),
-        equations(merged))
+        eqs)
     @test !isnothing(a_eq_idx)
-    a_eq = equations(merged)[a_eq_idx]
-    # The coupling should have added b_194 as a forcing term (via p_a_194 ~ b_194).
-    @test occursin("b_194", string(a_eq.rhs))
+    a_eq = eqs[a_eq_idx]
+    @test occursin("p_a_194", string(a_eq.rhs))
+
+    # There should be an algebraic equation linking p_a_194 to b_194.
+    coupling_eq_idx = findfirst(
+        eq -> occursin("p_a_194", string(eq.lhs)) &&
+              occursin("b_194", string(eq.rhs)),
+        eqs)
+    @test !isnothing(coupling_eq_idx)
 end
 
 @testset "cross-group ODE-ODE coupling with different dimensions errors (#194)" begin
