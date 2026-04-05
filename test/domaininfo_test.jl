@@ -165,6 +165,15 @@ end
     @test length(di.partial_derivative_funcs) == 0
 end
 
+@testset "grid staggering truncation" begin
+    di = DomainInfo(DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3);
+        xrange = 0:0.1:1, yrange = 0:0.1:2)
+
+    # staggering with more elements than spatial dims should be truncated
+    @test grid(di, (true, false, false)) ≈ [-0.05:0.1:1.05, 0.0:0.1:2.0]
+    @test grid(di, (false, true, true)) ≈ [0.0:0.1:1.0, -0.05:0.1:2.05]
+end
+
 @testset "t_ref" begin
     s, e = DateTime(2024, 1, 1), DateTime(2024, 1, 1, 3)
     di = DomainInfo(s, e; xrange = 0:0.1:1, yrange = 0:0.1:2)

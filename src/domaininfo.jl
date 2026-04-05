@@ -177,7 +177,11 @@ function grid(d::DomainInfo{T}) where {T}
 end
 function grid(d::DomainInfo{T}, staggering) where {T}
     endpts = endpoints(d)
-    @assert length(staggering)==length(endpts) "The number of staggering values $(length(staggering)) must match the number of partial independent variables $(length(endpts))."
+    ndims = length(endpts)
+    if length(staggering) > ndims
+        staggering = staggering[1:ndims]
+    end
+    @assert length(staggering)==ndims "The number of staggering values $(length(staggering)) must match the number of partial independent variables $(ndims)."
     @assert all(isa.(staggering, (Bool,))) "Staggering must be a vector of booleans."
     [stag ? range(start = s - d / 2, step = d, length = length(s:d:e) + 1) : s:d:e
      for (stag, (s, e), d) in zip(staggering, endpts, d.grid_spacing)]
