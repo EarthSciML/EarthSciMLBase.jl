@@ -542,11 +542,25 @@ function Base.:(+)(
     ps = parameters(sys)
     toreplace, replacements = replacement_params(ps, pvars(di))
     dvs = add_dims(allvars, dimensions) # Add new dimensions to dependent variables.
-    eqs = substitute(equations(sys), Dict(zip(toreplace, replacements))) # Substitute local coordinate parameters for global ones.
+    # Substitute local coordinate parameters for global ones.
+    # Use substitute_in_deriv for Symbolics v7 compatibility.
+    coord_subs = Dict(zip(toreplace, replacements))
+    eqs = map(equations(sys)) do eq
+        Symbolics.substitute_in_deriv(eq.lhs, coord_subs) ~
+            Symbolics.substitute_in_deriv(eq.rhs, coord_subs)
+    end
     eqs = Vector{Equation}([add_dims(eq, allvars, dimensions) for eq in eqs]) # Add new dimensions to equations.
+    # Collect parameter defaults so MOL can find them.
+    ics = Dict{Any, Any}()
+    for p in ps
+        if ModelingToolkit.hasdefault(p)
+            ics[Symbolics.unwrap(p)] = ModelingToolkit.getdefault(p)
+        end
+    end
     PDESystem(
-        eqs, icbc(di, statevars), domains(di), dimensions, dvs, ps,
-        name = nameof(sys), metadata = ModelingToolkit.get_metadata(sys))
+        eqs, icbc(di, statevars), domains(di), dimensions, dvs, ps;
+        name = nameof(sys), metadata = ModelingToolkit.get_metadata(sys),
+        initial_conditions = ics)
 end
 
 Base.:(+)(

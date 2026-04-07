@@ -1406,3 +1406,103 @@ end
         @test occursin("slice_variable", string(e.msg))
     end
 end
+
+@testset "Issue #198: @constants in connector equations preserved" begin
+    @parameters x198
+    @variables u198(..)
+
+    pde = PDESystem(
+        [D_test(u198(t_test, x198)) ~ -u198(t_test, x198)],
+        [u198(0, x198) ~ 1.0, u198(t_test, 0) ~ 0.0, u198(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x198 ∈ Interval(0.0, 1.0)],
+        [t_test, x198], [u198(t_test, x198)], [];
+        name = :pde198, checks = false
+    )
+
+    @constants c198 = 2.5
+    coupling_eqs = [D_test(u198(t_test, x198)) ~ c198]
+
+    merged = EarthSciMLBase.merge_pdesystems([pde], coupling_eqs; name = :merged198)
+
+    # c198 should be in the merged parameters
+    ps_names = [string(Symbolics.tosymbol(p, escape = false)) for p in merged.ps]
+    @test "c198" in ps_names
+
+    # c198 default should be in initial_conditions
+    ics = merged.initial_conditions
+    @test !isempty(ics)
+    c198_key = first(k for (k, v) in ics if string(Symbolics.tosymbol(Symbolics.wrap(k), escape = false)) == "c198")
+    @test Symbolics.value(ics[c198_key]) == 2.5
+
+    # Derivative artifacts should NOT be collected as parameters
+    @test !any(n -> occursin("ˍ", n), ps_names)
+end
+
+@testset "Issue #199: Namespaced spatial coordinates replaced" begin
+    @parameters x199
+    @variables u199a(..) v199a(..)
+
+    pde1 = PDESystem(
+        [D_test(u199a(t_test, x199)) ~ -u199a(t_test, x199)],
+        [u199a(0, x199) ~ 1.0, u199a(t_test, 0) ~ 0.0, u199a(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x199 ∈ Interval(0.0, 1.0)],
+        [t_test, x199], [u199a(t_test, x199)], [];
+        name = :pde199a, checks = false
+    )
+
+    @parameters subsys199₊x199
+    pde2 = PDESystem(
+        [D_test(v199a(t_test, x199)) ~ -v199a(t_test, subsys199₊x199)],
+        [v199a(0, x199) ~ 1.0, v199a(t_test, 0) ~ 0.0, v199a(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x199 ∈ Interval(0.0, 1.0)],
+        [t_test, x199], [v199a(t_test, x199)], [subsys199₊x199];
+        name = :pde199b, checks = false
+    )
+
+    merged = EarthSciMLBase.merge_pdesystems([pde1, pde2]; name = :merged199)
+
+    # Namespaced coordinate should be removed from parameters
+    ps_names = [string(Symbolics.tosymbol(p, escape = false)) for p in merged.ps]
+    @test !("subsys199₊x199" in ps_names)
+
+    # Equations should not contain the namespaced coordinate
+    for eq in equations(merged)
+        @test !contains(string(eq), "subsys199₊x199")
+    end
+end
+
+@testset "Issue #201: Parameter defaults through PDE pipeline" begin
+    # Test 1: Defaults preserved when promoting ODE to PDE
+    @parameters x201
+    @parameters k201a = 3.0
+    @variables v201a(t_test)
+    @named ode201 = System([D_test(v201a) ~ -k201a * v201a], t_test)
+
+    di201 = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x201 ∈ Interval(0.0, 1.0))
+    )
+    promoted = ode201 + di201
+    @test !isempty(promoted.initial_conditions)
+
+    # Test 2: Defaults preserved through merge
+    @parameters k201b = 5.0
+    @variables u201b(..)
+    pde201 = PDESystem(
+        [D_test(u201b(t_test, x201)) ~ -k201b * u201b(t_test, x201)],
+        [u201b(0, x201) ~ 1.0, u201b(t_test, 0) ~ 0.0, u201b(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x201 ∈ Interval(0.0, 1.0)],
+        [t_test, x201], [u201b(t_test, x201)], [k201b];
+        name = :pde201, checks = false
+    )
+
+    merged = EarthSciMLBase.merge_pdesystems([pde201, promoted]; name = :merged201)
+    ics = merged.initial_conditions
+    @test !isempty(ics)
+
+    # Both parameter defaults should be present
+    ics_strs = Dict(string(Symbolics.tosymbol(Symbolics.wrap(k), escape = false)) => v
+                    for (k, v) in ics)
+    @test haskey(ics_strs, "k201b")
+    @test Symbolics.value(ics_strs["k201b"]) == 5.0
+end

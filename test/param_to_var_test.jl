@@ -87,7 +87,7 @@ end
 
     # System structure should be preserved
     @test length(equations(pdesys2)) == 1
-    @test length(pdesys2.bcs) == 1
+    @test length(pdesys2.bcs) == 2  # original IC + IC for promoted S
     @test length(pdesys2.ivs) == 3
     # S was promoted from parameter to DV
     @test length(pdesys2.dvs) == 2
@@ -114,4 +114,73 @@ end
 
     pdesys2 = param_to_var(pdesys, :S2_var)  # already a DV, should skip
     @test length(pdesys2.ps) == 1  # S2 still a parameter
+end
+
+@testset "PDESystem param_to_var - IC added for promoted variable (Issue #200)" begin
+    using DomainSets
+
+    @parameters px200 [unit = u"m"]
+    @parameters S200 = 1.0 [description = "Speed", unit = u"m/s"]
+    @variables ψ200(..) [description = "Level-set", unit = u"m"]
+
+    pde_eq = [D(ψ200(t, px200)) ~ -S200 * Differential(px200)(ψ200(t, px200))]
+    pde_bcs = [ψ200(0.0, px200) ~ px200]
+    pde_domains = [t ∈ Interval(0.0, 10.0), px200 ∈ Interval(0.0, 100.0)]
+    pdesys = PDESystem(pde_eq, pde_bcs, pde_domains, [t, px200], [ψ200(t, px200)], [S200];
+        name = :pdetest200)
+
+    pdesys2 = param_to_var(pdesys, :S200)
+
+    # S200 should have an IC boundary condition
+    @test length(pdesys2.bcs) == 2  # original IC + new IC for S200
+    s200_bcs = filter(bc -> contains(string(bc.lhs), "S200"), pdesys2.bcs)
+    @test length(s200_bcs) == 1
+    # IC value should be the parameter's default (1.0)
+    @test Symbolics.value(s200_bcs[1].rhs) == 1.0
+end
+
+@testset "PDESystem param_to_var - IC defaults to 0.0 when no default" begin
+    using DomainSets
+    using ModelingToolkit: t_nounits, D_nounits
+
+    @parameters px200b
+    @parameters S200b  # No default value
+    @variables ψ200b(..)
+
+    pde_eq = [D_nounits(ψ200b(t_nounits, px200b)) ~ -S200b]
+    pde_bcs = [ψ200b(0.0, px200b) ~ px200b]
+    pde_domains = [t_nounits ∈ Interval(0.0, 10.0), px200b ∈ Interval(0.0, 100.0)]
+    pdesys = PDESystem(pde_eq, pde_bcs, pde_domains, [t_nounits, px200b],
+        [ψ200b(t_nounits, px200b)], [S200b]; name = :pdetest200b, checks = false)
+
+    pdesys2 = param_to_var(pdesys, :S200b)
+
+    s200b_bcs = filter(bc -> contains(string(bc.lhs), "S200b"), pdesys2.bcs)
+    @test length(s200b_bcs) == 1
+    # IC value should default to 0.0 when parameter has no default
+    @test Symbolics.value(s200b_bcs[1].rhs) == 0.0
+end
+
+@testset "PDESystem param_to_var - initial_conditions forwarded" begin
+    using DomainSets
+    using ModelingToolkit: t_nounits, D_nounits
+
+    @parameters px200c
+    @parameters S200c = 1.0
+    @parameters k200c = 2.0
+    @variables ψ200c(..)
+
+    pde_eq = [D_nounits(ψ200c(t_nounits, px200c)) ~ -S200c * k200c]
+    pde_bcs = [ψ200c(0.0, px200c) ~ px200c]
+    pde_domains = [t_nounits ∈ Interval(0.0, 10.0), px200c ∈ Interval(0.0, 100.0)]
+    pdesys = PDESystem(pde_eq, pde_bcs, pde_domains, [t_nounits, px200c],
+        [ψ200c(t_nounits, px200c)], [S200c, k200c];
+        name = :pdetest200c, checks = false,
+        initial_conditions = Dict(Symbolics.unwrap(k200c) => 2.0))
+
+    # Promote S200c, keep k200c
+    pdesys2 = param_to_var(pdesys, :S200c)
+
+    # k200c should still be in initial_conditions
+    @test !isempty(pdesys2.initial_conditions)
 end

@@ -181,6 +181,28 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
         end
     end
 
+    # Scan all equations (including coupling) for parameters/constants not yet
+    # collected. This catches @constants introduced in couple2 connector equations.
+    existing_ps_names = Set(Symbol(Symbolics.tosymbol(s, escape = false)) for s in all_ps)
+    iv_names = Set(Symbol.(unified_ivs))
+    for eq in all_eqs
+        for var in Symbolics.get_variables(eq)
+            uvar = Symbolics.unwrap(var)
+            vname = Symbol(Symbolics.tosymbol(var, escape = false))
+            vname in existing_ps_names && continue
+            vname in iv_names && continue
+            vname in existing_dv_names && continue
+            # Skip callable terms (DVs) - only collect leaf parameters/constants
+            if Symbolics.iscall(uvar) && !(Symbolics.operation(uvar) isa Differential)
+                continue
+            end
+            # Skip derivative symbols (e.g., uˍt from Differential decomposition)
+            occursin("ˍ", string(vname)) && continue
+            push!(all_ps, var)
+            push!(existing_ps_names, vname)
+        end
+    end
+
     # Resolve DVs created by param_to_var that duplicate existing namespaced DVs.
     # param_to_var creates bare variables like R_H(t,x,y), while the promoted ODE
     # group has namespaced versions like FireSpreadDirection₊R_H(t,x,y).  We
@@ -216,13 +238,15 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
     end
     if !isempty(dv_subs)
         all_eqs = map(all_eqs) do eq
-            Symbolics.substitute(eq.lhs, dv_subs) ~ Symbolics.substitute(eq.rhs, dv_subs)
+            Symbolics.substitute_in_deriv_and_depvar(eq.lhs, dv_subs) ~
+                Symbolics.substitute_in_deriv_and_depvar(eq.rhs, dv_subs)
         end
         all_eqs = filter(eq -> !isequal(eq.lhs, eq.rhs), all_eqs)
         all_eqs = unique_eqs(all_eqs)
 
         all_bcs = map(all_bcs) do bc
-            Symbolics.substitute(bc.lhs, dv_subs) ~ Symbolics.substitute(bc.rhs, dv_subs)
+            Symbolics.substitute_in_deriv_and_depvar(bc.lhs, dv_subs) ~
+                Symbolics.substitute_in_deriv_and_depvar(bc.rhs, dv_subs)
         end
         all_bcs = unique_eqs(all_bcs)
 
@@ -230,7 +254,53 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
         all_dvs = filter(dv -> Symbolics.unwrap(dv) ∉ keys(dv_subs), all_dvs)
     end
 
-    PDESystem(all_eqs, all_bcs, unified_domains, unified_ivs, all_dvs, all_ps; name = name)
+    # Replace namespaced IV copies (e.g., LANDFIRE₊x) with bare IVs (x).
+    # After composition, data source components may retain namespaced copies
+    # of independent variables as parameters. MOL only knows about bare IVs.
+    iv_subs = Dict{Any, Any}()
+    iv_name_to_sym = Dict{String, Any}()
+    for iv in unified_ivs
+        iv_name_to_sym[string(Symbol(iv))] = iv
+    end
+    for p in all_ps
+        p_str = string(Symbolics.tosymbol(p, escape = false))
+        for (iv_name, iv_sym) in iv_name_to_sym
+            if p_str != iv_name && endswith(p_str, "₊" * iv_name)
+                iv_subs[Symbolics.unwrap(p)] = Symbolics.unwrap(iv_sym)
+            end
+        end
+    end
+    if !isempty(iv_subs)
+        # Use substitute_in_deriv_and_depvar because the namespaced IVs
+        # appear as arguments to dependent variable calls (e.g., v(t, LANDFIRE₊x))
+        # and substitute_in_deriv alone doesn't recurse into depvar arguments.
+        all_eqs = map(all_eqs) do eq
+            Symbolics.substitute_in_deriv_and_depvar(eq.lhs, iv_subs) ~
+                Symbolics.substitute_in_deriv_and_depvar(eq.rhs, iv_subs)
+        end
+        all_bcs = map(all_bcs) do bc
+            Symbolics.substitute_in_deriv_and_depvar(bc.lhs, iv_subs) ~
+                Symbolics.substitute_in_deriv_and_depvar(bc.rhs, iv_subs)
+        end
+        all_ps = filter(p -> !(Symbolics.unwrap(p) in keys(iv_subs)), all_ps)
+    end
+
+    # Collect initial_conditions from all PDESystems and parameter defaults
+    # so that MOL's internal pipeline can find parameter values.
+    merged_ics = Dict{Any, Any}()
+    for p in pdesystems
+        for (k, v) in p.initial_conditions
+            merged_ics[k] = v
+        end
+    end
+    for p in all_ps
+        if ModelingToolkit.hasdefault(p)
+            merged_ics[Symbolics.unwrap(p)] = ModelingToolkit.getdefault(p)
+        end
+    end
+
+    PDESystem(all_eqs, all_bcs, unified_domains, unified_ivs, all_dvs, all_ps;
+        name = name, initial_conditions = merged_ics)
 end
 
 # Safely collect parameters, handling NullParameters from SciMLBase.

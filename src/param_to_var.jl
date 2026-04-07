@@ -99,12 +99,16 @@ function param_to_var(sys::ModelingToolkit.PDESystem, ps::Symbol...)
         return sys
     end
 
-    # Manually substitute in equations and boundary conditions
+    # Manually substitute in equations and boundary conditions.
+    # Use substitute_in_deriv_and_depvar for Symbolics v7 compatibility:
+    # substitute alone doesn't recurse into Differential or depvar arguments.
     new_eqs = map(sys.eqs) do eq
-        Symbolics.substitute(eq.lhs, replace) ~ Symbolics.substitute(eq.rhs, replace)
+        Symbolics.substitute_in_deriv_and_depvar(eq.lhs, replace) ~
+            Symbolics.substitute_in_deriv_and_depvar(eq.rhs, replace)
     end
     new_bcs = map(sys.bcs) do bc
-        Symbolics.substitute(bc.lhs, replace) ~ Symbolics.substitute(bc.rhs, replace)
+        Symbolics.substitute_in_deriv_and_depvar(bc.lhs, replace) ~
+            Symbolics.substitute_in_deriv_and_depvar(bc.rhs, replace)
     end
 
     # Remove converted parameters
@@ -116,6 +120,28 @@ function param_to_var(sys::ModelingToolkit.PDESystem, ps::Symbol...)
         push!(new_dvs, Symbolics.wrap(newvar_unwrapped))
     end
 
+    # Add initial condition BCs for promoted variables.
+    # MOL requires a t=0 BC for every dependent variable.
+    t_iv = sys.ivs[1]
+    spatial_ivs = sys.ivs[2:end]
+    t_domain = first(d for d in sys.domain if isequal(d.variables, t_iv))
+    t_start = DomainSets.infimum(t_domain.domain)
+    new_bcs = collect(new_bcs) # ensure mutable
+    for (param_unwrapped, newvar_unwrapped) in replace
+        param = Symbolics.wrap(param_unwrapped)
+        op = Symbolics.operation(newvar_unwrapped)
+        ic_val = ModelingToolkit.hasdefault(param) ? ModelingToolkit.getdefault(param) : 0.0
+        push!(new_bcs, Symbolics.wrap(op)(t_start, spatial_ivs...) ~ ic_val)
+    end
+
+    # Forward initial_conditions, removing converted parameters
+    new_ics = Dict{Any, Any}()
+    for (k, v) in sys.initial_conditions
+        if !(k in keys(replace))
+            new_ics[k] = v
+        end
+    end
+
     PDESystem(new_eqs, new_bcs, sys.domain, sys.ivs, new_dvs, new_ps;
-        name = nameof(sys), metadata = sys.metadata)
+        name = nameof(sys), metadata = sys.metadata, initial_conditions = new_ics)
 end
