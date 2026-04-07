@@ -1589,3 +1589,38 @@ end
     # Total BCs: 3 from pde1 + 2 spatial from pde2 + 1 generated IC for v200 = 6
     @test length(merged.bcs) == 6
 end
+
+@testset "Issue #200: algebraic DVs don't get spurious ICs" begin
+    @parameters x200b
+    @variables u200b(..) w200b(..)
+
+    # u200b has a differential equation and an IC
+    pde1 = PDESystem(
+        [D_test(u200b(t_test, x200b)) ~ -u200b(t_test, x200b)],
+        [u200b(0, x200b) ~ 1.0, u200b(t_test, 0) ~ 0.0, u200b(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x200b ∈ Interval(0.0, 1.0)],
+        [t_test, x200b], [u200b(t_test, x200b)], [];
+        name = :pde200b1, checks = false
+    )
+
+    # w200b is an algebraic variable (no D(w200b), no IC)
+    pde2 = PDESystem(
+        [w200b(t_test, x200b) ~ 2.0 * u200b(t_test, x200b)],
+        Equation[],
+        [t_test ∈ Interval(0.0, 1.0), x200b ∈ Interval(0.0, 1.0)],
+        [t_test, x200b], [w200b(t_test, x200b)], [];
+        name = :pde200b2, checks = false
+    )
+
+    merged = EarthSciMLBase.merge_pdesystems([pde1, pde2]; name = :merged200b)
+
+    # w200b should NOT get an IC because it's algebraic (no D(w200b) in equations)
+    w200b_ics = filter(merged.bcs) do bc
+        s = string(bc.lhs)
+        contains(s, "w200b") && !contains(s, "t")
+    end
+    @test length(w200b_ics) == 0
+
+    # Total BCs should be 3 (from pde1 only, no spurious IC for w200b)
+    @test length(merged.bcs) == 3
+end

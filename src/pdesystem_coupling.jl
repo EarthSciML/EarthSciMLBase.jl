@@ -326,7 +326,25 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
         end
         return false
     end
+    # Only add ICs for DVs that have a time-derivative equation (D(dv) ~ ...).
+    # Algebraic DVs (defined by dv ~ expression) are determined by their
+    # algebraic equation and don't need ICs.
+    dvs_with_deriv = Set{Any}()
+    for eq in all_eqs
+        for var in Symbolics.get_variables(eq)
+            uvar = Symbolics.unwrap(var)
+            if Symbolics.iscall(uvar) && Symbolics.operation(uvar) isa Differential
+                # The argument of D(...) is the DV call - extract its operator.
+                inner = Symbolics.arguments(uvar)[1]
+                if Symbolics.iscall(Symbolics.unwrap(inner))
+                    push!(dvs_with_deriv, Symbolics.operation(Symbolics.unwrap(inner)))
+                end
+            end
+        end
+    end
     for dv in all_dvs
+        dv_op = Symbolics.operation(Symbolics.unwrap(dv))
+        dv_op in dvs_with_deriv || continue  # skip algebraic DVs
         _has_ic(dv, all_bcs, t_iv) && continue
         uvar = Symbolics.unwrap(dv)
         op = Symbolics.operation(uvar)
