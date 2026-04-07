@@ -299,6 +299,42 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
         end
     end
 
+    # Add t=0 ICs for any DVs that lack one. This handles variables
+    # promoted by param_to_var whose ICs were lost during DV dedup,
+    # as well as any other DVs missing initial conditions.
+    t_iv = unified_ivs[1]
+    t_domain = first(d for d in unified_domains if isequal(d.variables, t_iv))
+    t_start = DomainSets.infimum(t_domain.domain)
+    # Check each DV: see if any existing BC is a t=0 IC for this DV.
+    # An IC has the DV's operator called with a numeric first argument
+    # (the t boundary), not the symbolic t variable.
+    function _has_ic(dv, bcs, t_iv)
+        dv_op = Symbolics.operation(Symbolics.unwrap(dv))
+        for bc in bcs
+            for var in Symbolics.get_variables(bc.lhs)
+                uvar = Symbolics.unwrap(var)
+                Symbolics.iscall(uvar) || continue
+                Symbolics.operation(uvar) isa Differential && continue
+                Symbolics.operation(uvar) === dv_op || continue
+                # Check if the first argument is NOT the symbolic t variable
+                # (i.e., it's a numeric boundary value like 0 or 0.0).
+                first_arg = Symbolics.arguments(uvar)[1]
+                if !isequal(first_arg, Symbolics.unwrap(t_iv))
+                    return true
+                end
+            end
+        end
+        return false
+    end
+    for dv in all_dvs
+        _has_ic(dv, all_bcs, t_iv) && continue
+        uvar = Symbolics.unwrap(dv)
+        op = Symbolics.operation(uvar)
+        dv_args = Symbolics.arguments(uvar)
+        dv_spatial = dv_args[2:end]
+        push!(all_bcs, Symbolics.wrap(op)(t_start, dv_spatial...) ~ 0.0)
+    end
+
     PDESystem(all_eqs, all_bcs, unified_domains, unified_ivs, all_dvs, all_ps;
         name = name, initial_conditions = merged_ics)
 end

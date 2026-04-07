@@ -120,21 +120,10 @@ function param_to_var(sys::ModelingToolkit.PDESystem, ps::Symbol...)
         push!(new_dvs, Symbolics.wrap(newvar_unwrapped))
     end
 
-    # Add initial condition BCs for promoted variables.
-    # MOL requires a t=0 BC for every dependent variable.
-    t_iv = sys.ivs[1]
-    spatial_ivs = sys.ivs[2:end]
-    t_domain = first(d for d in sys.domain if isequal(d.variables, t_iv))
-    t_start = DomainSets.infimum(t_domain.domain)
-    new_bcs = collect(new_bcs) # ensure mutable
-    for (param_unwrapped, newvar_unwrapped) in replace
-        param = Symbolics.wrap(param_unwrapped)
-        op = Symbolics.operation(newvar_unwrapped)
-        ic_val = ModelingToolkit.hasdefault(param) ? ModelingToolkit.getdefault(param) : 0.0
-        push!(new_bcs, Symbolics.wrap(op)(t_start, spatial_ivs...) ~ ic_val)
-    end
-
-    # Forward initial_conditions, removing converted parameters
+    # Forward initial_conditions, removing converted parameters.
+    # Note: ICs for promoted variables are NOT added here because the DV
+    # names may change during merge_pdesystems (DV dedup). Instead,
+    # merge_pdesystems adds ICs for any DVs that lack them.
     new_ics = Dict{Any, Any}()
     for (k, v) in sys.initial_conditions
         if !(k in keys(replace))

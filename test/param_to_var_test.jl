@@ -87,7 +87,7 @@ end
 
     # System structure should be preserved
     @test length(equations(pdesys2)) == 1
-    @test length(pdesys2.bcs) == 2  # original IC + IC for promoted S
+    @test length(pdesys2.bcs) == 1  # original IC only; promoted var ICs added by merge_pdesystems
     @test length(pdesys2.ivs) == 3
     # S was promoted from parameter to DV
     @test length(pdesys2.dvs) == 2
@@ -116,7 +116,7 @@ end
     @test length(pdesys2.ps) == 1  # S2 still a parameter
 end
 
-@testset "PDESystem param_to_var - IC added for promoted variable (Issue #200)" begin
+@testset "PDESystem param_to_var - ICs not added (deferred to merge_pdesystems)" begin
     using DomainSets
 
     @parameters px200 [unit = u"m"]
@@ -131,34 +131,9 @@ end
 
     pdesys2 = param_to_var(pdesys, :S200)
 
-    # S200 should have an IC boundary condition
-    @test length(pdesys2.bcs) == 2  # original IC + new IC for S200
-    s200_bcs = filter(bc -> contains(string(bc.lhs), "S200"), pdesys2.bcs)
-    @test length(s200_bcs) == 1
-    # IC value should be the parameter's default (1.0)
-    @test Symbolics.value(s200_bcs[1].rhs) == 1.0
-end
-
-@testset "PDESystem param_to_var - IC defaults to 0.0 when no default" begin
-    using DomainSets
-    using ModelingToolkit: t_nounits, D_nounits
-
-    @parameters px200b
-    @parameters S200b  # No default value
-    @variables ψ200b(..)
-
-    pde_eq = [D_nounits(ψ200b(t_nounits, px200b)) ~ -S200b]
-    pde_bcs = [ψ200b(0.0, px200b) ~ px200b]
-    pde_domains = [t_nounits ∈ Interval(0.0, 10.0), px200b ∈ Interval(0.0, 100.0)]
-    pdesys = PDESystem(pde_eq, pde_bcs, pde_domains, [t_nounits, px200b],
-        [ψ200b(t_nounits, px200b)], [S200b]; name = :pdetest200b, checks = false)
-
-    pdesys2 = param_to_var(pdesys, :S200b)
-
-    s200b_bcs = filter(bc -> contains(string(bc.lhs), "S200b"), pdesys2.bcs)
-    @test length(s200b_bcs) == 1
-    # IC value should default to 0.0 when parameter has no default
-    @test Symbolics.value(s200b_bcs[1].rhs) == 0.0
+    # param_to_var should NOT add ICs (they're added by merge_pdesystems instead,
+    # because DV names may change during merge/dedup).
+    @test length(pdesys2.bcs) == 1  # only original IC
 end
 
 @testset "PDESystem param_to_var - initial_conditions forwarded" begin

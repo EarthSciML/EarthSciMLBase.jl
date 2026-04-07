@@ -1556,3 +1556,36 @@ end
     @test haskey(ics_strs, "k201b")
     @test Symbolics.value(ics_strs["k201b"]) == 5.0
 end
+
+@testset "Issue #200: merge_pdesystems adds missing ICs for DVs" begin
+    @parameters x200
+    @variables u200(..) v200(..)
+
+    pde1 = PDESystem(
+        [D_test(u200(t_test, x200)) ~ -u200(t_test, x200)],
+        [u200(0, x200) ~ 1.0, u200(t_test, 0) ~ 0.0, u200(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x200 ∈ Interval(0.0, 1.0)],
+        [t_test, x200], [u200(t_test, x200)], [];
+        name = :pde200a, checks = false
+    )
+
+    # v200 has NO t=0 IC (simulates a param_to_var promoted variable)
+    pde2 = PDESystem(
+        [D_test(v200(t_test, x200)) ~ -v200(t_test, x200)],
+        [v200(t_test, 0) ~ 0.0, v200(t_test, 1) ~ 0.0],  # spatial BCs only, no IC
+        [t_test ∈ Interval(0.0, 1.0), x200 ∈ Interval(0.0, 1.0)],
+        [t_test, x200], [v200(t_test, x200)], [];
+        name = :pde200b, checks = false
+    )
+
+    merged = EarthSciMLBase.merge_pdesystems([pde1, pde2]; name = :merged200)
+
+    # v200 should now have a t=0 IC added by merge_pdesystems
+    v200_ics = filter(bc -> contains(string(bc.lhs), "v200") &&
+                            !contains(string(bc.lhs), "t"),  # IC has numeric t, not symbolic t
+                      merged.bcs)
+    @test length(v200_ics) >= 1
+
+    # Total BCs: 3 from pde1 + 2 spatial from pde2 + 1 generated IC for v200 = 6
+    @test length(merged.bcs) == 6
+end
