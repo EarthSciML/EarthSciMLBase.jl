@@ -129,7 +129,9 @@ end
         name = :pde2
     )
 
-    # Coupling: add +v to u's equation and -u to v's equation
+    # Coupling equations are added as separate equations (not merged additively).
+    # This matches the ODE path where couple2 connector equations are composed
+    # via MTK's compose without additive merge.
     coupling = [
         D_test(u(t_test, x)) ~ v(t_test, x),
         D_test(v(t_test, x)) ~ -u(t_test, x)
@@ -138,14 +140,51 @@ end
     merged = merge_pdesystems([pde1, pde2], coupling)
     eqs = equations(merged)
 
-    @test length(eqs) == 2
-    # Check that coupling terms were added to existing equations
-    u_eq = eqs[findfirst(eq -> isequal(eq.lhs, D_test(u(t_test, x))), eqs)]
-    v_eq = eqs[findfirst(eq -> isequal(eq.lhs, D_test(v(t_test, x))), eqs)]
-    u_rhs_str = string(u_eq.rhs)
-    v_rhs_str = string(v_eq.rhs)
-    @test occursin("v(t, x)", u_rhs_str)
-    @test occursin("u(t, x)", v_rhs_str)
+    @test length(eqs) == 4  # 2 original + 2 coupling
+    # Coupling equations should exist as separate equations
+    @test any(eq -> isequal(eq.lhs, D_test(u(t_test, x))) &&
+                    occursin("v(t, x)", string(eq.rhs)), eqs)
+    @test any(eq -> isequal(eq.lhs, D_test(v(t_test, x))) &&
+                    occursin("u(t, x)", string(eq.rhs)), eqs)
+end
+
+@testset "merge_pdesystems - connector equations not merged additively" begin
+    @parameters x_conn
+    @variables u_conn(..) v_conn(..)
+    @parameters k_conn
+
+    # u_conn has a defining algebraic equation: u_conn ~ k_conn * v_conn
+    pde1 = PDESystem(
+        [u_conn(t_test, x_conn) ~ k_conn * v_conn(t_test, x_conn)],
+        Equation[],
+        [t_test ∈ Interval(0.0, 1.0), x_conn ∈ Interval(0.0, 1.0)],
+        [t_test, x_conn], [u_conn(t_test, x_conn)], [k_conn];
+        name = :pde_conn1, checks = false
+    )
+    pde2 = PDESystem(
+        [D_test(v_conn(t_test, x_conn)) ~ -v_conn(t_test, x_conn)],
+        [v_conn(0, x_conn) ~ 1.0, v_conn(t_test, 0) ~ 0.0, v_conn(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_conn ∈ Interval(0.0, 1.0)],
+        [t_test, x_conn], [v_conn(t_test, x_conn)], [];
+        name = :pde_conn2, checks = false
+    )
+
+    # Connector equation with same LHS as existing algebraic equation.
+    # This should NOT be merged additively (would create self-referential eq).
+    connector_eq = [u_conn(t_test, x_conn) ~ 2.0 * v_conn(t_test, x_conn)]
+
+    merged = EarthSciMLBase.merge_pdesystems([pde1, pde2], connector_eq; name = :merged_conn)
+    eqs = equations(merged)
+
+    # Both algebraic equations should exist (the original and the connector),
+    # NOT a merged self-referential equation.
+    for eq in eqs
+        eq_str = string(eq)
+        # Check no equation has u_conn on BOTH sides
+        if contains(string(eq.lhs), "u_conn")
+            @test !contains(string(eq.rhs), "u_conn")
+        end
+    end
 end
 
 @testset "couple() accepts PDESystems" begin
@@ -209,15 +248,15 @@ end
     merged = convert(PDESystem, cs)
 
     eqs = equations(merged)
-    @test length(eqs) == 2
+    @test length(eqs) == 4  # 2 original + 2 coupling (separate equations)
     @test length(merged.dvs) == 2
     @test length(merged.bcs) == 6
 
-    # Verify coupling terms are present in equations
-    u_eq = eqs[findfirst(eq -> isequal(eq.lhs, D_test(u(t_test, x))), eqs)]
-    v_eq = eqs[findfirst(eq -> isequal(eq.lhs, D_test(v(t_test, x))), eqs)]
-    @test occursin("v(t, x)", string(u_eq.rhs))
-    @test occursin("u(t, x)", string(v_eq.rhs))
+    # Verify coupling equations are present as separate equations
+    @test any(eq -> isequal(eq.lhs, D_test(u(t_test, x))) &&
+                    occursin("v(t, x)", string(eq.rhs)), eqs)
+    @test any(eq -> isequal(eq.lhs, D_test(v(t_test, x))) &&
+                    occursin("u(t, x)", string(eq.rhs)), eqs)
 end
 
 @testset "couple() PDESystem + ODE System + DomainInfo" begin
@@ -380,16 +419,14 @@ end
         name = :pde_3d
     )
 
-    # Coupling: add v at z=0 to u's equation
+    # Coupling: connector equation added as-is (not merged additively)
     coupling = [D_test(u(t_test, x, y)) ~ v(t_test, x, y, 0.0)]
     merged = merge_pdesystems([pde_2d, pde_3d], coupling)
 
-    @test length(equations(merged)) == 2
+    @test length(equations(merged)) == 3  # 2 original + 1 coupling
     @test length(merged.ivs) == 4  # t, x, y, z
-    # Verify coupling term was added to u's equation
-    u_eq = equations(merged)[findfirst(
-        eq -> occursin("u(t, x, y)", string(eq.lhs)), equations(merged))]
-    @test occursin("v(t, x, y, 0.0)", string(u_eq.rhs))
+    # Verify coupling equation is present as a separate equation
+    @test any(eq -> occursin("v(t, x, y, 0.0)", string(eq.rhs)), equations(merged))
 end
 
 @testset "slice_variable" begin
@@ -456,14 +493,12 @@ end
     cs = couple(pde_2d, pde_3d)
     merged = convert(PDESystem, cs)
 
-    @test length(equations(merged)) == 2
+    @test length(equations(merged)) == 3  # 2 original + 1 coupling
     @test length(merged.ivs) == 4  # t, x, y, z
     @test length(merged.dvs) == 2
 
-    # Verify coupling term in u's equation
-    u_eq = equations(merged)[findfirst(
-        eq -> occursin("u(t, x, y)", string(eq.lhs)), equations(merged))]
-    @test occursin("v(t, x, y, 0.0)", string(u_eq.rhs))
+    # Verify coupling equation is present
+    @test any(eq -> occursin("v(t, x, y, 0.0)", string(eq.rhs)), equations(merged))
 end
 
 @testset "SysDomainInfo metadata" begin
@@ -717,12 +752,10 @@ end
     # Verify coupling: u_cg's equation should reference the sliced v_cg variable,
     # and there should be a slice equation defining v_cg(t, x_cg, y_cg) ~ v_cg(t, x_cg, y_cg, 0.0).
     eqs = equations(merged)
-    u_eq = eqs[findfirst(
-        eq -> occursin("u_cg(t, x_cg, y_cg)", string(eq.lhs)) &&
-              occursin("Differential(t", string(eq.lhs)),
-        eqs)]
-    # The u_cg equation should have a coupling term (the sliced v_cg)
-    @test occursin("v_cg", string(u_eq.rhs))
+    # There should be a coupling equation with D(u_cg) on LHS and v_cg on RHS
+    @test any(eq -> occursin("u_cg", string(eq.lhs)) &&
+                    occursin("Differential(t", string(eq.lhs)) &&
+                    occursin("v_cg", string(eq.rhs)), eqs)
     # There should be a slice equation with 0.0 substituted
     slice_eq = findfirst(
         eq -> occursin("0.0", string(eq.rhs)) &&
@@ -846,12 +879,10 @@ end
         eqs)
     @test !isnothing(slice_eq_found)
 
-    # The coupling term should be added to u_sv's equation
-    u_eq = eqs[findfirst(
-        eq -> occursin("u_sv(t, x_sv, y_sv)", string(eq.lhs)) &&
-              occursin("Differential(t", string(eq.lhs)),
-        eqs)]
-    @test occursin("v_sv", string(u_eq.rhs))
+    # There should be a coupling equation with D(u_sv) on LHS and v_sv on RHS
+    @test any(eq -> occursin("u_sv", string(eq.lhs)) &&
+                    occursin("Differential(t", string(eq.lhs)) &&
+                    occursin("v_sv", string(eq.rhs)), eqs)
 end
 
 @testset "new DV from coupling equation added to dvs (#183)" begin

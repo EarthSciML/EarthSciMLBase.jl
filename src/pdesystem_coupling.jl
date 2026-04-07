@@ -146,14 +146,12 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
         append!(all_eqs, equations(p))
     end
 
-    # Apply coupling equations
+    # Add coupling equations from couple2 connectors as new equations.
+    # In the ODE path, couple2 connector equations are composed via MTK's
+    # compose — no additive merge. The PDE path should work the same way.
     for ceq in coupling_eqs
-        idx = findfirst(eq -> isequal(eq.lhs, ceq.lhs), all_eqs)
-        if idx !== nothing
-            all_eqs[idx] = all_eqs[idx].lhs ~ all_eqs[idx].rhs + ceq.rhs
-        else
-            push!(all_eqs, ceq)
-        end
+        isequal(ceq.lhs, ceq.rhs) && continue  # skip trivial connectors
+        push!(all_eqs, ceq)
     end
 
     # Merge BCs, DVs, Ps (deduplicate)
