@@ -1407,6 +1407,56 @@ end
     end
 end
 
+@testset "cross-group couple2 deferred when method expects PDESystem" begin
+    # A couple2 method that accesses .dvs (which only exists on PDESystem)
+    # should be silently skipped during Phase 1.25 (ODE-ODE cross-group)
+    # and deferred to PDE-phase dispatch.
+    @parameters x_defer y_defer
+    @variables e_defer(t_test)=0.0 f_defer(t_test)=0.0
+
+    struct DeferTestE
+        sys
+    end
+    struct DeferTestF
+        sys
+    end
+
+    domain_e = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_defer ∈ Interval(0.0, 1.0))
+    )
+    domain_f = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_defer ∈ Interval(0.0, 1.0), y_defer ∈ Interval(0.0, 1.0))
+    )
+
+    ode_e = System([D_test(e_defer) ~ -e_defer], t_test; name = :ode_e_defer,
+        metadata = Dict(SysDomainInfo => domain_e, CoupleType => DeferTestE))
+    ode_f = System([D_test(f_defer) ~ -f_defer], t_test; name = :ode_f_defer,
+        metadata = Dict(SysDomainInfo => domain_f, CoupleType => DeferTestF))
+
+    # This couple2 accesses .dvs which only exists on PDESystem.
+    # It should NOT crash during Phase 1.25; it should be deferred.
+    function EarthSciMLBase.couple2(a::DeferTestE, b::DeferTestF)
+        dvs = b.sys.dvs  # This will error if sys is an ODE System
+        ConnectorSystem(Equation[], a.sys, b.sys)
+    end
+
+    @variables w_defer(..)
+    Dx_defer = Differential(x_defer)
+    pde_defer = PDESystem(
+        [D_test(w_defer(t_test, x_defer)) ~ Dx_defer(w_defer(t_test, x_defer))],
+        [w_defer(0, x_defer) ~ 1.0, w_defer(t_test, 0) ~ 0.0, w_defer(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_defer ∈ Interval(0.0, 1.0)],
+        [t_test, x_defer], [w_defer(t_test, x_defer)], [];
+        name = :pde_defer
+    )
+
+    # This should not throw — Phase 1.25 should catch the error and defer.
+    cs = couple(pde_defer, ode_e, ode_f, domain_e)
+    @test cs isa CoupledSystem
+end
+
 @testset "Issue #198: @constants in connector equations preserved" begin
     @parameters x198
     @variables u198(..)
