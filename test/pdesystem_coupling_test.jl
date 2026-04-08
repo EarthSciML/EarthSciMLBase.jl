@@ -129,7 +129,9 @@ end
         name = :pde2
     )
 
-    # Coupling: add +v to u's equation and -u to v's equation
+    # Coupling equations are added as separate equations (not merged additively).
+    # This matches the ODE path where couple2 connector equations are composed
+    # via MTK's compose without additive merge.
     coupling = [
         D_test(u(t_test, x)) ~ v(t_test, x),
         D_test(v(t_test, x)) ~ -u(t_test, x)
@@ -138,14 +140,51 @@ end
     merged = merge_pdesystems([pde1, pde2], coupling)
     eqs = equations(merged)
 
-    @test length(eqs) == 2
-    # Check that coupling terms were added to existing equations
-    u_eq = eqs[findfirst(eq -> isequal(eq.lhs, D_test(u(t_test, x))), eqs)]
-    v_eq = eqs[findfirst(eq -> isequal(eq.lhs, D_test(v(t_test, x))), eqs)]
-    u_rhs_str = string(u_eq.rhs)
-    v_rhs_str = string(v_eq.rhs)
-    @test occursin("v(t, x)", u_rhs_str)
-    @test occursin("u(t, x)", v_rhs_str)
+    @test length(eqs) == 4  # 2 original + 2 coupling
+    # Coupling equations should exist as separate equations
+    @test any(eq -> isequal(eq.lhs, D_test(u(t_test, x))) &&
+                    occursin("v(t, x)", string(eq.rhs)), eqs)
+    @test any(eq -> isequal(eq.lhs, D_test(v(t_test, x))) &&
+                    occursin("u(t, x)", string(eq.rhs)), eqs)
+end
+
+@testset "merge_pdesystems - connector equations not merged additively" begin
+    @parameters x_conn
+    @variables u_conn(..) v_conn(..)
+    @parameters k_conn
+
+    # u_conn has a defining algebraic equation: u_conn ~ k_conn * v_conn
+    pde1 = PDESystem(
+        [u_conn(t_test, x_conn) ~ k_conn * v_conn(t_test, x_conn)],
+        Equation[],
+        [t_test ∈ Interval(0.0, 1.0), x_conn ∈ Interval(0.0, 1.0)],
+        [t_test, x_conn], [u_conn(t_test, x_conn)], [k_conn];
+        name = :pde_conn1, checks = false
+    )
+    pde2 = PDESystem(
+        [D_test(v_conn(t_test, x_conn)) ~ -v_conn(t_test, x_conn)],
+        [v_conn(0, x_conn) ~ 1.0, v_conn(t_test, 0) ~ 0.0, v_conn(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_conn ∈ Interval(0.0, 1.0)],
+        [t_test, x_conn], [v_conn(t_test, x_conn)], [];
+        name = :pde_conn2, checks = false
+    )
+
+    # Connector equation with same LHS as existing algebraic equation.
+    # This should NOT be merged additively (would create self-referential eq).
+    connector_eq = [u_conn(t_test, x_conn) ~ 2.0 * v_conn(t_test, x_conn)]
+
+    merged = EarthSciMLBase.merge_pdesystems([pde1, pde2], connector_eq; name = :merged_conn)
+    eqs = equations(merged)
+
+    # Both algebraic equations should exist (the original and the connector),
+    # NOT a merged self-referential equation.
+    for eq in eqs
+        eq_str = string(eq)
+        # Check no equation has u_conn on BOTH sides
+        if contains(string(eq.lhs), "u_conn")
+            @test !contains(string(eq.rhs), "u_conn")
+        end
+    end
 end
 
 @testset "couple() accepts PDESystems" begin
@@ -209,15 +248,15 @@ end
     merged = convert(PDESystem, cs)
 
     eqs = equations(merged)
-    @test length(eqs) == 2
+    @test length(eqs) == 4  # 2 original + 2 coupling (separate equations)
     @test length(merged.dvs) == 2
     @test length(merged.bcs) == 6
 
-    # Verify coupling terms are present in equations
-    u_eq = eqs[findfirst(eq -> isequal(eq.lhs, D_test(u(t_test, x))), eqs)]
-    v_eq = eqs[findfirst(eq -> isequal(eq.lhs, D_test(v(t_test, x))), eqs)]
-    @test occursin("v(t, x)", string(u_eq.rhs))
-    @test occursin("u(t, x)", string(v_eq.rhs))
+    # Verify coupling equations are present as separate equations
+    @test any(eq -> isequal(eq.lhs, D_test(u(t_test, x))) &&
+                    occursin("v(t, x)", string(eq.rhs)), eqs)
+    @test any(eq -> isequal(eq.lhs, D_test(v(t_test, x))) &&
+                    occursin("u(t, x)", string(eq.rhs)), eqs)
 end
 
 @testset "couple() PDESystem + ODE System + DomainInfo" begin
@@ -380,16 +419,14 @@ end
         name = :pde_3d
     )
 
-    # Coupling: add v at z=0 to u's equation
+    # Coupling: connector equation added as-is (not merged additively)
     coupling = [D_test(u(t_test, x, y)) ~ v(t_test, x, y, 0.0)]
     merged = merge_pdesystems([pde_2d, pde_3d], coupling)
 
-    @test length(equations(merged)) == 2
+    @test length(equations(merged)) == 3  # 2 original + 1 coupling
     @test length(merged.ivs) == 4  # t, x, y, z
-    # Verify coupling term was added to u's equation
-    u_eq = equations(merged)[findfirst(
-        eq -> occursin("u(t, x, y)", string(eq.lhs)), equations(merged))]
-    @test occursin("v(t, x, y, 0.0)", string(u_eq.rhs))
+    # Verify coupling equation is present as a separate equation
+    @test any(eq -> occursin("v(t, x, y, 0.0)", string(eq.rhs)), equations(merged))
 end
 
 @testset "slice_variable" begin
@@ -456,14 +493,12 @@ end
     cs = couple(pde_2d, pde_3d)
     merged = convert(PDESystem, cs)
 
-    @test length(equations(merged)) == 2
+    @test length(equations(merged)) == 3  # 2 original + 1 coupling
     @test length(merged.ivs) == 4  # t, x, y, z
     @test length(merged.dvs) == 2
 
-    # Verify coupling term in u's equation
-    u_eq = equations(merged)[findfirst(
-        eq -> occursin("u(t, x, y)", string(eq.lhs)), equations(merged))]
-    @test occursin("v(t, x, y, 0.0)", string(u_eq.rhs))
+    # Verify coupling equation is present
+    @test any(eq -> occursin("v(t, x, y, 0.0)", string(eq.rhs)), equations(merged))
 end
 
 @testset "SysDomainInfo metadata" begin
@@ -717,12 +752,10 @@ end
     # Verify coupling: u_cg's equation should reference the sliced v_cg variable,
     # and there should be a slice equation defining v_cg(t, x_cg, y_cg) ~ v_cg(t, x_cg, y_cg, 0.0).
     eqs = equations(merged)
-    u_eq = eqs[findfirst(
-        eq -> occursin("u_cg(t, x_cg, y_cg)", string(eq.lhs)) &&
-              occursin("Differential(t", string(eq.lhs)),
-        eqs)]
-    # The u_cg equation should have a coupling term (the sliced v_cg)
-    @test occursin("v_cg", string(u_eq.rhs))
+    # There should be a coupling equation with D(u_cg) on LHS and v_cg on RHS
+    @test any(eq -> occursin("u_cg", string(eq.lhs)) &&
+                    occursin("Differential(t", string(eq.lhs)) &&
+                    occursin("v_cg", string(eq.rhs)), eqs)
     # There should be a slice equation with 0.0 substituted
     slice_eq = findfirst(
         eq -> occursin("0.0", string(eq.rhs)) &&
@@ -846,12 +879,10 @@ end
         eqs)
     @test !isnothing(slice_eq_found)
 
-    # The coupling term should be added to u_sv's equation
-    u_eq = eqs[findfirst(
-        eq -> occursin("u_sv(t, x_sv, y_sv)", string(eq.lhs)) &&
-              occursin("Differential(t", string(eq.lhs)),
-        eqs)]
-    @test occursin("v_sv", string(u_eq.rhs))
+    # There should be a coupling equation with D(u_sv) on LHS and v_sv on RHS
+    @test any(eq -> occursin("u_sv", string(eq.lhs)) &&
+                    occursin("Differential(t", string(eq.lhs)) &&
+                    occursin("v_sv", string(eq.rhs)), eqs)
 end
 
 @testset "new DV from coupling equation added to dvs (#183)" begin
@@ -931,8 +962,7 @@ end
     function EarthSciMLBase.couple2(r::RothermelTestCoupler, ls::LevelSetTestCoupler)
         r_sys, ls_sys = r.sys, ls.sys
         ls_sys = param_to_var(ls_sys, :S_ct)
-        eq_vars = collect(Symbolics.get_variables(equations(ls_sys)[1]))
-        S_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :S_ct, eq_vars))
+        S_sym = get_promoted_dv(ls_sys, :S_ct)
         return ConnectorSystem([S_sym ~ r_sys.R_ct], ls_sys, r_sys)
     end
 
@@ -1035,8 +1065,7 @@ end
     function EarthSciMLBase.couple2(a::ODE_A_Coupler182, b::PDECoupler182)
         a_sys, b_sys = a.sys, b.sys
         b_sys = param_to_var(b_sys, :S_182)
-        eq_vars = collect(Symbolics.get_variables(equations(b_sys)[1]))
-        S_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :S_182, eq_vars))
+        S_sym = get_promoted_dv(b_sys, :S_182)
         return ConnectorSystem([S_sym ~ a_sys.R_182], b_sys, a_sys)
     end
 
@@ -1044,8 +1073,7 @@ end
     function EarthSciMLBase.couple2(b::ODE_B_Coupler182, p::PDECoupler182)
         b_sys, p_sys = b.sys, p.sys
         p_sys = param_to_var(p_sys, :Q_182)
-        eq_vars = collect(Symbolics.get_variables(equations(p_sys)[1]))
-        Q_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :Q_182, eq_vars))
+        Q_sym = get_promoted_dv(p_sys, :Q_182)
         return ConnectorSystem([Q_sym ~ b_sys.W_182], p_sys, b_sys)
     end
 
@@ -1121,8 +1149,7 @@ end
     function EarthSciMLBase.couple2(r::ODECoupler184, ls::PDECoupler184)
         r_sys, ls_sys = r.sys, ls.sys
         ls_sys = param_to_var(ls_sys, :S_184)
-        eq_vars = collect(Symbolics.get_variables(equations(ls_sys)[1]))
-        S_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :S_184, eq_vars))
+        S_sym = get_promoted_dv(ls_sys, :S_184)
         # r_sys.R_184 creates a namespaced variable (ode_184₊R_184)
         return ConnectorSystem([S_sym ~ r_sys.R_184], ls_sys, r_sys)
     end
@@ -1198,9 +1225,8 @@ end
     pde_190_mod = param_to_var(pde_190, :R_190)
     @test length(pde_190_mod.dvs) == 2  # u_190 + R_190
 
-    # The connector links R_190 (now a DV in pde_190) to R_190_src
-    eq_vars = Symbolics.get_variables(equations(pde_190_mod)[1])
-    R_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :R_190, eq_vars))
+    # The connector links R_190 (now a namespaced DV in pde_190) to R_190_src
+    R_sym = get_promoted_dv(pde_190_mod, :R_190)
     connector = [R_sym ~ R_190_src(t_test, x_190, y_190)]
 
     merged = merge_pdesystems([pde_src, pde_190_mod], connector)
@@ -1209,16 +1235,15 @@ end
     @test length(equations(merged)) == length(merged.dvs)
 end
 
-@testset "Issue #190: namespaced DV dedup in merge" begin
-    # When param_to_var creates R(t,x,y) in one system and the other system
-    # has prefix₊R(t,x,y) (from ODE→PDE promotion with namespace), they share
-    # the same base symbol and dimensionality but differ in string representation.
-    # merge_pdesystems must unify them.
+@testset "Issue #190/#203: param_to_var creates namespaced DVs" begin
+    # param_to_var on a PDESystem creates a namespaced DV (e.g., pde_b₊R_190b)
+    # instead of a bare one. This eliminates the naming collisions that previously
+    # required the dv_subs workaround in merge_pdesystems.
 
     @parameters x_190b y_190b
     @parameters k_190b = 2.0
 
-    # System A: has a namespaced DV "R_190b" via a subsystem (simulates promoted ODE group)
+    # System A: provides R_190b as a DV
     @variables R_190b(..) [description = "Rate"]
     pde_a = PDESystem(
         [R_190b(t_test, x_190b, y_190b) ~ k_190b],
@@ -1232,28 +1257,30 @@ end
     # System B: has a parameter R_190b that gets converted to DV via param_to_var
     @variables u_190b(..) [description = "PDE state"]
     @parameters R_190b_param = 1.0 [description = "Rate"]
-    # Manually create a DV with the same base name R_190b but a different symbolic object
-    # (this is what param_to_var does — it creates a new @variables R_190b(t,x,y))
-    @variables R_190b_new(..) [description = "Rate promoted"]
     pde_b = PDESystem(
         [D_test(u_190b(t_test, x_190b, y_190b)) ~
-         -R_190b_new(t_test, x_190b, y_190b) *
-         u_190b(t_test, x_190b, y_190b)],
+         -R_190b_param * u_190b(t_test, x_190b, y_190b)],
         [u_190b(0, x_190b, y_190b) ~ 1.0],
         [t_test ∈ Interval(0.0, 1.0),
             x_190b ∈ Interval(0.0, 1.0), y_190b ∈ Interval(0.0, 1.0)],
         [t_test, x_190b, y_190b],
-        [u_190b(t_test, x_190b, y_190b), R_190b(t_test, x_190b, y_190b)],
-        [];
+        [u_190b(t_test, x_190b, y_190b)],
+        [R_190b_param];
         name = :pde_b
     )
 
-    # Connector: links pde_b's R_190b to pde_a's R_190b (same base name, same dims)
-    connector = [R_190b(t_test, x_190b, y_190b) ~ R_190b(t_test, x_190b, y_190b)]
+    # param_to_var creates a namespaced DV: pde_b₊R_190b_param
+    pde_b_mod = param_to_var(pde_b, :R_190b_param)
+    @test length(pde_b_mod.dvs) == 2
+    dv_names = [string(Symbolics.tosymbol(dv, escape = false)) for dv in pde_b_mod.dvs]
+    @test any(n -> occursin("pde_b₊R_190b_param", n), dv_names)
 
-    merged = merge_pdesystems([pde_a, pde_b], connector)
+    # Connector: links pde_b₊R_190b_param to R_190b (distinct names, not trivial)
+    R_sym = get_promoted_dv(pde_b_mod, :R_190b_param)
+    connector = [R_sym ~ R_190b(t_test, x_190b, y_190b)]
 
-    # The connector should be resolved as trivial and removed.
+    merged = merge_pdesystems([pde_a, pde_b_mod], connector)
+
     # Equation count must equal DV count.
     @test length(equations(merged)) == length(merged.dvs)
 end
@@ -1405,4 +1432,222 @@ end
         @test occursin("mismatched", string(e.msg))
         @test occursin("slice_variable", string(e.msg))
     end
+end
+
+@testset "cross-group couple2 deferred when method expects PDESystem" begin
+    # A couple2 method that accesses .dvs (which only exists on PDESystem)
+    # should be silently skipped during Phase 1.25 (ODE-ODE cross-group)
+    # and deferred to PDE-phase dispatch.
+    @parameters x_defer y_defer
+    @variables e_defer(t_test)=0.0 f_defer(t_test)=0.0
+
+    struct DeferTestE
+        sys
+    end
+    struct DeferTestF
+        sys
+    end
+
+    domain_e = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_defer ∈ Interval(0.0, 1.0))
+    )
+    domain_f = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x_defer ∈ Interval(0.0, 1.0), y_defer ∈ Interval(0.0, 1.0))
+    )
+
+    ode_e = System([D_test(e_defer) ~ -e_defer], t_test; name = :ode_e_defer,
+        metadata = Dict(SysDomainInfo => domain_e, CoupleType => DeferTestE))
+    ode_f = System([D_test(f_defer) ~ -f_defer], t_test; name = :ode_f_defer,
+        metadata = Dict(SysDomainInfo => domain_f, CoupleType => DeferTestF))
+
+    # This couple2 accesses .dvs which only exists on PDESystem.
+    # It should NOT crash during Phase 1.25; it should be deferred.
+    function EarthSciMLBase.couple2(a::DeferTestE, b::DeferTestF)
+        dvs = b.sys.dvs  # This will error if sys is an ODE System
+        ConnectorSystem(Equation[], a.sys, b.sys)
+    end
+
+    @variables w_defer(..)
+    Dx_defer = Differential(x_defer)
+    pde_defer = PDESystem(
+        [D_test(w_defer(t_test, x_defer)) ~ Dx_defer(w_defer(t_test, x_defer))],
+        [w_defer(0, x_defer) ~ 1.0, w_defer(t_test, 0) ~ 0.0, w_defer(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x_defer ∈ Interval(0.0, 1.0)],
+        [t_test, x_defer], [w_defer(t_test, x_defer)], [];
+        name = :pde_defer
+    )
+
+    # This should not throw — Phase 1.25 should catch the error and defer.
+    cs = couple(pde_defer, ode_e, ode_f, domain_e)
+    @test cs isa CoupledSystem
+end
+
+@testset "Issue #198: @constants in connector equations preserved" begin
+    @parameters x198
+    @variables u198(..)
+
+    pde = PDESystem(
+        [D_test(u198(t_test, x198)) ~ -u198(t_test, x198)],
+        [u198(0, x198) ~ 1.0, u198(t_test, 0) ~ 0.0, u198(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x198 ∈ Interval(0.0, 1.0)],
+        [t_test, x198], [u198(t_test, x198)], [];
+        name = :pde198, checks = false
+    )
+
+    @constants c198 = 2.5
+    coupling_eqs = [D_test(u198(t_test, x198)) ~ c198]
+
+    merged = EarthSciMLBase.merge_pdesystems([pde], coupling_eqs; name = :merged198)
+
+    # c198 should be in the merged parameters
+    ps_names = [string(Symbolics.tosymbol(p, escape = false)) for p in merged.ps]
+    @test "c198" in ps_names
+
+    # c198 default should be in initial_conditions
+    ics = merged.initial_conditions
+    @test !isempty(ics)
+    c198_key = first(k for (k, v) in ics if string(Symbolics.tosymbol(Symbolics.wrap(k), escape = false)) == "c198")
+    @test Symbolics.value(ics[c198_key]) == 2.5
+
+    # Derivative artifacts should NOT be collected as parameters
+    @test !any(n -> occursin("ˍ", n), ps_names)
+end
+
+@testset "Issue #199: Namespaced spatial coordinates replaced" begin
+    @parameters x199
+    @variables u199a(..) v199a(..)
+
+    pde1 = PDESystem(
+        [D_test(u199a(t_test, x199)) ~ -u199a(t_test, x199)],
+        [u199a(0, x199) ~ 1.0, u199a(t_test, 0) ~ 0.0, u199a(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x199 ∈ Interval(0.0, 1.0)],
+        [t_test, x199], [u199a(t_test, x199)], [];
+        name = :pde199a, checks = false
+    )
+
+    @parameters subsys199₊x199
+    pde2 = PDESystem(
+        [D_test(v199a(t_test, x199)) ~ -v199a(t_test, subsys199₊x199)],
+        [v199a(0, x199) ~ 1.0, v199a(t_test, 0) ~ 0.0, v199a(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x199 ∈ Interval(0.0, 1.0)],
+        [t_test, x199], [v199a(t_test, x199)], [subsys199₊x199];
+        name = :pde199b, checks = false
+    )
+
+    merged = EarthSciMLBase.merge_pdesystems([pde1, pde2]; name = :merged199)
+
+    # Namespaced coordinate should be removed from parameters
+    ps_names = [string(Symbolics.tosymbol(p, escape = false)) for p in merged.ps]
+    @test !("subsys199₊x199" in ps_names)
+
+    # Equations should not contain the namespaced coordinate
+    for eq in equations(merged)
+        @test !contains(string(eq), "subsys199₊x199")
+    end
+end
+
+@testset "Issue #201: Parameter defaults through PDE pipeline" begin
+    # Test 1: Defaults preserved when promoting ODE to PDE
+    @parameters x201
+    @parameters k201a = 3.0
+    @variables v201a(t_test)
+    @named ode201 = System([D_test(v201a) ~ -k201a * v201a], t_test)
+
+    di201 = DomainInfo(
+        constIC(0.0, t_test ∈ Interval(0.0, 1.0)),
+        constBC(0.0, x201 ∈ Interval(0.0, 1.0))
+    )
+    promoted = ode201 + di201
+    @test !isempty(promoted.initial_conditions)
+
+    # Test 2: Defaults preserved through merge
+    @parameters k201b = 5.0
+    @variables u201b(..)
+    pde201 = PDESystem(
+        [D_test(u201b(t_test, x201)) ~ -k201b * u201b(t_test, x201)],
+        [u201b(0, x201) ~ 1.0, u201b(t_test, 0) ~ 0.0, u201b(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x201 ∈ Interval(0.0, 1.0)],
+        [t_test, x201], [u201b(t_test, x201)], [k201b];
+        name = :pde201, checks = false
+    )
+
+    merged = EarthSciMLBase.merge_pdesystems([pde201, promoted]; name = :merged201)
+    ics = merged.initial_conditions
+    @test !isempty(ics)
+
+    # Both parameter defaults should be present
+    ics_strs = Dict(string(Symbolics.tosymbol(Symbolics.wrap(k), escape = false)) => v
+                    for (k, v) in ics)
+    @test haskey(ics_strs, "k201b")
+    @test Symbolics.value(ics_strs["k201b"]) == 5.0
+end
+
+@testset "Issue #200: merge_pdesystems adds missing ICs for DVs" begin
+    @parameters x200
+    @variables u200(..) v200(..)
+
+    pde1 = PDESystem(
+        [D_test(u200(t_test, x200)) ~ -u200(t_test, x200)],
+        [u200(0, x200) ~ 1.0, u200(t_test, 0) ~ 0.0, u200(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x200 ∈ Interval(0.0, 1.0)],
+        [t_test, x200], [u200(t_test, x200)], [];
+        name = :pde200a, checks = false
+    )
+
+    # v200 has NO t=0 IC (simulates a param_to_var promoted variable)
+    pde2 = PDESystem(
+        [D_test(v200(t_test, x200)) ~ -v200(t_test, x200)],
+        [v200(t_test, 0) ~ 0.0, v200(t_test, 1) ~ 0.0],  # spatial BCs only, no IC
+        [t_test ∈ Interval(0.0, 1.0), x200 ∈ Interval(0.0, 1.0)],
+        [t_test, x200], [v200(t_test, x200)], [];
+        name = :pde200b, checks = false
+    )
+
+    merged = EarthSciMLBase.merge_pdesystems([pde1, pde2]; name = :merged200)
+
+    # v200 should now have a t=0 IC added by merge_pdesystems
+    v200_ics = filter(bc -> contains(string(bc.lhs), "v200") &&
+                            !contains(string(bc.lhs), "t"),  # IC has numeric t, not symbolic t
+                      merged.bcs)
+    @test length(v200_ics) >= 1
+
+    # Total BCs: 3 from pde1 + 2 spatial from pde2 + 1 generated IC for v200 = 6
+    @test length(merged.bcs) == 6
+end
+
+@testset "Issue #200: algebraic DVs don't get spurious ICs" begin
+    @parameters x200b
+    @variables u200b(..) w200b(..)
+
+    # u200b has a differential equation and an IC
+    pde1 = PDESystem(
+        [D_test(u200b(t_test, x200b)) ~ -u200b(t_test, x200b)],
+        [u200b(0, x200b) ~ 1.0, u200b(t_test, 0) ~ 0.0, u200b(t_test, 1) ~ 0.0],
+        [t_test ∈ Interval(0.0, 1.0), x200b ∈ Interval(0.0, 1.0)],
+        [t_test, x200b], [u200b(t_test, x200b)], [];
+        name = :pde200b1, checks = false
+    )
+
+    # w200b is an algebraic variable (no D(w200b), no IC)
+    pde2 = PDESystem(
+        [w200b(t_test, x200b) ~ 2.0 * u200b(t_test, x200b)],
+        Equation[],
+        [t_test ∈ Interval(0.0, 1.0), x200b ∈ Interval(0.0, 1.0)],
+        [t_test, x200b], [w200b(t_test, x200b)], [];
+        name = :pde200b2, checks = false
+    )
+
+    merged = EarthSciMLBase.merge_pdesystems([pde1, pde2]; name = :merged200b)
+
+    # w200b should NOT get an IC because it's algebraic (no D(w200b) in equations)
+    w200b_ics = filter(merged.bcs) do bc
+        s = string(bc.lhs)
+        contains(s, "w200b") && !contains(s, "t")
+    end
+    @test length(w200b_ics) == 0
+
+    # Total BCs should be 3 (from pde1 only, no spurious IC for w200b)
+    @test length(merged.bcs) == 3
 end

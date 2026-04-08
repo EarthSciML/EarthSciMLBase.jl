@@ -146,14 +146,11 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
         append!(all_eqs, equations(p))
     end
 
-    # Apply coupling equations
+    # Add coupling equations from couple2 connectors as new equations.
+    # In the ODE path, couple2 connector equations are composed via MTK's
+    # compose — no additive merge. The PDE path should work the same way.
     for ceq in coupling_eqs
-        idx = findfirst(eq -> isequal(eq.lhs, ceq.lhs), all_eqs)
-        if idx !== nothing
-            all_eqs[idx] = all_eqs[idx].lhs ~ all_eqs[idx].rhs + ceq.rhs
-        else
-            push!(all_eqs, ceq)
-        end
+        push!(all_eqs, ceq)
     end
 
     # Merge BCs, DVs, Ps (deduplicate)
@@ -181,56 +178,129 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
         end
     end
 
-    # Resolve DVs created by param_to_var that duplicate existing namespaced DVs.
-    # param_to_var creates bare variables like R_H(t,x,y), while the promoted ODE
-    # group has namespaced versions like FireSpreadDirection₊R_H(t,x,y).  We
-    # substitute the bare version with the namespaced one (which has the defining
-    # equation), then drop trivial connector equations (LHS == RHS).
-    # Two namespaced DVs with the same base name (e.g., Rothermel₊β_ratio and
-    # FireSpreadDirection₊β_ratio) are genuinely different variables and are kept.
-    all_dvs_raw = vcat([p.dvs for p in pdesystems]...)
-    _dv_nargs(dv) = length(Symbolics.arguments(Symbolics.unwrap(dv)))
-    _dv_base(dv) = Symbol(last(split(string(Symbolics.tosymbol(dv, escape = false)), "₊")))
-    _dv_is_namespaced(dv) = occursin("₊", string(Symbolics.tosymbol(dv, escape = false)))
-
-    # Index namespaced DVs by (base_name, nargs)
-    namespaced_dvs = Dict{Tuple{Symbol, Int}, Any}()
-    for dv in all_dvs_raw
-        if _dv_is_namespaced(dv)
-            key = (_dv_base(dv), _dv_nargs(dv))
-            if !haskey(namespaced_dvs, key)
-                namespaced_dvs[key] = dv
+    # Scan all equations (including coupling) for parameters/constants not yet
+    # collected. This catches @constants introduced in couple2 connector equations.
+    existing_ps_names = Set(Symbol(Symbolics.tosymbol(s, escape = false)) for s in all_ps)
+    iv_names = Set(Symbol.(unified_ivs))
+    for eq in all_eqs
+        for var in Symbolics.get_variables(eq)
+            uvar = Symbolics.unwrap(var)
+            vname = Symbol(Symbolics.tosymbol(var, escape = false))
+            vname in existing_ps_names && continue
+            vname in iv_names && continue
+            vname in existing_dv_names && continue
+            # Skip callable terms (DVs) - only collect leaf parameters/constants
+            if Symbolics.iscall(uvar) && !(Symbolics.operation(uvar) isa Differential)
+                continue
             end
+            # Skip derivative symbols (e.g., uˍt from Differential decomposition)
+            occursin("ˍ", string(vname)) && continue
+            push!(all_ps, var)
+            push!(existing_ps_names, vname)
         end
     end
 
-    # Substitute non-namespaced DVs that match a namespaced counterpart
-    dv_subs = Dict{Any, Any}()
-    for dv in all_dvs_raw
-        if !_dv_is_namespaced(dv)
-            key = (_dv_base(dv), _dv_nargs(dv))
-            if haskey(namespaced_dvs, key)
-                dv_subs[Symbolics.unwrap(dv)] = Symbolics.unwrap(namespaced_dvs[key])
+    # Replace namespaced IV copies (e.g., LANDFIRE₊x) with bare IVs (x).
+    # After composition, data source components may retain namespaced copies
+    # of independent variables as parameters. MOL only knows about bare IVs.
+    iv_subs = Dict{Any, Any}()
+    iv_name_to_sym = Dict{String, Any}()
+    for iv in unified_ivs
+        iv_name_to_sym[string(Symbol(iv))] = iv
+    end
+    for p in all_ps
+        p_str = string(Symbolics.tosymbol(p, escape = false))
+        for (iv_name, iv_sym) in iv_name_to_sym
+            if p_str != iv_name && endswith(p_str, "₊" * iv_name)
+                iv_subs[Symbolics.unwrap(p)] = Symbolics.unwrap(iv_sym)
             end
         end
     end
-    if !isempty(dv_subs)
+    if !isempty(iv_subs)
+        # Use substitute_in_deriv_and_depvar because the namespaced IVs
+        # appear as arguments to dependent variable calls (e.g., v(t, LANDFIRE₊x))
+        # and substitute_in_deriv alone doesn't recurse into depvar arguments.
         all_eqs = map(all_eqs) do eq
-            Symbolics.substitute(eq.lhs, dv_subs) ~ Symbolics.substitute(eq.rhs, dv_subs)
+            Symbolics.substitute_in_deriv_and_depvar(eq.lhs, iv_subs) ~
+                Symbolics.substitute_in_deriv_and_depvar(eq.rhs, iv_subs)
         end
-        all_eqs = filter(eq -> !isequal(eq.lhs, eq.rhs), all_eqs)
-        all_eqs = unique_eqs(all_eqs)
-
         all_bcs = map(all_bcs) do bc
-            Symbolics.substitute(bc.lhs, dv_subs) ~ Symbolics.substitute(bc.rhs, dv_subs)
+            Symbolics.substitute_in_deriv_and_depvar(bc.lhs, iv_subs) ~
+                Symbolics.substitute_in_deriv_and_depvar(bc.rhs, iv_subs)
         end
-        all_bcs = unique_eqs(all_bcs)
-
-        # Remove substituted DVs
-        all_dvs = filter(dv -> Symbolics.unwrap(dv) ∉ keys(dv_subs), all_dvs)
+        all_ps = filter(p -> !(Symbolics.unwrap(p) in keys(iv_subs)), all_ps)
     end
 
-    PDESystem(all_eqs, all_bcs, unified_domains, unified_ivs, all_dvs, all_ps; name = name)
+    # Collect initial_conditions from all PDESystems and parameter defaults
+    # so that MOL's internal pipeline can find parameter values.
+    merged_ics = Dict{Any, Any}()
+    for p in pdesystems
+        for (k, v) in p.initial_conditions
+            merged_ics[k] = v
+        end
+    end
+    for p in all_ps
+        if ModelingToolkit.hasdefault(p)
+            merged_ics[Symbolics.unwrap(p)] = ModelingToolkit.getdefault(p)
+        end
+    end
+
+    # Add t=0 ICs for any DVs that lack one. This handles variables
+    # promoted by param_to_var whose ICs were lost during DV dedup,
+    # as well as any other DVs missing initial conditions.
+    t_iv = unified_ivs[1]
+    t_domain = first(d for d in unified_domains if isequal(d.variables, t_iv))
+    t_start = DomainSets.infimum(t_domain.domain)
+    # Check each DV: see if any existing BC is a t=0 IC for this DV.
+    # An IC has the DV's operator called with a numeric first argument
+    # (the t boundary), not the symbolic t variable.
+    function _has_ic(dv, bcs, t_iv)
+        dv_op = Symbolics.operation(Symbolics.unwrap(dv))
+        for bc in bcs
+            for var in Symbolics.get_variables(bc.lhs)
+                uvar = Symbolics.unwrap(var)
+                Symbolics.iscall(uvar) || continue
+                Symbolics.operation(uvar) isa Differential && continue
+                Symbolics.operation(uvar) === dv_op || continue
+                # Check if the first argument is NOT the symbolic t variable
+                # (i.e., it's a numeric boundary value like 0 or 0.0).
+                first_arg = Symbolics.arguments(uvar)[1]
+                if !isequal(first_arg, Symbolics.unwrap(t_iv))
+                    return true
+                end
+            end
+        end
+        return false
+    end
+    # Only add ICs for DVs that have a time-derivative equation (D(dv) ~ ...).
+    # Algebraic DVs (defined by dv ~ expression) are determined by their
+    # algebraic equation and don't need ICs.
+    dvs_with_deriv = Set{Any}()
+    for eq in all_eqs
+        for var in Symbolics.get_variables(eq)
+            uvar = Symbolics.unwrap(var)
+            if Symbolics.iscall(uvar) && Symbolics.operation(uvar) isa Differential
+                # The argument of D(...) is the DV call - extract its operator.
+                inner = Symbolics.arguments(uvar)[1]
+                if Symbolics.iscall(Symbolics.unwrap(inner))
+                    push!(dvs_with_deriv, Symbolics.operation(Symbolics.unwrap(inner)))
+                end
+            end
+        end
+    end
+    for dv in all_dvs
+        dv_op = Symbolics.operation(Symbolics.unwrap(dv))
+        dv_op in dvs_with_deriv || continue  # skip algebraic DVs
+        _has_ic(dv, all_bcs, t_iv) && continue
+        uvar = Symbolics.unwrap(dv)
+        op = Symbolics.operation(uvar)
+        dv_args = Symbolics.arguments(uvar)
+        dv_spatial = dv_args[2:end]
+        push!(all_bcs, Symbolics.wrap(op)(t_start, dv_spatial...) ~ 0.0)
+    end
+
+    PDESystem(all_eqs, all_bcs, unified_domains, unified_ivs, all_dvs, all_ps;
+        name = name, initial_conditions = merged_ics)
 end
 
 # Safely collect parameters, handling NullParameters from SciMLBase.

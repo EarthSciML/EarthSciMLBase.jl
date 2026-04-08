@@ -446,7 +446,16 @@ function Base.convert(::Type{<:PDESystem}, sys::CoupledSystem; name = :model,
                 for (x, y, xi, yi) in ((a, b, i, j), (b, a, j, i))
                     x_t, y_t = get_coupletype(x), get_coupletype(y)
                     if hasmethod(couple2, (x_t, y_t))
-                        cs = couple2(x_t(x), y_t(y))
+                        # Try running couple2 with the individual ODE
+                        # System. If the method expects a promoted
+                        # PDESystem (e.g. accesses .dvs), it will error
+                        # here and we defer to PDE-phase dispatch.
+                        local cs
+                        try
+                            cs = couple2(x_t(x), y_t(y))
+                        catch
+                            continue
+                        end
                         @assert cs isa ConnectorSystem "The result of coupling two systems together must be a EarthSciMLBase.ConnectorSystem. " *
                                                        "This is not the case for $(nameof(x)) ($x_t) and $(nameof(y)) ($y_t); it is instead a $(typeof(cs))."
                         x_name = nameof(x)
