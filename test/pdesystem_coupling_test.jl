@@ -962,8 +962,7 @@ end
     function EarthSciMLBase.couple2(r::RothermelTestCoupler, ls::LevelSetTestCoupler)
         r_sys, ls_sys = r.sys, ls.sys
         ls_sys = param_to_var(ls_sys, :S_ct)
-        eq_vars = collect(Symbolics.get_variables(equations(ls_sys)[1]))
-        S_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :S_ct, eq_vars))
+        S_sym = get_promoted_dv(ls_sys, :S_ct)
         return ConnectorSystem([S_sym ~ r_sys.R_ct], ls_sys, r_sys)
     end
 
@@ -1066,8 +1065,7 @@ end
     function EarthSciMLBase.couple2(a::ODE_A_Coupler182, b::PDECoupler182)
         a_sys, b_sys = a.sys, b.sys
         b_sys = param_to_var(b_sys, :S_182)
-        eq_vars = collect(Symbolics.get_variables(equations(b_sys)[1]))
-        S_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :S_182, eq_vars))
+        S_sym = get_promoted_dv(b_sys, :S_182)
         return ConnectorSystem([S_sym ~ a_sys.R_182], b_sys, a_sys)
     end
 
@@ -1075,8 +1073,7 @@ end
     function EarthSciMLBase.couple2(b::ODE_B_Coupler182, p::PDECoupler182)
         b_sys, p_sys = b.sys, p.sys
         p_sys = param_to_var(p_sys, :Q_182)
-        eq_vars = collect(Symbolics.get_variables(equations(p_sys)[1]))
-        Q_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :Q_182, eq_vars))
+        Q_sym = get_promoted_dv(p_sys, :Q_182)
         return ConnectorSystem([Q_sym ~ b_sys.W_182], p_sys, b_sys)
     end
 
@@ -1152,8 +1149,7 @@ end
     function EarthSciMLBase.couple2(r::ODECoupler184, ls::PDECoupler184)
         r_sys, ls_sys = r.sys, ls.sys
         ls_sys = param_to_var(ls_sys, :S_184)
-        eq_vars = collect(Symbolics.get_variables(equations(ls_sys)[1]))
-        S_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :S_184, eq_vars))
+        S_sym = get_promoted_dv(ls_sys, :S_184)
         # r_sys.R_184 creates a namespaced variable (ode_184₊R_184)
         return ConnectorSystem([S_sym ~ r_sys.R_184], ls_sys, r_sys)
     end
@@ -1229,9 +1225,8 @@ end
     pde_190_mod = param_to_var(pde_190, :R_190)
     @test length(pde_190_mod.dvs) == 2  # u_190 + R_190
 
-    # The connector links R_190 (now a DV in pde_190) to R_190_src
-    eq_vars = Symbolics.get_variables(equations(pde_190_mod)[1])
-    R_sym = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :R_190, eq_vars))
+    # The connector links R_190 (now a namespaced DV in pde_190) to R_190_src
+    R_sym = get_promoted_dv(pde_190_mod, :R_190)
     connector = [R_sym ~ R_190_src(t_test, x_190, y_190)]
 
     merged = merge_pdesystems([pde_src, pde_190_mod], connector)
@@ -1240,16 +1235,15 @@ end
     @test length(equations(merged)) == length(merged.dvs)
 end
 
-@testset "Issue #190: namespaced DV dedup in merge" begin
-    # When param_to_var creates R(t,x,y) in one system and the other system
-    # has prefix₊R(t,x,y) (from ODE→PDE promotion with namespace), they share
-    # the same base symbol and dimensionality but differ in string representation.
-    # merge_pdesystems must unify them.
+@testset "Issue #190/#203: param_to_var creates namespaced DVs" begin
+    # param_to_var on a PDESystem creates a namespaced DV (e.g., pde_b₊R_190b)
+    # instead of a bare one. This eliminates the naming collisions that previously
+    # required the dv_subs workaround in merge_pdesystems.
 
     @parameters x_190b y_190b
     @parameters k_190b = 2.0
 
-    # System A: has a namespaced DV "R_190b" via a subsystem (simulates promoted ODE group)
+    # System A: provides R_190b as a DV
     @variables R_190b(..) [description = "Rate"]
     pde_a = PDESystem(
         [R_190b(t_test, x_190b, y_190b) ~ k_190b],
@@ -1263,28 +1257,30 @@ end
     # System B: has a parameter R_190b that gets converted to DV via param_to_var
     @variables u_190b(..) [description = "PDE state"]
     @parameters R_190b_param = 1.0 [description = "Rate"]
-    # Manually create a DV with the same base name R_190b but a different symbolic object
-    # (this is what param_to_var does — it creates a new @variables R_190b(t,x,y))
-    @variables R_190b_new(..) [description = "Rate promoted"]
     pde_b = PDESystem(
         [D_test(u_190b(t_test, x_190b, y_190b)) ~
-         -R_190b_new(t_test, x_190b, y_190b) *
-         u_190b(t_test, x_190b, y_190b)],
+         -R_190b_param * u_190b(t_test, x_190b, y_190b)],
         [u_190b(0, x_190b, y_190b) ~ 1.0],
         [t_test ∈ Interval(0.0, 1.0),
             x_190b ∈ Interval(0.0, 1.0), y_190b ∈ Interval(0.0, 1.0)],
         [t_test, x_190b, y_190b],
-        [u_190b(t_test, x_190b, y_190b), R_190b(t_test, x_190b, y_190b)],
-        [];
+        [u_190b(t_test, x_190b, y_190b)],
+        [R_190b_param];
         name = :pde_b
     )
 
-    # Connector: links pde_b's R_190b to pde_a's R_190b (same base name, same dims)
-    connector = [R_190b(t_test, x_190b, y_190b) ~ R_190b(t_test, x_190b, y_190b)]
+    # param_to_var creates a namespaced DV: pde_b₊R_190b_param
+    pde_b_mod = param_to_var(pde_b, :R_190b_param)
+    @test length(pde_b_mod.dvs) == 2
+    dv_names = [string(Symbolics.tosymbol(dv, escape = false)) for dv in pde_b_mod.dvs]
+    @test any(n -> occursin("pde_b₊R_190b_param", n), dv_names)
 
-    merged = merge_pdesystems([pde_a, pde_b], connector)
+    # Connector: links pde_b₊R_190b_param to R_190b (distinct names, not trivial)
+    R_sym = get_promoted_dv(pde_b_mod, :R_190b_param)
+    connector = [R_sym ~ R_190b(t_test, x_190b, y_190b)]
 
-    # The connector should be resolved as trivial and removed.
+    merged = merge_pdesystems([pde_a, pde_b_mod], connector)
+
     # Equation count must equal DV count.
     @test length(equations(merged)) == length(merged.dvs)
 end

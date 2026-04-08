@@ -150,7 +150,6 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
     # In the ODE path, couple2 connector equations are composed via MTK's
     # compose — no additive merge. The PDE path should work the same way.
     for ceq in coupling_eqs
-        isequal(ceq.lhs, ceq.rhs) && continue  # skip trivial connectors
         push!(all_eqs, ceq)
     end
 
@@ -199,57 +198,6 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
             push!(all_ps, var)
             push!(existing_ps_names, vname)
         end
-    end
-
-    # Resolve DVs created by param_to_var that duplicate existing namespaced DVs.
-    # param_to_var creates bare variables like R_H(t,x,y), while the promoted ODE
-    # group has namespaced versions like FireSpreadDirection₊R_H(t,x,y).  We
-    # substitute the bare version with the namespaced one (which has the defining
-    # equation), then drop trivial connector equations (LHS == RHS).
-    # Two namespaced DVs with the same base name (e.g., Rothermel₊β_ratio and
-    # FireSpreadDirection₊β_ratio) are genuinely different variables and are kept.
-    all_dvs_raw = vcat([p.dvs for p in pdesystems]...)
-    _dv_nargs(dv) = length(Symbolics.arguments(Symbolics.unwrap(dv)))
-    _dv_base(dv) = Symbol(last(split(string(Symbolics.tosymbol(dv, escape = false)), "₊")))
-    _dv_is_namespaced(dv) = occursin("₊", string(Symbolics.tosymbol(dv, escape = false)))
-
-    # Index namespaced DVs by (base_name, nargs)
-    namespaced_dvs = Dict{Tuple{Symbol, Int}, Any}()
-    for dv in all_dvs_raw
-        if _dv_is_namespaced(dv)
-            key = (_dv_base(dv), _dv_nargs(dv))
-            if !haskey(namespaced_dvs, key)
-                namespaced_dvs[key] = dv
-            end
-        end
-    end
-
-    # Substitute non-namespaced DVs that match a namespaced counterpart
-    dv_subs = Dict{Any, Any}()
-    for dv in all_dvs_raw
-        if !_dv_is_namespaced(dv)
-            key = (_dv_base(dv), _dv_nargs(dv))
-            if haskey(namespaced_dvs, key)
-                dv_subs[Symbolics.unwrap(dv)] = Symbolics.unwrap(namespaced_dvs[key])
-            end
-        end
-    end
-    if !isempty(dv_subs)
-        all_eqs = map(all_eqs) do eq
-            Symbolics.substitute_in_deriv_and_depvar(eq.lhs, dv_subs) ~
-                Symbolics.substitute_in_deriv_and_depvar(eq.rhs, dv_subs)
-        end
-        all_eqs = filter(eq -> !isequal(eq.lhs, eq.rhs), all_eqs)
-        all_eqs = unique_eqs(all_eqs)
-
-        all_bcs = map(all_bcs) do bc
-            Symbolics.substitute_in_deriv_and_depvar(bc.lhs, dv_subs) ~
-                Symbolics.substitute_in_deriv_and_depvar(bc.rhs, dv_subs)
-        end
-        all_bcs = unique_eqs(all_bcs)
-
-        # Remove substituted DVs
-        all_dvs = filter(dv -> Symbolics.unwrap(dv) ∉ keys(dv_subs), all_dvs)
     end
 
     # Replace namespaced IV copies (e.g., LANDFIRE₊x) with bare IVs (x).

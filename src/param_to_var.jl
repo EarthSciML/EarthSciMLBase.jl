@@ -1,4 +1,4 @@
-export param_to_var
+export param_to_var, get_promoted_dv
 
 """
 Add the units and description in the variable `from` to the variable `to`.
@@ -74,7 +74,8 @@ function param_to_var(sys::ModelingToolkit.PDESystem, ps::Symbol...)
     replace = Dict()
     for p in ps
         dv_names = [Symbolics.tosymbol(dv, escape = false) for dv in sys.dvs]
-        if p in dv_names
+        ns_name = Symbol(nameof(sys), "₊", p)
+        if ns_name in dv_names || p in dv_names
             continue
         end
         iparam = findfirst(isequal(p), Symbol.(params))
@@ -88,8 +89,11 @@ function param_to_var(sys::ModelingToolkit.PDESystem, ps::Symbol...)
 
         # Create a variable with ALL independent variables so it has the
         # same spatial dimensionality as the other dependent variables.
+        # Namespace the variable with the system name (e.g., sysname₊p)
+        # to avoid naming collisions when multiple PDESystems are merged.
         ivs = sys.ivs
-        newvar = only(@variables $p(..))
+        ns_p = Symbol(nameof(sys), "₊", p)
+        newvar = only(@variables $ns_p(..))
         newvar = add_metadata(newvar, param; exclude_default = true)
         newvar_call = newvar(ivs...)
         replace[Symbolics.unwrap(param)] = Symbolics.unwrap(newvar_call)
@@ -133,4 +137,25 @@ function param_to_var(sys::ModelingToolkit.PDESystem, ps::Symbol...)
 
     PDESystem(new_eqs, new_bcs, sys.domain, sys.ivs, new_dvs, new_ps;
         name = nameof(sys), metadata = sys.metadata, initial_conditions = new_ics)
+end
+
+"""
+    get_promoted_dv(sys::ModelingToolkit.PDESystem, base_name::Symbol)
+
+Return the dependent variable from `sys` whose base name (the part after
+the last `₊`) matches `base_name`. This is useful in `couple2` methods
+after calling [`param_to_var`](@ref) to retrieve the promoted variable
+without hardcoding the namespace prefix.
+
+$(SIGNATURES)
+"""
+function get_promoted_dv(sys::ModelingToolkit.PDESystem, base_name::Symbol)
+    for dv in sys.dvs
+        dv_sym = Symbolics.tosymbol(dv, escape = false)
+        if dv_sym == base_name ||
+           Symbol(last(split(string(dv_sym), "₊"))) == base_name
+            return dv
+        end
+    end
+    error("Promoted variable for :$base_name not found in system $(nameof(sys))")
 end

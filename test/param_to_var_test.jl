@@ -76,10 +76,10 @@ end
     # S should no longer be a parameter
     @test length(pdesys2.ps) == 0
 
-    # The substituted equation should contain S(t, px, py) instead of S
-    # (param_to_var creates a variable with all IVs for PDESystem)
+    # The substituted equation should contain pdetest₊S(t, px, py) instead of S
+    # (param_to_var creates a namespaced variable with all IVs for PDESystem)
     eq_vars = Symbolics.get_variables(equations(pdesys2)[1])
-    S_var = only(filter(v -> Symbolics.tosymbol(v, escape = false) == :S, eq_vars))
+    S_var = only(filter(v -> Symbolics.tosymbol(v, escape = false) == Symbol("pdetest₊S"), eq_vars))
     @test length(Symbolics.arguments(Symbolics.unwrap(S_var))) == 3  # t, px, py
 
     # Metadata should be preserved
@@ -89,10 +89,10 @@ end
     @test length(equations(pdesys2)) == 1
     @test length(pdesys2.bcs) == 1  # original IC only; promoted var ICs added by merge_pdesystems
     @test length(pdesys2.ivs) == 3
-    # S was promoted from parameter to DV
+    # S was promoted from parameter to DV (namespaced as pdetest₊S)
     @test length(pdesys2.dvs) == 2
     dv_names = [Symbolics.tosymbol(dv, escape = false) for dv in pdesys2.dvs]
-    @test :S ∈ dv_names
+    @test Symbol("pdetest₊S") ∈ dv_names
     @test :ψ ∈ dv_names
 end
 
