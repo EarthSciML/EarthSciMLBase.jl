@@ -2,25 +2,26 @@
 <html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Home · EarthSciMLBase.jl</title><meta name="title" content="Home · EarthSciMLBase.jl"/><meta property="og:title" content="Home · EarthSciMLBase.jl"/><meta property="twitter:title" content="Home · EarthSciMLBase.jl"/><meta name="description" content="Documentation for EarthSciMLBase.jl."/><meta property="og:description" content="Documentation for EarthSciMLBase.jl."/><meta property="twitter:description" content="Documentation for EarthSciMLBase.jl."/><meta property="og:url" content="https://EarthSciML.github.io/EarthSciMLBase.jl/"/><meta property="twitter:url" content="https://EarthSciML.github.io/EarthSciMLBase.jl/"/><link rel="canonical" href="https://EarthSciML.github.io/EarthSciMLBase.jl/"/><script data-outdated-warner src="assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="assets/documenter.js"></script><script src="search_index.js"></script><script src="siteinfo.js"></script><script src="../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href>EarthSciMLBase.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li class="is-active"><a class="tocitem" href>Home</a><ul class="internal"><li><a class="tocitem" href="#Installation"><span>Installation</span></a></li><li><a class="tocitem" href="#Feature-Summary"><span>Feature Summary</span></a></li><li><a class="tocitem" href="#Feature-List"><span>Feature List</span></a></li><li><a class="tocitem" href="#Contributing"><span>Contributing</span></a></li><li><a class="tocitem" href="#Reproducibility"><span>Reproducibility</span></a></li></ul></li><li><a class="tocitem" href="composition/">Composition</a></li><li><a class="tocitem" href="operator_compose/">Operator Composition</a></li><li><a class="tocitem" href="param_to_var/">Parameter Replacement</a></li><li><a class="tocitem" href="system_events/">System Events</a></li><li><a class="tocitem" href="icbc/">Initial and Boundary Conditions</a></li><li><a class="tocitem" href="advection/">Advection</a></li><li><a class="tocitem" href="coord_transforms/">Coordinate Transforms</a></li><li><a class="tocitem" href="mixed_dim_coupling/">Mixed-Dimension Coupling</a></li><li><a class="tocitem" href="operator/">Operators</a></li><li><span class="tocitem">Examples</span><ul><li><a class="tocitem" href="example_all_together/">All Together</a></li></ul></li><li><a class="tocitem" href="api/">API Reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Home</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Home</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/EarthSciML/EarthSciMLBase.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/EarthSciML/EarthSciMLBase.jl/blob/main/docs/src/index.md#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="EarthSciMLBase:-Utilities-for-Symbolic-Earth-Science-Modeling-and-Machine-Learning"><a class="docs-heading-anchor" href="#EarthSciMLBase:-Utilities-for-Symbolic-Earth-Science-Modeling-and-Machine-Learning">EarthSciMLBase: Utilities for Symbolic Earth Science Modeling and Machine Learning</a><a id="EarthSciMLBase:-Utilities-for-Symbolic-Earth-Science-Modeling-and-Machine-Learning-1"></a><a class="docs-heading-anchor-permalink" href="#EarthSciMLBase:-Utilities-for-Symbolic-Earth-Science-Modeling-and-Machine-Learning" title="Permalink"></a></h1><p>Documentation for <a href="https://github.com/EarthSciML/EarthSciMLBase.jl">EarthSciMLBase</a>.</p><p>This package contains utilities for constructing Earth Science models in Julia using <a href="https://github.com/SciML/ModelingToolkit.jl">ModelingToolkit.jl</a>.</p><h2 id="Installation"><a class="docs-heading-anchor" href="#Installation">Installation</a><a id="Installation-1"></a><a class="docs-heading-anchor-permalink" href="#Installation" title="Permalink"></a></h2><pre><code class="language-julia hljs">using Pkg
 Pkg.add(&quot;EarthSciMLBase&quot;)</code></pre><h2 id="Feature-Summary"><a class="docs-heading-anchor" href="#Feature-Summary">Feature Summary</a><a id="Feature-Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Feature-Summary" title="Permalink"></a></h2><p>This package contains types and functions designed to simplify the process of constructing and composing symbolically-defined Earth Science model components together.</p><h2 id="Feature-List"><a class="docs-heading-anchor" href="#Feature-List">Feature List</a><a id="Feature-List-1"></a><a class="docs-heading-anchor-permalink" href="#Feature-List" title="Permalink"></a></h2><ul><li>Operations to compose ModelingToolkit.jl equation systems together.</li><li>Operations to add initial and boundary conditions to systems and to turn ODE systems into PDE systems, and to provide coordinate transformations.</li><li>Operations to add Advection terms to systems.</li><li>A <code>Simulator</code> type for running large-scale simulations.</li></ul><h2 id="Contributing"><a class="docs-heading-anchor" href="#Contributing">Contributing</a><a id="Contributing-1"></a><a class="docs-heading-anchor-permalink" href="#Contributing" title="Permalink"></a></h2><ul><li>Please refer to the <a href="https://github.com/SciML/ColPrac/blob/master/README.md">SciML ColPrac: Contributor&#39;s Guide on Collaborative Practices for Community Packages</a> for guidance on PRs, issues, and other matters relating to contributing.</li></ul><h2 id="Reproducibility"><a class="docs-heading-anchor" href="#Reproducibility">Reproducibility</a><a id="Reproducibility-1"></a><a class="docs-heading-anchor-permalink" href="#Reproducibility" title="Permalink"></a></h2><details><summary>The documentation of this EarthSciML package was built using these direct dependencies,</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Status `~/work/EarthSciMLBase.jl/EarthSciMLBase.jl/docs/Project.toml`
   [13f3f980] CairoMakie v0.15.9
-  [479239e8] Catalyst v16.1.0 `~/.julia/dev/Catalyst`
+  [479239e8] Catalyst v16.1.1 `~/.julia/dev/Catalyst`
   [0c46a032] DifferentialEquations v7.17.0
   [e30172f5] Documenter v1.17.0
-  [5b8099bc] DomainSets v0.7.16
+⌅ [5b8099bc] DomainSets v0.7.18
   [06fc5a27] DynamicQuantities v1.12.1
   [e53f1632] EarthSciMLBase v0.25.6 `~/work/EarthSciMLBase.jl/EarthSciMLBase.jl`
   [1ecd5474] GraphMakie v0.6.3
   [fa8bd995] MetaGraphsNext v0.8.0
-  [961ee093] ModelingToolkit v11.18.0
+  [961ee093] ModelingToolkit v11.19.1
   [91a5bcdd] Plots v1.41.6
-  [0c5d862f] Symbolics v7.17.0</code></pre></details><details><summary>and using this machine and Julia version.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Julia Version 1.12.5
+  [0c5d862f] Symbolics v7.18.0
+Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated`</code></pre></details><details><summary>and using this machine and Julia version.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Julia Version 1.12.5
 Commit 5fe89b8ddc1 (2026-02-09 16:05 UTC)
 Build Info:
   Official https://julialang.org release
 Platform Info:
   OS: Linux (x86_64-linux-gnu)
-  CPU: 4 × AMD EPYC 7763 64-Core Processor
+  CPU: 4 × Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
   WORD_SIZE: 64
-  LLVM: libLLVM-18.1.7 (ORCJIT, znver3)
+  LLVM: libLLVM-18.1.7 (ORCJIT, icelake-server)
   GC: Built with stock GC
 Threads: 1 default, 1 interactive, 1 GC (on 4 virtual cores)
 Environment:
@@ -55,19 +56,19 @@ Environment:
   [62783981] BitTwiddlingConvenienceFunctions v0.1.6
   [8e7c35d0] BlockArrays v1.9.3
   [764a87c0] BoundaryValueDiffEq v5.20.0
-  [7227322d] BoundaryValueDiffEqAscher v1.11.0
-  [56b672f2] BoundaryValueDiffEqCore v2.1.0
-  [85d9eb09] BoundaryValueDiffEqFIRK v1.12.0
-  [1a22d4ce] BoundaryValueDiffEqMIRK v1.12.0
-  [9255f1d6] BoundaryValueDiffEqMIRKN v1.11.0
-  [ed55bfe0] BoundaryValueDiffEqShooting v1.12.0
-  [70df07ce] BracketingNonlinearSolve v1.12.0
+  [7227322d] BoundaryValueDiffEqAscher v1.12.0
+  [56b672f2] BoundaryValueDiffEqCore v2.2.0
+  [85d9eb09] BoundaryValueDiffEqFIRK v1.13.0
+  [1a22d4ce] BoundaryValueDiffEqMIRK v1.13.0
+  [9255f1d6] BoundaryValueDiffEqMIRKN v1.12.0
+  [ed55bfe0] BoundaryValueDiffEqShooting v1.13.0
+  [70df07ce] BracketingNonlinearSolve v1.12.1
   [fa961155] CEnum v0.5.0
   [2a0fbf3d] CPUSummary v0.2.7
   [96374032] CRlibm v1.0.2
   [159f3aea] Cairo v1.1.1
   [13f3f980] CairoMakie v0.15.9
-  [479239e8] Catalyst v16.1.0 `~/.julia/dev/Catalyst`
+  [479239e8] Catalyst v16.1.1 `~/.julia/dev/Catalyst`
   [d360d2e6] ChainRulesCore v1.26.1
   [fb6a15b2] CloseOpenIntervals v0.1.13
   [944b1d66] CodecZlib v0.7.8
@@ -95,12 +96,12 @@ Environment:
   [e2d170a0] DataValueInterfaces v1.0.0
   [244e2a9f] DefineSingletons v0.1.2
   [927a84f5] DelaunayTriangulation v1.6.6
-  [bcd4f6db] DelayDiffEq v5.71.0
+  [bcd4f6db] DelayDiffEq v5.72.0
   [8bb1440f] DelimitedFiles v1.9.1
   [85a47980] Dictionaries v0.4.6
   [2b5f629d] DiffEqBase v6.214.1
-  [459566f4] DiffEqCallbacks v4.12.0
-  [77a26b50] DiffEqNoiseProcess v5.27.0
+  [459566f4] DiffEqCallbacks v4.13.0
+  [77a26b50] DiffEqNoiseProcess v5.28.0
   [163ba53b] DiffResults v1.1.0
   [b552c78f] DiffRules v1.15.1
   [0c46a032] DifferentialEquations v7.17.0
@@ -109,7 +110,7 @@ Environment:
   [31c24e10] Distributions v0.25.123
   [ffbed154] DocStringExtensions v0.9.5
   [e30172f5] Documenter v1.17.0
-  [5b8099bc] DomainSets v0.7.16
+⌅ [5b8099bc] DomainSets v0.7.18
   [7c1d4256] DynamicPolynomials v0.6.6
   [06fc5a27] DynamicQuantities v1.12.1
   [e53f1632] EarthSciMLBase v0.25.6 `~/work/EarthSciMLBase.jl/EarthSciMLBase.jl`
@@ -139,8 +140,9 @@ Environment:
   [f6369f11] ForwardDiff v1.3.3
   [b38be410] FreeType v4.1.1
   [663a7486] FreeTypeAbstraction v0.10.8
+  [a85aefff] FunctionMaps v0.1.2
   [069b7b12] FunctionWrappers v1.1.3
-⌅ [77dc65aa] FunctionWrappersWrappers v0.1.3
+  [77dc65aa] FunctionWrappersWrappers v1.4.0
   [46192b85] GPUArraysCore v0.2.0
   [28b8d3ca] GR v0.73.24
   [c145ed77] GenericSchur v0.5.6
@@ -167,10 +169,10 @@ Environment:
   [d25df0c9] Inflate v0.1.5
   [22cec73e] InitialValues v0.3.1
   [18e54dd8] IntegerMathUtils v0.1.3
-  [de52edbc] Integrals v5.2.0
+  [de52edbc] Integrals v5.4.0
   [a98d9a8b] Interpolations v0.16.2
-  [d1acc4aa] IntervalArithmetic v1.0.5
-  [8197267c] IntervalSets v0.7.13
+  [d1acc4aa] IntervalArithmetic v1.0.6
+  [8197267c] IntervalSets v0.7.14
   [3587e190] InverseFunctions v0.1.17
   [92d709cd] IrrationalConstants v0.2.6
   [f1662d9f] Isoband v0.1.1
@@ -181,7 +183,7 @@ Environment:
   [682c06a0] JSON v1.5.0
   [ae98c720] Jieko v0.2.1
   [b835a17e] JpegTurbo v0.1.6
-  [ccbc3e58] JumpProcesses v9.24.0
+  [ccbc3e58] JumpProcesses v9.25.0
   [63c18a36] KernelAbstractions v0.9.41
   [5ab0869b] KernelDensity v0.6.11
   [ba0b0d4f] Krylov v0.10.6
@@ -192,10 +194,9 @@ Environment:
   [0e77f7df] LazilyInitializedFields v1.3.0
   [5078a376] LazyArrays v2.9.6
   [8cdb02fc] LazyModules v0.3.1
-  [2d8b4e74] LevyArea v1.0.0
   [87fe0de2] LineSearch v0.1.6
   [d3d80556] LineSearches v7.6.0
-  [7ed4a6bd] LinearSolve v3.69.0
+  [7ed4a6bd] LinearSolve v3.72.0
   [2ab3a3ac] LogExpFunctions v0.3.29
   [e6f89c97] LoggingExtras v1.2.0
   [1914dd2f] MacroTools v0.5.16
@@ -211,24 +212,24 @@ Environment:
   [fa8bd995] MetaGraphsNext v0.8.0
   [128add7d] MicroCollections v0.2.0
   [e1d29d7a] Missings v1.2.0
-  [961ee093] ModelingToolkit v11.18.0
-  [7771a370] ModelingToolkitBase v1.26.0
-  [6bb917b9] ModelingToolkitTearing v1.12.0
+  [961ee093] ModelingToolkit v11.19.1
+  [7771a370] ModelingToolkitBase v1.29.0
+  [6bb917b9] ModelingToolkitTearing v1.12.2
   [4886b29c] MonteCarloIntegration v0.2.0
   [e94cdb99] MosaicViews v0.3.4
   [2e0e35c7] Moshi v0.3.7
   [46d2c3a1] MuladdMacro v0.2.4
-  [102ac46a] MultivariatePolynomials v0.5.15
+  [102ac46a] MultivariatePolynomials v0.5.17
   [d8a4904e] MutableArithmetics v1.7.1
   [d41bc354] NLSolversBase v8.0.0
   [77ba4419] NaNMath v1.1.3
   [f09324ee] Netpbm v1.1.1
   [46757867] NetworkLayout v0.4.10
-⌃ [8913a72c] NonlinearSolve v4.16.0
-⌃ [be0214bd] NonlinearSolveBase v2.19.0
-⌃ [5959db7a] NonlinearSolveFirstOrder v2.0.0
-⌃ [9a2c21bd] NonlinearSolveQuasiNewton v1.12.0
-⌃ [26075421] NonlinearSolveSpectralMethods v1.6.0
+  [8913a72c] NonlinearSolve v4.17.1
+  [be0214bd] NonlinearSolveBase v2.23.0
+  [5959db7a] NonlinearSolveFirstOrder v2.1.1
+  [9a2c21bd] NonlinearSolveQuasiNewton v1.13.1
+  [26075421] NonlinearSolveSpectralMethods v1.7.1
   [510215fc] Observables v0.5.5
   [6fe1bfb0] OffsetArrays v1.17.0
   [52e1d378] OpenEXR v0.3.3
@@ -238,9 +239,9 @@ Environment:
   [1dea7af3] OrdinaryDiffEq v6.111.0
   [89bda076] OrdinaryDiffEqAdamsBashforthMoulton v1.11.0
   [6ad6398a] OrdinaryDiffEqBDF v1.24.0
-  [bbf590c4] OrdinaryDiffEqCore v3.27.0
+  [bbf590c4] OrdinaryDiffEqCore v3.29.0
   [50262376] OrdinaryDiffEqDefault v1.14.0
-  [4302a76b] OrdinaryDiffEqDifferentiation v2.6.0
+  [4302a76b] OrdinaryDiffEqDifferentiation v2.7.0
   [9286f039] OrdinaryDiffEqExplicitRK v1.11.0
   [e0540318] OrdinaryDiffEqExponentialRK v1.15.0
   [becaefa8] OrdinaryDiffEqExtrapolation v1.18.0
@@ -252,13 +253,13 @@ Environment:
   [521117fe] OrdinaryDiffEqLinear v1.12.0
   [1344f307] OrdinaryDiffEqLowOrderRK v1.12.0
   [b0944070] OrdinaryDiffEqLowStorageRK v1.14.0
-  [127b3ac7] OrdinaryDiffEqNonlinearSolve v1.25.0
+  [127b3ac7] OrdinaryDiffEqNonlinearSolve v1.26.0
   [c9986a66] OrdinaryDiffEqNordsieck v1.11.0
   [5dd0a6cf] OrdinaryDiffEqPDIRK v1.13.0
   [5b33eab2] OrdinaryDiffEqPRK v1.10.0
   [04162be5] OrdinaryDiffEqQPRK v1.10.0
   [af6ede74] OrdinaryDiffEqRKN v1.12.0
-  [43230ef6] OrdinaryDiffEqRosenbrock v1.28.0
+  [43230ef6] OrdinaryDiffEqRosenbrock v1.29.0
   [2d112036] OrdinaryDiffEqSDIRK v1.14.0
   [669c94d9] OrdinaryDiffEqSSPRK v1.13.0
   [e3e12d00] OrdinaryDiffEqStabilizedIRK v1.13.0
@@ -296,7 +297,7 @@ Environment:
   [795d4caa] ReadOnlyDicts v1.0.1
   [3cdcf5f2] RecipesBase v1.3.4
   [01d81517] RecipesPipeline v0.6.12
-⌅ [731186ca] RecursiveArrayTools v3.53.0
+⌅ [731186ca] RecursiveArrayTools v3.54.0
   [189a3867] Reexport v1.2.2
   [42d2dcc6] Referenceables v0.1.3
   [2792f1a3] RegistryInstances v0.1.0
@@ -305,12 +306,12 @@ Environment:
   [ae5879a3] ResettableStacks v1.2.0
   [79098fc4] Rmath v0.9.0
   [5eaf0fd0] RoundingEmulator v0.2.1
-  [7e49a35a] RuntimeGeneratedFunctions v0.5.17
-  [9dfe8606] SCCNonlinearSolve v1.12.0
+  [7e49a35a] RuntimeGeneratedFunctions v0.5.18
+  [9dfe8606] SCCNonlinearSolve v1.12.1
   [fdea26ae] SIMD v3.7.2
   [94e857df] SIMDTypes v0.1.0
-⌃ [0bca4576] SciMLBase v2.153.1
-  [19f34311] SciMLJacobianOperators v0.1.12
+⌅ [0bca4576] SciMLBase v2.154.0
+  [19f34311] SciMLJacobianOperators v0.1.13
   [a6db7da4] SciMLLogging v1.9.1
   [c0aeaf25] SciMLOperators v1.16.0
   [431bcebd] SciMLPublic v1.0.1
@@ -321,7 +322,7 @@ Environment:
   [992d4aef] Showoff v1.0.3
   [73760f76] SignedDistanceFields v0.4.1
   [777ac1f9] SimpleBufferStream v1.2.0
-  [727e6d20] SimpleNonlinearSolve v2.11.0
+  [727e6d20] SimpleNonlinearSolve v2.11.1
   [699a6c99] SimpleTraits v0.9.5
   [45858cf5] Sixel v0.1.5
   [ed01d8cd] Sobol v1.5.0
@@ -333,7 +334,7 @@ Environment:
   [860ef19b] StableRNGs v1.0.4
   [cae243ae] StackViews v0.1.2
   [0c0c59c1] StarAlgebras v0.3.0
-  [64909d44] StateSelection v1.9.0
+  [64909d44] StateSelection v1.9.1
   [aedffcd0] Static v1.3.1
   [0d7ed370] StaticArrayInterface v1.9.0
   [90137ffa] StaticArrays v1.9.18
@@ -342,16 +343,16 @@ Environment:
   [82ae8749] StatsAPI v1.8.0
   [2913bbd2] StatsBase v0.34.10
   [4c63d2b9] StatsFuns v1.5.2
-  [9672c7b4] SteadyStateDiffEq v2.9.0
+  [9672c7b4] SteadyStateDiffEq v2.10.0
   [789caeaf] StochasticDiffEq v6.101.0
   [19c5a474] StochasticDiffEqCore v1.1.0
   [0520c28c] StochasticDiffEqHighOrder v1.0.0
   [ebf54054] StochasticDiffEqIIF v1.0.0
-  [5080b986] StochasticDiffEqImplicit v1.1.0
+  [5080b986] StochasticDiffEqImplicit v1.2.0
   [aefaaa88] StochasticDiffEqLeaping v1.0.0
   [90dbc90e] StochasticDiffEqLevyArea v1.0.0
   [d15fe365] StochasticDiffEqLowOrder v1.0.0
-  [8c95a807] StochasticDiffEqMilstein v1.0.0
+  [8c95a807] StochasticDiffEqMilstein v1.1.0
   [db241ea8] StochasticDiffEqROCK v1.0.0
   [49714585] StochasticDiffEqRODE v1.0.0
   [af2a2fcd] StochasticDiffEqWeak v1.1.0
@@ -361,8 +362,8 @@ Environment:
   [c3572dad] Sundials v5.1.0
   [2efcf032] SymbolicIndexingInterface v0.3.46
   [19f23fe9] SymbolicLimits v1.1.0
-  [d1185830] SymbolicUtils v4.21.0
-  [0c5d862f] Symbolics v7.17.0
+  [d1185830] SymbolicUtils v4.24.0
+  [0c5d862f] Symbolics v7.18.0
   [3783bdb8] TableTraits v1.0.1
   [bd369af6] Tables v1.12.1
   [ed4db957] TaskLocalValues v0.1.3
@@ -411,9 +412,9 @@ Environment:
   [2e76f6c2] HarfBuzz_jll v8.5.1+0
   [905a6f67] Imath_jll v3.2.2+0
   [1d5cc7b8] IntelOpenMP_jll v2025.2.0+0
-  [aacddb02] JpegTurbo_jll v3.1.4+0
+  [aacddb02] JpegTurbo_jll v3.1.5+0
   [c1c5ebd0] LAME_jll v3.100.3+0
-  [88015f11] LERC_jll v4.0.1+0
+  [88015f11] LERC_jll v4.1.0+0
   [1d63c593] LLVMOpenMP_jll v18.1.8+0
 ⌅ [e9f186c6] Libffi_jll v3.4.7+0
   [7e76a0d4] Libglvnd_jll v1.7.1+1
@@ -427,7 +428,7 @@ Environment:
   [656ef2d0] OpenBLAS32_jll v0.3.30+0
   [6cdc7f73] OpenBLASConsistentFPCSR_jll v0.3.30+0
   [18a262bb] OpenEXR_jll v3.4.8+0
-  [9bd350c2] OpenSSH_jll v10.2.1+0
+  [9bd350c2] OpenSSH_jll v10.3.1+0
   [efe28fd5] OpenSpecFun_jll v0.5.6+0
   [91d4177d] Opus_jll v1.6.1+0
   [36c8627f] Pango_jll v1.57.0+0
@@ -442,7 +443,7 @@ Environment:
   [fb77eaff] Sundials_jll v7.5.0+0
   [a44049a8] Vulkan_Loader_jll v1.3.243+0
   [a2964d1f] Wayland_jll v1.24.0+0
-  [ffd25f8a] XZ_jll v5.8.2+0
+  [ffd25f8a] XZ_jll v5.8.3+0
   [f67eecfb] Xorg_libICE_jll v1.1.2+0
   [c834827a] Xorg_libSM_jll v1.2.6+0
   [4f6342f7] Xorg_libX11_jll v1.8.13+0
@@ -478,7 +479,7 @@ Environment:
   [2db6ffa8] libevdev_jll v1.13.4+0
   [f638f0a6] libfdk_aac_jll v2.0.4+0
   [36db933b] libinput_jll v1.28.1+0
-  [b53b4c65] libpng_jll v1.6.56+0
+  [b53b4c65] libpng_jll v1.6.57+0
   [075b6546] libsixel_jll v1.10.5+0
   [9a156e7d] libva_jll v2.23.0+0
   [f27f6e37] libvorbis_jll v1.3.8+0
@@ -538,6 +539,6 @@ Environment:
   [8e850b90] libblastrampoline_jll v5.15.0+0
   [8e850ede] nghttp2_jll v1.64.0+1
   [3f19e933] p7zip_jll v17.7.0+0
-Info Packages marked with ⌃ and ⌅ have new versions available. Those with ⌃ may be upgradable, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated -m`</code></pre></details>You can also download the 
+Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated -m`</code></pre></details>You can also download the 
 <a href="<p>https://github.com/EarthSciML/EarthSciMLBase.jl/tree/gh-pages/v0.25.6/assets/Manifest.toml</p>">manifest</a> file and the
-<a href="<p>https://github.com/EarthSciML/EarthSciMLBase.jl/tree/gh-pages/v0.25.6/assets/Project.toml</p>">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="composition/">Composition »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Sunday 5 April 2026 02:48">Sunday 5 April 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+<a href="<p>https://github.com/EarthSciML/EarthSciMLBase.jl/tree/gh-pages/v0.25.6/assets/Project.toml</p>">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="composition/">Composition »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Friday 10 April 2026 04:43">Friday 10 April 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
