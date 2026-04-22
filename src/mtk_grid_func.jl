@@ -1,20 +1,7 @@
-# Move coordinate variables from the parameter list of a function to the argument list.
-# This is useful for creating functions that take coordinates as arguments.
-function rewrite_coord_func(x, coord_args, idv::Symbol)
-    if @capture(x, function (args__)
-        body_
-    end)
-        return :(function ($(args...), $(coord_args...))
-            $body
-        end)
-    elseif @capture(x, (a_)(b_))
-        if (a isa _CoordTmpF) && (b == idv)
-            return :($(coord_args[a.idx]))
-        end
-    end
-    return x
-end
-
+# Post-codegen AST rewrite for Reactant: turns scalar `u`/`out` access and
+# scalar operations into broadcasted equivalents.  Coordinate arguments are
+# handled natively by `build_function_wrapper` (see `gen_coord_func`); this
+# rewrite only needs to handle array broadcasting.
 function rewrite_broadcast(x)
     if @capture(x, (a_)[b_] = (c_))
         if a == :ˍ₋out # Copying data to output array
@@ -36,38 +23,114 @@ function rewrite_broadcast(x)
     return x
 end
 
-function _add_coord_args(ex, coord_args, idv::Symbol, ::MapAlgorithm)
-    ex = MacroTools.postwalk(x -> rewrite_coord_func(x, coord_args, idv), ex)
+# Placeholder symbolic variable carrying a coordinate's name + unit.  Used as
+# a trailing function argument so `build_function_wrapper` generates code that
+# references the coordinate by name rather than via the parameter buffer.
+function _coord_placeholder(name::Symbol, unit)
+    sym = Symbolics.unwrap(Symbolics.variable(name; T = Real))
+    sym = ModelingToolkit.toparam(sym)
+    if unit !== nothing
+        sym = Symbolics.setmetadata(sym, ModelingToolkit.VariableUnit, unit)
+    end
+    return sym
 end
 
-function _add_coord_args(ex, coord_args, idv::Symbol, ::MapReactant)
-    ex = MacroTools.postwalk(x -> rewrite_coord_func(x, coord_args, idv), ex)
-    ex = MacroTools.postwalk(x -> rewrite_broadcast(x), ex)
+# Recursively walk a symbolic expression and apply `f!` to every subexpression
+# whose top-level `operation` is a `_CoordTmpF`.
+function _foreach_coord_tmp(f!, expr)
+    expr = Symbolics.unwrap(expr)
+    if Symbolics.iscall(expr)
+        if Symbolics.operation(expr) isa _CoordTmpF
+            f!(expr)
+        end
+        for a in Symbolics.arguments(expr)
+            _foreach_coord_tmp(f!, a)
+        end
+    end
+    return nothing
 end
 
+# Walk `sys_coord` equations + observed to collect every `_CoordTmpF(coord, i)(t)`
+# term that `_prepare_coord_sys` inserted.  Returns a Vector indexed by `i`; any
+# coordinate not referenced in the system gets a placeholder with no unit.
+function _coord_placeholders(sys_coord, coord_args)
+    found = Dict{Int, Tuple{Any, Any}}() # idx => (tmp_term, coord)
+    sources = vcat(equations(sys_coord), ModelingToolkit.observed(sys_coord))
+    for eq in sources, side in (eq.lhs, eq.rhs)
+
+        _foreach_coord_tmp(side) do term
+            op = Symbolics.operation(term)
+            get!(found, op.idx, (term, op.coord))
+        end
+    end
+    phs = Vector{Any}(undef, length(coord_args))
+    subst = Dict()
+    for i in eachindex(coord_args)
+        unit_c = haskey(found, i) ? ModelingToolkit.get_unit(found[i][2]) : nothing
+        phs[i] = _coord_placeholder(coord_args[i], unit_c)
+        if haskey(found, i)
+            subst[found[i][1]] = phs[i]
+        end
+    end
+    return phs, subst
+end
+
+# Build the function signature arguments that `build_function_wrapper` expects
+# for a coord-aware generated function.  Returns `(args..., p_start, p_end)`.
+function _coord_function_args(sys, placeholders)
+    dvs = unknowns(sys)
+    ps = parameters(sys; initial_parameters = true)
+    p = tuple(ModelingToolkit.reorder_parameters(sys, Symbolics.unwrap.(ps))...)
+    iv = ModelingToolkit.get_iv(sys)
+    args = (dvs, p..., iv, placeholders...)
+    return args, 2, 1 + length(p)
+end
+
+"""
+Generate a scalar/in-place function that accepts the three coordinate values as
+trailing arguments.  The generated signature is `(u, p, t, c1, c2, c3)` (out-of-place)
+or `(out, u, p, t, c1, c2, c3)` (in-place), matching the arity expected by the
+downstream grid-evaluation machinery.
+"""
 function gen_coord_func(sys, expr, coord_args, alg::MapAlgorithm = MapBroadcast();
         eval_expression = false, eval_module = @__MODULE__)
-    idv = var2symbol(ModelingToolkit.get_iv(sys))
-    fexpr = ModelingToolkit.generate_custom_function(sys, expr, expression = Val{true})
-    if fexpr isa Tuple
-        fexpr = _add_coord_args.(fexpr, (coord_args,), (idv,), (alg,))
-        f = ModelingToolkit.eval_or_rgf.(fexpr; eval_expression, eval_module)
-        f = ModelingToolkit.GeneratedFunctionWrapper{(2, 6, true)}(f[1], f[2])
-    else
-        fexpr = _add_coord_args(fexpr, coord_args, idv, alg)
-        f = ModelingToolkit.eval_or_rgf(fexpr; eval_expression, eval_module)
+    placeholders, subst = _coord_placeholders(sys, coord_args)
+    expr_sub = isempty(subst) ? expr : Symbolics.substitute.(expr, (subst,))
+    args, p_start, p_end = _coord_function_args(sys, placeholders)
+
+    fexpr = ModelingToolkit.build_function_wrapper(
+        sys, expr_sub, args...;
+        p_start = p_start, p_end = p_end, expression = Val{true}
+    )
+
+    if alg isa MapReactant
+        fexpr = fexpr isa Tuple ?
+                map(f -> MacroTools.postwalk(rewrite_broadcast, f), fexpr) :
+                MacroTools.postwalk(rewrite_broadcast, fexpr)
     end
-    return f
+
+    if fexpr isa Tuple
+        f = ModelingToolkit.eval_or_rgf.(fexpr; eval_expression, eval_module)
+        return ModelingToolkit.GeneratedFunctionWrapper{(2, 6, true)}(f[1], f[2])
+    else
+        return ModelingToolkit.eval_or_rgf(fexpr; eval_expression, eval_module)
+    end
 end
 
 function _get_coord_args(sys, domain)
     coords = EarthSciMLBase.coord_params(sys, domain)
-    # Create constants to replace coordinates. We will replace these with arguments later.
+    # Symbolic names for the trailing coord arguments of the generated function.
     coord_args = Symbol.(nameof.(coords), (:_arg,))
     coords, coord_args
 end
 
-# Dummy function for temporarily replacing coordinate variables.
+# Placeholder symbolic function used to keep coordinate-valued expressions
+# flowing through `mtkcompile` without adding the coordinates to the parameter
+# list.  The underlying coordinate is never evaluated directly — every
+# `_CoordTmpF(coord, i)(t)` term is substituted with a scalar placeholder
+# parameter before code generation in `gen_coord_func`.  The scalar-arg method
+# returns `Inf` so that any stray, unsubstituted call at runtime produces a
+# loud, recognisable failure rather than silently returning a plausible value.
 struct _CoordTmpF
     coord::Any
     idx::Int
