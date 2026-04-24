@@ -16,8 +16,9 @@ every ODE system is promoted using that shared DomainInfo, meaning every variabl
 gets the same spatial dimensions.
 
 This creates a conflict when systems need different numbers of dimensions:
-- A 2D surface model needs `{t, x, y}`
-- A 3D data source needs `{t, x, y, lev}`
+
+  - A 2D surface model needs `{t, x, y}`
+  - A 3D data source needs `{t, x, y, lev}`
 
 If the shared DomainInfo is 2D, the 3D data source loses its vertical dimension.
 If it is 3D, the 2D model gets an unwanted `lev` dimension that doesn't appear in
@@ -46,7 +47,7 @@ domain_2d = DomainInfo(
 domain_3d = DomainInfo(
     constIC(0.0, t ∈ Interval(0.0, 1.0)),
     constBC(0.0, x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
-            z ∈ Interval(0.0, 1.0))
+        z ∈ Interval(0.0, 1.0))
 )
 
 nothing # hide
@@ -60,7 +61,7 @@ in the metadata dictionary alongside the usual `CoupleType`:
 System([D(v) ~ p_v], t; name = :data3d,
     metadata = Dict(
         SysDomainInfo => domain_3d,
-        CoupleType => MyDataCoupler,
+        CoupleType => MyDataCoupler
     ))
 ```
 
@@ -86,8 +87,8 @@ Dx = Differential(x)
 pde_2d = PDESystem(
     [D(u(t, x, y)) ~ Dx(Dx(u(t, x, y)))],
     [u(0, x, y) ~ 1.0,
-     u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
-     u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0],
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0],
     [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
     [t, x, y], [u(t, x, y)], [];
     name = :surface,
@@ -100,7 +101,7 @@ pde_2d = PDESystem(
 ode_3d = System([D(v) ~ p_v], t; name = :data3d,
     metadata = Dict(
         SysDomainInfo => domain_3d,
-        CoupleType => DataSource3DCoupler,
+        CoupleType => DataSource3DCoupler
     ))
 nothing # hide
 ```
@@ -120,7 +121,7 @@ function EarthSciMLBase.couple2(s::SurfaceCoupler, d::DataSource3DCoupler)
     # Add the sliced variable as a forcing term to u's equation.
     coupling_eqs = [
         D(u(t, x, y)) ~ sliced_v,
-        slice_eq,
+        slice_eq
     ]
     ConnectorSystem(coupling_eqs, a_sys, b_sys)
 end
@@ -157,22 +158,22 @@ end
 
 The mixed-dimension coupling mechanism works through these steps:
 
-1. **Grouping**: ODE systems are partitioned by their effective [`DomainInfo`](@ref).
-   Systems with [`SysDomainInfo`](@ref) metadata use their own; others use the
-   [`CoupledSystem`](@ref)'s default.
+ 1. **Grouping**: ODE systems are partitioned by their effective [`DomainInfo`](@ref).
+    Systems with [`SysDomainInfo`](@ref) metadata use their own; others use the
+    [`CoupledSystem`](@ref)'s default.
 
-2. **Same-group ODE coupling**: Within each group, `EarthSciMLBase.couple2` methods
-   run as normal, because all systems share the same dimensions.
+ 2. **Same-group ODE coupling**: Within each group, `EarthSciMLBase.couple2` methods
+    run as normal, because all systems share the same dimensions.
 
-3. **Individual promotion**: Each group is composed into a flat `System` and
-   promoted to a `PDESystem` via `system + domaininfo`. Metadata (including
-   [`CoupleType`](@ref)) is preserved through this promotion.
+ 3. **Individual promotion**: Each group is composed into a flat `System` and
+    promoted to a `PDESystem` via `system + domaininfo`. Metadata (including
+    [`CoupleType`](@ref)) is preserved through this promotion.
 
-4. **Cross-group PDE coupling**: After promotion, `EarthSciMLBase.couple2` methods
-   are checked between all `PDESystem` pairs (including across groups). These
-   methods can handle dimension mismatches using tools like
-   [`slice_variable`](@ref).
+ 4. **Cross-group PDE coupling**: After promotion, `EarthSciMLBase.couple2` methods
+    are checked between all `PDESystem` pairs (including across groups). These
+    methods can handle dimension mismatches using tools like
+    [`slice_variable`](@ref).
 
-5. **Merging**: [`merge_pdesystems`](@ref) computes the union of all
-   independent variables and domains, keeping each dependent variable at its
-   original dimensionality.
+ 5. **Merging**: [`merge_pdesystems`](@ref) computes the union of all
+    independent variables and domains, keeping each dependent variable at its
+    original dimensionality.
