@@ -1,6 +1,7 @@
 [default.extend-words]
 strang = "strang"
 setp = "setp"
-ICcomponent = "ICcomponent"
-BCcomponent = "BCcomponent"
-ICBCcomponent = "ICBCcomponent"
+# typos splits ICcomponent/BCcomponent/ICBCcomponent on the second capital and
+# lowercases the tail to "Ccomponent", which it flags as a misspelling of
+# "Component".  These names are legitimate (existing public types) so allow it.
+Ccomponent = "Ccomponent"
