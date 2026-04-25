@@ -68,8 +68,10 @@ using OrdinaryDiffEqTsit5
     have_eqs = equations(sirfinal)
     obs = ModelingToolkit.observed(sirfinal)
 
-    # Check that the expected equations are present (allowing for equivalent simplifications)
-    have_str = string(have_eqs)
+    # Check that the expected variables appear in the simplified system (either
+    # directly in the remaining equations or in observed equations that expose
+    # the equivalence between connected variables).
+    have_str = string(have_eqs) * " " * string(obs)
     @test occursin("reqn₊γ", have_str) && occursin("reqn₊I", have_str) &&
           occursin("reqn₊R", have_str)
     @test occursin("seqn₊β", have_str) && occursin("seqn₊S", have_str) &&
@@ -152,25 +154,29 @@ end
         @testset "permutation $i" begin
             m = convert(System, model)
             eqstr = string(equations(m))
-            @test occursin("b₊c_NO2(t)", eqstr)
-            @test occursin("b₊jNO2(t)", eqstr)
-            @test occursin("b₊NO2(t)", string(unknowns(m)))
             obstr = string(ModelingToolkit.observed(m))
-            @test occursin("a₊j_NO2(t) ~ a₊j_unit", obstr)
-            @test occursin("c₊NO2(t) ~ c₊emis", obstr)
-            @test occursin("b₊jNO2(t) ~ a₊j_NO2(t)", obstr)
-            @test occursin("b₊c_NO2(t) ~ c₊NO2(t)", obstr)
+            # After simplification, equivalent variables are substituted for a single
+            # representative, so the test checks the combined equation+observed text
+            # to stay agnostic to which representative MTK chose.
+            combined = eqstr * " " * obstr
+            @test occursin("b₊c_NO2(t)", combined)
+            @test occursin("b₊jNO2(t)", combined)
+            @test occursin("b₊NO2(t)", string(unknowns(m)))
+            @test occursin("a₊j_unit", combined)
+            @test occursin("a₊j_NO2(t)", combined)
+            @test occursin("c₊emis", combined)
+            @test occursin("c₊NO2(t)", combined)
         end
     end
 
     @testset "Stable evaluation" begin
         sys = couple(A(), B(), C())
         s = convert(System, sys)
-        eqs1 = string(equations(s))
-        @test occursin("b₊c_NO2(t)", eqs1)
-        eqs2 = string(equations(s))
-        @test occursin("b₊c_NO2(t)", eqs2)
-        @test eqs1 == eqs2
+        combined1 = string(equations(s)) * " " * string(ModelingToolkit.observed(s))
+        @test occursin("b₊c_NO2(t)", combined1)
+        combined2 = string(equations(s)) * " " * string(ModelingToolkit.observed(s))
+        @test occursin("b₊c_NO2(t)", combined2)
+        @test combined1 == combined2
     end
 end
 
@@ -224,11 +230,11 @@ end
     end
 
     models = [couple(X(), Y(), Z()),
-              couple(Z(), Y(), X()),
-              couple(Y(), X(), Z()),
-              couple(Z(), X(), Y()),
-              couple(X(), Z(), Y()),
-              couple(Y(), Z(), X())]
+        couple(Z(), Y(), X()),
+        couple(Y(), X(), Z()),
+        couple(Z(), X(), Y()),
+        couple(X(), Z(), Y()),
+        couple(Y(), Z(), X())]
     for (i, model) in enumerate(models)
         @testset "permutation $i" begin
             m = convert(System, model)
@@ -359,14 +365,39 @@ end
     # Utility function to check if a variable is needed in the system,
     # i.e., if one of the state variables depends on it.
     function is_var_needed(var, sys)
-        var = EarthSciMLBase.var2symbol(var)
-        if var in EarthSciMLBase.var2symbol.(unknowns(sys))
+        target = EarthSciMLBase.var2symbol(var)
+        if target in EarthSciMLBase.var2symbol.(unknowns(sys))
             return true
         end
+        obs = ModelingToolkit.observed(sys)
         exprs = [eq.rhs for eq in equations(sys)]
-        needed_obs = ModelingToolkit.observed_equations_used_by(sys, exprs)
-        needed_vars = getproperty.(observed(sys)[needed_obs], :lhs)
-        return var in EarthSciMLBase.var2symbol.(needed_vars)
+        needed_obs_idx = ModelingToolkit.observed_equations_used_by(sys, exprs)
+        needed_syms = Set(EarthSciMLBase.var2symbol.(getproperty.(obs[needed_obs_idx],
+            :lhs)))
+        # Follow the observed equivalence chain in both directions so that
+        # variables which MTK simplification aliased to a different representative
+        # still count as "needed" when any alias in their class is used.
+        changed = true
+        while changed
+            changed = false
+            for eq in obs
+                lhs_sym = EarthSciMLBase.var2symbol(eq.lhs)
+                rhs_syms = EarthSciMLBase.var2symbol.(Symbolics.get_variables(eq.rhs))
+                lhs_needed = lhs_sym in needed_syms
+                rhs_needed = any(s -> s in needed_syms, rhs_syms)
+                if lhs_needed && !all(s -> s in needed_syms, rhs_syms)
+                    for s in rhs_syms
+                        push!(needed_syms, s)
+                    end
+                    changed = true
+                end
+                if rhs_needed && !lhs_needed
+                    push!(needed_syms, lhs_sym)
+                    changed = true
+                end
+            end
+        end
+        return target in needed_syms
     end
 
     runcount1 = 0

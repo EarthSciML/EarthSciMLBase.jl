@@ -67,7 +67,8 @@ end
 
     pde_eq = [D(ψ(t, px, py)) ~ -S * sqrt(Dpx(ψ(t, px, py))^2 + Dpy(ψ(t, px, py))^2)]
     pde_bcs = [ψ(0.0, px, py) ~ sqrt((px - 50.0)^2 + (py - 50.0)^2) - 10.0]
-    pde_domains = [t ∈ Interval(0.0, 10.0), px ∈ Interval(0.0, 100.0), py ∈ Interval(0.0, 100.0)]
+    pde_domains = [
+        t ∈ Interval(0.0, 10.0), px ∈ Interval(0.0, 100.0), py ∈ Interval(0.0, 100.0)]
     pdesys = PDESystem(pde_eq, pde_bcs, pde_domains, [t, px, py], [ψ(t, px, py)], [S];
         name = :pdetest, metadata = Dict(CoupleType => :pdemetatest))
 

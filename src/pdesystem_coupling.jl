@@ -125,9 +125,10 @@ as an existing equation, its RHS is added to the existing equation's RHS. Otherw
 is added as a new equation.
 
 # Arguments
-- `pdesystems`: Vector of PDESystems to merge
-- `coupling_eqs`: Additional coupling equations to apply (default: empty)
-- `name`: Name for the resulting PDESystem (default: `:coupled`)
+
+  - `pdesystems`: Vector of PDESystems to merge
+  - `coupling_eqs`: Additional coupling equations to apply (default: empty)
+  - `name`: Name for the resulting PDESystem (default: `:coupled`)
 """
 function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem},
         coupling_eqs::Vector{Equation} = Equation[];
@@ -165,7 +166,8 @@ function merge_pdesystems(pdesystems::AbstractVector{<:ModelingToolkit.PDESystem
     # Ensure all LHS dependent variables are registered in dvs.
     # This handles variables introduced by coupling equations, such as
     # slice_variable outputs (which have distinct names like v_at_z_0ₓ0).
-    existing_dv_names = Set(Symbol(Symbolics.tosymbol(dv, escape = false)) for dv in all_dvs)
+    existing_dv_names = Set(Symbol(Symbolics.tosymbol(dv, escape = false))
+    for dv in all_dvs)
     for eq in all_eqs
         for var in Symbolics.get_variables(eq.lhs)
             uvar = Symbolics.unwrap(var)
@@ -252,13 +254,15 @@ evaluated at `slice_value`. The distinct name avoids conflicts with the original
 variable in the PDESystem `dvs` list.
 
 # Arguments
-- `var`: A symbolic dependent variable call, e.g., `U(t, x, y, lev)`
-- `slice_dim`: The independent variable to fix, e.g., `lev`
-- `slice_value`: The numeric value at which to evaluate `slice_dim`
-- `name`: (keyword) Optional `Symbol` for the new variable. Defaults to
-  `Symbol(varname, "_at_", dim)`, e.g., `:U_at_lev`.
+
+  - `var`: A symbolic dependent variable call, e.g., `U(t, x, y, lev)`
+  - `slice_dim`: The independent variable to fix, e.g., `lev`
+  - `slice_value`: The numeric value at which to evaluate `slice_dim`
+  - `name`: (keyword) Optional `Symbol` for the new variable. Defaults to
+    `Symbol(varname, "_at_", dim)`, e.g., `:U_at_lev`.
 
 # Example
+
 ```julia
 @parameters x y lev
 @variables U(..)
