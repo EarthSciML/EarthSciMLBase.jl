@@ -16,12 +16,12 @@ domain_2d = DomainInfo(
 domain_3d = DomainInfo(
     constIC(0.0, t ∈ Interval(0.0, 1.0)),
     constBC(0.0, x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
-            z ∈ Interval(0.0, 1.0))
+        z ∈ Interval(0.0, 1.0))
 )</code></pre><p>An ODE system declares its own DomainInfo by including <code>SysDomainInfo =&gt; domaininfo</code> in the metadata dictionary alongside the usual <code>CoupleType</code>:</p><pre><code class="language-julia hljs"># Example: a data source that needs 3 spatial dimensions
 System([D(v) ~ p_v], t; name = :data3d,
     metadata = Dict(
         SysDomainInfo =&gt; domain_3d,
-        CoupleType =&gt; MyDataCoupler,
+        CoupleType =&gt; MyDataCoupler
     ))</code></pre><h2 id="Cross-Dimension-Coupling-Example"><a class="docs-heading-anchor" href="#Cross-Dimension-Coupling-Example">Cross-Dimension Coupling Example</a><a id="Cross-Dimension-Coupling-Example-1"></a><a class="docs-heading-anchor-permalink" href="#Cross-Dimension-Coupling-Example" title="Permalink"></a></h2><p>Here is a complete example where a 2D PDE system receives forcing from a 3D ODE data source at ground level (<code>z=0</code>).</p><p>First, define coupler types and the systems:</p><pre><code class="language-julia hljs">struct SurfaceCoupler
     sys
 end
@@ -36,8 +36,8 @@ Dx = Differential(x)
 pde_2d = PDESystem(
     [D(u(t, x, y)) ~ Dx(Dx(u(t, x, y)))],
     [u(0, x, y) ~ 1.0,
-     u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
-     u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0],
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0],
     [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
     [t, x, y], [u(t, x, y)], [];
     name = :surface,
@@ -50,7 +50,7 @@ pde_2d = PDESystem(
 ode_3d = System([D(v) ~ p_v], t; name = :data3d,
     metadata = Dict(
         SysDomainInfo =&gt; domain_3d,
-        CoupleType =&gt; DataSource3DCoupler,
+        CoupleType =&gt; DataSource3DCoupler
     ))</code></pre><p>Define how the 2D and 3D systems couple. The <code>EarthSciMLBase.couple2</code> method receives the promoted PDESystems, so we extract the 3D dependent variable and use <a href="../api/#EarthSciMLBase.slice_variable-Tuple{Any, Any, Any}"><code>slice_variable</code></a> to fix the vertical coordinate at ground level (<code>z=0</code>):</p><pre><code class="language-julia hljs">function EarthSciMLBase.couple2(s::SurfaceCoupler, d::DataSource3DCoupler)
     a_sys, b_sys = s.sys, d.sys
     # Find the 3D dependent variable from the promoted data source system.
@@ -61,12 +61,12 @@ ode_3d = System([D(v) ~ p_v], t; name = :data3d,
     # Add the sliced variable as a forcing term to u&#39;s equation.
     coupling_eqs = [
         D(u(t, x, y)) ~ sliced_v,
-        slice_eq,
+        slice_eq
     ]
     ConnectorSystem(coupling_eqs, a_sys, b_sys)
 end</code></pre><p>Couple and convert. The 2D PDE system, 3D ODE data source, and default 2D domain are all passed to <a href="../api/#EarthSciMLBase.couple-Tuple"><code>couple</code></a>:</p><pre><code class="language-julia hljs">cs = couple(pde_2d, ode_3d, domain_2d)
 merged = convert(PDESystem, cs)</code></pre><p class="math-container">\[ \begin{align}
-\frac{\mathrm{d}}{\mathrm{d}t} ~ u\left( t, x, y \right) &amp;= \mathtt{data3d.v\_at\_z}\left( t, x, y \right) + \frac{\mathrm{d}^{2}}{\mathrm{d}x^{2}} ~ u\left( t, x, y \right) \\
+\frac{\mathrm{d}}{\mathrm{d}t} ~ u\left( t, x, y \right) &amp;= \frac{\mathrm{d}^{2}}{\mathrm{d}x^{2}} ~ u\left( t, x, y \right) + \mathtt{data3d.v\_at\_z}\left( t, x, y \right) \\
 \frac{\mathrm{d}}{\mathrm{d}t} ~ \mathtt{data3d.v}\left( t, x, y, z \right) &amp;= \mathtt{data3d.p\_v} \\
 \mathtt{data3d.v\_at\_z}\left( t, x, y \right) &amp;= \mathtt{data3d.v}\left( t, x, y, 0 \right)
 \end{align}
@@ -76,6 +76,6 @@ end</code></pre><pre class="documenter-example-output"><code class="nohighlight 
 data3d₊v(t, x, y, z)
 data3d₊v_at_z(t, x, y)</code></pre><p>The equations include the original diffusion equation with the coupling term added, plus a slice equation extracting the 3D variable at <code>z=0</code>:</p><pre><code class="language-julia hljs">for eq in equations(merged)
     println(eq)
-end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Differential(t, 1)(u(t, x, y)) ~ data3d₊v_at_z(t, x, y) + Differential(x, 2)(u(t, x, y))
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Differential(t, 1)(u(t, x, y)) ~ Differential(x, 2)(u(t, x, y)) + data3d₊v_at_z(t, x, y)
 Differential(t, 1)(data3d₊v(t, x, y, z)) ~ data3d₊p_v
-data3d₊v_at_z(t, x, y) ~ data3d₊v(t, x, y, 0.0)</code></pre><h2 id="How-It-Works-Internally"><a class="docs-heading-anchor" href="#How-It-Works-Internally">How It Works Internally</a><a id="How-It-Works-Internally-1"></a><a class="docs-heading-anchor-permalink" href="#How-It-Works-Internally" title="Permalink"></a></h2><p>The mixed-dimension coupling mechanism works through these steps:</p><ol><li><p><strong>Grouping</strong>: ODE systems are partitioned by their effective <a href="../api/#EarthSciMLBase.DomainInfo"><code>DomainInfo</code></a>. Systems with <a href="../api/#EarthSciMLBase.SysDomainInfo"><code>SysDomainInfo</code></a> metadata use their own; others use the <a href="../api/#EarthSciMLBase.CoupledSystem"><code>CoupledSystem</code></a>&#39;s default.</p></li><li><p><strong>Same-group ODE coupling</strong>: Within each group, <code>EarthSciMLBase.couple2</code> methods run as normal, because all systems share the same dimensions.</p></li><li><p><strong>Individual promotion</strong>: Each group is composed into a flat <code>System</code> and promoted to a <code>PDESystem</code> via <code>system + domaininfo</code>. Metadata (including <a href="../api/#EarthSciMLBase.CoupleType"><code>CoupleType</code></a>) is preserved through this promotion.</p></li><li><p><strong>Cross-group PDE coupling</strong>: After promotion, <code>EarthSciMLBase.couple2</code> methods are checked between all <code>PDESystem</code> pairs (including across groups). These methods can handle dimension mismatches using tools like <a href="../api/#EarthSciMLBase.slice_variable-Tuple{Any, Any, Any}"><code>slice_variable</code></a>.</p></li><li><p><strong>Merging</strong>: <a href="../api/#EarthSciMLBase.merge_pdesystems"><code>merge_pdesystems</code></a> computes the union of all independent variables and domains, keeping each dependent variable at its original dimensionality.</p></li></ol></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../coord_transforms/">« Coordinate Transforms</a><a class="docs-footer-nextpage" href="../operator/">Operators »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Friday 10 April 2026 04:43">Friday 10 April 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+data3d₊v_at_z(t, x, y) ~ data3d₊v(t, x, y, 0.0)</code></pre><h2 id="How-It-Works-Internally"><a class="docs-heading-anchor" href="#How-It-Works-Internally">How It Works Internally</a><a id="How-It-Works-Internally-1"></a><a class="docs-heading-anchor-permalink" href="#How-It-Works-Internally" title="Permalink"></a></h2><p>The mixed-dimension coupling mechanism works through these steps:</p><ol><li><p><strong>Grouping</strong>: ODE systems are partitioned by their effective <a href="../api/#EarthSciMLBase.DomainInfo"><code>DomainInfo</code></a>. Systems with <a href="../api/#EarthSciMLBase.SysDomainInfo"><code>SysDomainInfo</code></a> metadata use their own; others use the <a href="../api/#EarthSciMLBase.CoupledSystem"><code>CoupledSystem</code></a>&#39;s default.</p></li><li><p><strong>Same-group ODE coupling</strong>: Within each group, <code>EarthSciMLBase.couple2</code> methods run as normal, because all systems share the same dimensions.</p></li><li><p><strong>Individual promotion</strong>: Each group is composed into a flat <code>System</code> and promoted to a <code>PDESystem</code> via <code>system + domaininfo</code>. Metadata (including <a href="../api/#EarthSciMLBase.CoupleType"><code>CoupleType</code></a>) is preserved through this promotion.</p></li><li><p><strong>Cross-group PDE coupling</strong>: After promotion, <code>EarthSciMLBase.couple2</code> methods are checked between all <code>PDESystem</code> pairs (including across groups). These methods can handle dimension mismatches using tools like <a href="../api/#EarthSciMLBase.slice_variable-Tuple{Any, Any, Any}"><code>slice_variable</code></a>.</p></li><li><p><strong>Merging</strong>: <a href="../api/#EarthSciMLBase.merge_pdesystems"><code>merge_pdesystems</code></a> computes the union of all independent variables and domains, keeping each dependent variable at its original dimensionality.</p></li></ol></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../coord_transforms/">« Coordinate Transforms</a><a class="docs-footer-nextpage" href="../operator/">Operators »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Saturday 25 April 2026 23:13">Saturday 25 April 2026</span>. Using Julia version 1.12.6.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
