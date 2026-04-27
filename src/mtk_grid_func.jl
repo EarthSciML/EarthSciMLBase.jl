@@ -96,6 +96,22 @@ function gen_coord_func(sys, expr, coord_args, alg::MapAlgorithm = MapBroadcast(
         eval_expression = false, eval_module = @__MODULE__)
     placeholders, subst = _coord_placeholders(sys, coord_args)
     expr_sub = isempty(subst) ? expr : Symbolics.substitute.(expr, (subst,))
+
+    # `build_function_wrapper` inlines observed equations into `expr_sub` via the
+    # system's stored observed RHSs. Those RHSs were not touched by the substitution
+    # above (only `expr` was), so any `_CoordTmpF(coord, i)(t)` calls hidden inside
+    # `observed(sys)` would land in the generated code unsubstituted and fall through
+    # to the `(::_CoordTmpF)(t) = Inf` fallback at runtime. Pre-inline observed (with
+    # placeholder-substituted RHSs) into `expr_sub` so the downstream `obs_subber` is
+    # a no-op; `Symbolics.fixpoint_sub` resolves nested observed references.
+    if !isempty(subst) && !isempty(ModelingToolkit.observed(sys))
+        obs_subst = Dict{Any, Any}()
+        for eq in ModelingToolkit.observed(sys)
+            obs_subst[eq.lhs] = Symbolics.substitute(eq.rhs, subst)
+        end
+        expr_sub = Symbolics.fixpoint_sub.(expr_sub, (obs_subst,))
+    end
+
     args, p_start, p_end = _coord_function_args(sys, placeholders)
 
     fexpr = ModelingToolkit.build_function_wrapper(

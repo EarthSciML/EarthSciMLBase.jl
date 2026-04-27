@@ -114,6 +114,38 @@ end
     @test [14] ≈ obs_f(u0, p, 0.0, 1, 2, 3)
 end
 
+# Regression: the equation RHS may reference an observed variable whose RHS
+# (not the equation RHS) is the one that depends on coords. `gen_coord_func`
+# applies the placeholder substitution to equation RHSs only, so without
+# pre-inlining observed before `build_function_wrapper`, the unsubstituted
+# `_CoordTmpF()(t)` calls inside observed RHSs end up in the generated code
+# via `obs_subber` and silently evaluate to `Inf` at runtime.
+@testset "coord-dependent observed used by equation RHS" begin
+    @parameters lon2=0.0 lat2=0.0 lev2=1.0
+    @variables u2(t)=1.0 coord_term(t)
+    eqs2 = [
+        coord_term ~ 2 * lon2 + 3 * lat2 + lev2,  # observed (the only coord refs)
+        D(u2) ~ coord_term + 1                    # eq RHS only refs the observed
+    ]
+    indepdomain2 = t ∈ Interval(0.0, 1.0)
+    partialdomains2 = [
+        lon2 ∈ Interval(-π, π),
+        lat2 ∈ Interval(-0.45π, 0.45π),
+        lev2 ∈ Interval(1, 3)
+    ]
+    domain2 = DomainInfo(
+        partialderivatives_δxyδlonlat,
+        constIC(0.0, indepdomain2), constBC(0.0, partialdomains2...);
+        grid_spacing = [1.0, 1.0, 1.0]
+    )
+    sys2 = mtkcompile(System(eqs2, t, name = :sys2))
+    sys_coord2, coord_args2 = EarthSciMLBase._prepare_coord_sys(sys2, domain2)
+    f2 = EarthSciMLBase.build_coord_ode_function(sys_coord2, coord_args2)
+    p2 = MTKParameters(sys_coord2, ModelingToolkit.initial_conditions(sys_coord2))
+    # At lon=5, lat=2, lev=4: coord_term = 2*5 + 3*2 + 4 = 20, so D(u2) = 21.
+    @test f2([1.0], p2, 0.0, 5.0, 2.0, 4.0) ≈ [21.0]
+end
+
 if Sys.isapple()
     @testset "GPU jacobian" begin
         using Metal
