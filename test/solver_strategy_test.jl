@@ -5,6 +5,8 @@ using OrdinaryDiffEqTsit5, OrdinaryDiffEqSDIRK, OrdinaryDiffEqLowOrderRK
 using DynamicQuantities
 using SciMLBase: DiscreteCallback, ReturnCode
 using LinearSolve
+import SciMLStructures
+import SymbolicIndexingInterface
 t = ModelingToolkit.t_nounits
 D = ModelingToolkit.D_nounits
 
@@ -143,7 +145,7 @@ p = EarthSciMLBase._strang_ode_func(sys_coords, coord_args,
     get_tspan(domain), grid; sparse = false)
 IIchunks,
 integrators = EarthSciMLBase._strang_integrators(st, domain, f_ode, u0_single,
-    get_tspan(domain)[1], p)
+    get_tspan(domain)[1], p, nothing)
 
 EarthSciMLBase.threaded_ode_step!(u, IIchunks, integrators, 0.0, 1.0)
 
@@ -317,6 +319,70 @@ end
         prob = ODEProblem(csys, st)
         sol = solve(prob, Euler(); dt = 1.0, abstol = 1e-12, reltol = 1e-12)
         @test sum(abs.(sol.u[end]))≈3.820642384890682e7 rtol=1e-3
+    end
+
+    @testset "issue #219 stiff sub-integrator event_cb" begin
+        # Regression test: the discrete event callback returned by
+        # `process_events(sys_mtk)` (e.g. EarthSciData's data-load
+        # `SymbolicDiscreteCallback`) must reach the inner stiff
+        # sub-integrators, otherwise their `init` runs `auto_dt_reset!`
+        # against still-uninitialized parameter buffers.
+        fired = Ref(0)
+        cb_event = DiscreteCallback(
+            (u, t, integrator) -> true,
+            integrator -> (fired[] += 1))
+
+        st_local = SolverStrangSerial(Tsit5(), 1.0)
+        tstart = EarthSciMLBase.get_tspan(domain)[1]
+
+        # With event_cb passed: inner integrator must carry the callback…
+        _, integrators_with = EarthSciMLBase._strang_integrators(
+            st_local, domain, f_ode, u0_single, tstart, p, cb_event)
+        @test length(integrators_with[1].opts.callback.discrete_callbacks) > 0
+
+        # …and it must actually fire during stiff sub-integration.
+        ucopy = copy(u)
+        fired[] = 0
+        EarthSciMLBase.single_ode_step!(
+            ucopy, CartesianIndices(tuple(size(domain)...))[1:1],
+            integrators_with[1], 0.0, 1.0)
+        @test fired[] > 0
+
+        # With event_cb=nothing: no extra discrete callbacks injected.
+        _, integrators_none = EarthSciMLBase._strang_integrators(
+            st_local, domain, f_ode, u0_single, tstart, p, nothing)
+        @test length(integrators_none[1].opts.callback.discrete_callbacks) == 0
+
+        # IIP must be transparent for parameter access so MTK-generated
+        # affect code (which expects `integrator.p::MTKParameters`) works
+        # against the inner stiff sub-integrators (PR #220 review).
+        ii0 = CartesianIndices(tuple(size(domain)...))[1]
+        iip = EarthSciMLBase.IIP{typeof(ii0), typeof(p)}(ii0, p)
+        @test iip[1] === p[1]
+        @test length(iip) == length(p)
+        @test SymbolicIndexingInterface.parameter_values(iip) === p
+        @test SciMLStructures.canonicalize(SciMLStructures.Tunable(), iip)[1] ==
+              SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]
+        @test SciMLStructures.ismutablescimlstructure(iip) ==
+              SciMLStructures.ismutablescimlstructure(p)
+
+        # MTK's `GeneratedFunctionWrapper` must unwrap IIP at the call
+        # boundary, otherwise its `@generated _generated_call` falls into
+        # the "single buffer" branch and packs IIP as `(iip, nothing)` —
+        # which breaks `___mtkparameters___[i]` indexing inside the affect's
+        # generated body (PR #220 follow-up review).
+        gfw_oop = ModelingToolkit.GeneratedFunctionWrapper{(2, 3, true)}(
+            (u, p_, t) -> p_,                # OOP returns the (unwrapped) p
+            (out, u, p_, t) -> (out[1] = p_[1][1]; nothing))
+        # OOP: if IIP isn't unwrapped, MTK would pass `(iip, nothing)` and
+        # the OOP function would return that 2-tuple, not `iip.p`.
+        @test gfw_oop(zeros(1), iip, 0.0) === p
+        # IIP variant
+        out = zeros(1)
+        gfw_oop(out, zeros(1), iip, 0.0)
+        # `p[1][1]` (first element of the 1st parameter portion) must be
+        # finite — would be undefined if IIP weren't unwrapped.
+        @test isfinite(out[1])
     end
 
     @testset "IMEX" begin

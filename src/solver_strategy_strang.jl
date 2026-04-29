@@ -18,6 +18,60 @@ mutable struct IIP{T1, T2}
     p::T2
 end
 
+# Make IIP transparent for parameter access so MTK-generated affect code (and
+# the SciMLStructures / SymbolicIndexingInterface machinery it sits on) can
+# reach the underlying MTKParameters without knowing about the IIP wrapper.
+# The stiff-RHS path (`f_stiff` in `_strang_ode_func`) explicitly unwraps via
+# `p.p`, but callbacks attached for issue #219 don't, and would otherwise hit
+# `BoundsError` walking off the end of the IIP wrapper.
+@inline function Base.getproperty(iip::IIP, s::Symbol)
+    s === :ii && return getfield(iip, :ii)
+    s === :p && return getfield(iip, :p)
+    return getproperty(getfield(iip, :p), s)
+end
+@inline function Base.setproperty!(iip::IIP, s::Symbol, v)
+    s === :ii && return setfield!(iip, :ii, v)
+    s === :p && return setfield!(iip, :p, v)
+    return setproperty!(getfield(iip, :p), s, v)
+end
+@inline Base.getindex(iip::IIP, args...) = getindex(getfield(iip, :p), args...)
+@inline Base.setindex!(iip::IIP, v, args...) = setindex!(getfield(iip, :p), v, args...)
+@inline Base.length(iip::IIP) = length(getfield(iip, :p))
+@inline Base.size(iip::IIP) = size(getfield(iip, :p))
+Base.IndexStyle(::Type{<:IIP}) = IndexLinear()
+
+SymbolicIndexingInterface.parameter_values(iip::IIP) = getfield(iip, :p)
+
+SciMLStructures.ismutablescimlstructure(iip::IIP) =
+    SciMLStructures.ismutablescimlstructure(getfield(iip, :p))
+for Portion in (SciMLStructures.Tunable, SciMLStructures.Initials,
+    SciMLStructures.Discrete, SciMLStructures.Constants,
+    SciMLStructures.Caches)
+    @eval SciMLStructures.canonicalize(portion::$Portion, iip::IIP) =
+        SciMLStructures.canonicalize(portion, getfield(iip, :p))
+    @eval SciMLStructures.replace(portion::$Portion, iip::IIP, newvals) =
+        IIP{typeof(getfield(iip, :ii)), typeof(getfield(iip, :p))}(
+            getfield(iip, :ii),
+            SciMLStructures.replace(portion, getfield(iip, :p), newvals))
+    @eval SciMLStructures.replace!(portion::$Portion, iip::IIP, newvals) =
+        SciMLStructures.replace!(portion, getfield(iip, :p), newvals)
+end
+
+# MTK's `GeneratedFunctionWrapper` is `@generated`: when it sees a parameter
+# argument that isn't `<: Union{Tuple, MTKParameters}` it falls through to the
+# "single buffer" branch and rebuilds the call as `f(..., (p, nothing), ...)`
+# — so the generated body's `___mtkparameters___[3]` then walks off the 2-tuple
+# (PR #220 review). Unwrap `IIP` to the underlying `MTKParameters` at the GFW
+# boundary so the type guard sees the right thing — the same `p.p` unwrap
+# `f_stiff` already does, lifted to every MTK-generated function (RHS,
+# jacobian, observed reader, modified-value reader, …) called with `integ.p`.
+@inline function (gfw::ModelingToolkit.GeneratedFunctionWrapper)(u, iip::IIP, t)
+    return gfw(u, getfield(iip, :p), t)
+end
+@inline function (gfw::ModelingToolkit.GeneratedFunctionWrapper)(out, u, iip::IIP, t)
+    return gfw(out, u, getfield(iip, :p), t)
+end
+
 """
 ```julia
 # Specify the number of threads and the stiff ODE solver algorithm.
@@ -110,19 +164,35 @@ function _strang_ode_func(sys_mtk, coord_args, tspan, grd; sparse = false)
     return ode_f, _prob.u0, _prob.p
 end
 
-function _strang_integrators(st::SolverStrang, dom::DomainInfo, f_ode, u0_single, start, p)
+function _strang_integrators(
+        st::SolverStrang, dom::DomainInfo, f_ode, u0_single, start, p, event_cb)
     II = CartesianIndices(tuple(size(dom)...))
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
     iip = IIP{typeof(II[1]), typeof(p)}(II[1], p)
+
+    # Thread the data-load discrete callback into the inner stiff sub-integrators
+    # so its `initialize = affect` populates parameter buffers before `init`'s
+    # auto_dt_reset! evaluates the RHS — otherwise NaN propagates from
+    # still-empty interpolator buffers (issue #219).
+    nt = (; st.stiff_kwargs...)
+    inner_kwargs = if isnothing(event_cb)
+        nt
+    else
+        existing_cb = get(nt, :callback, nothing)
+        merged_cb = isnothing(existing_cb) ? CallbackSet(event_cb) :
+                    CallbackSet(event_cb, existing_cb)
+        merge(nt, (; callback = merged_cb))
+    end
+
     prob = ODEProblem(f_ode, u0_single, (start, start + typeof(start)(st.timestep)), iip;
-        st.stiff_kwargs...)
+        inner_kwargs...)
     stiff_integrators = [init(
                              remake(prob, u0 = u0_single,
                                  p = IIP{typeof(II[1]), typeof(p)}(II[1], p)),
                              st.stiffalg,
                              save_on = false, save_start = false,
                              save_end = false, initialize_save = false;
-                             st.stiff_kwargs...) for _ in 1:length(IIchunks)]
+                             inner_kwargs...) for _ in 1:length(IIchunks)]
     return IIchunks, stiff_integrators
 end
 
@@ -144,11 +214,13 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = no
     p = _strang_ode_func(sys_mtk, coord_args, (start, finish), grd;
         sparse = sparse)
 
-    IIchunks, stiff_integrators = _strang_integrators(st, dom, f_ode, u0_single, start, p)
+    event_cb = ModelingToolkit.process_events(sys_mtk)
+    IIchunks,
+    stiff_integrators = _strang_integrators(
+        st, dom, f_ode, u0_single, start, p, event_cb)
     nonstiff_op = nonstiff_ops(s, sys_mtk, coord_args, dom, u0, p, st.alg)
 
     cb = []
-    event_cb = ModelingToolkit.process_events(sys_mtk)
     if !isnothing(event_cb)
         push!(cb, event_cb)
     end
