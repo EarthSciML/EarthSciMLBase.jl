@@ -365,6 +365,24 @@ end
               SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]
         @test SciMLStructures.ismutablescimlstructure(iip) ==
               SciMLStructures.ismutablescimlstructure(p)
+
+        # MTK's `GeneratedFunctionWrapper` must unwrap IIP at the call
+        # boundary, otherwise its `@generated _generated_call` falls into
+        # the "single buffer" branch and packs IIP as `(iip, nothing)` —
+        # which breaks `___mtkparameters___[i]` indexing inside the affect's
+        # generated body (PR #220 follow-up review).
+        gfw_oop = ModelingToolkit.GeneratedFunctionWrapper{(2, 3, true)}(
+            (u, p_, t) -> p_,                # OOP returns the (unwrapped) p
+            (out, u, p_, t) -> (out[1] = p_[1][1]; nothing))
+        # OOP: if IIP isn't unwrapped, MTK would pass `(iip, nothing)` and
+        # the OOP function would return that 2-tuple, not `iip.p`.
+        @test gfw_oop(zeros(1), iip, 0.0) === p
+        # IIP variant
+        out = zeros(1)
+        gfw_oop(out, zeros(1), iip, 0.0)
+        # `p[1][1]` (first element of the 1st parameter portion) must be
+        # finite — would be undefined if IIP weren't unwrapped.
+        @test isfinite(out[1])
     end
 
     @testset "IMEX" begin

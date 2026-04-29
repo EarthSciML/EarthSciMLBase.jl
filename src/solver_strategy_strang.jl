@@ -57,6 +57,21 @@ for Portion in (SciMLStructures.Tunable, SciMLStructures.Initials,
         SciMLStructures.replace!(portion, getfield(iip, :p), newvals)
 end
 
+# MTK's `GeneratedFunctionWrapper` is `@generated`: when it sees a parameter
+# argument that isn't `<: Union{Tuple, MTKParameters}` it falls through to the
+# "single buffer" branch and rebuilds the call as `f(..., (p, nothing), ...)`
+# — so the generated body's `___mtkparameters___[3]` then walks off the 2-tuple
+# (PR #220 review). Unwrap `IIP` to the underlying `MTKParameters` at the GFW
+# boundary so the type guard sees the right thing — the same `p.p` unwrap
+# `f_stiff` already does, lifted to every MTK-generated function (RHS,
+# jacobian, observed reader, modified-value reader, …) called with `integ.p`.
+@inline function (gfw::ModelingToolkit.GeneratedFunctionWrapper)(u, iip::IIP, t)
+    return gfw(u, getfield(iip, :p), t)
+end
+@inline function (gfw::ModelingToolkit.GeneratedFunctionWrapper)(out, u, iip::IIP, t)
+    return gfw(out, u, getfield(iip, :p), t)
+end
+
 """
 ```julia
 # Specify the number of threads and the stiff ODE solver algorithm.
