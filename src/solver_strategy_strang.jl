@@ -18,6 +18,45 @@ mutable struct IIP{T1, T2}
     p::T2
 end
 
+# Make IIP transparent for parameter access so MTK-generated affect code (and
+# the SciMLStructures / SymbolicIndexingInterface machinery it sits on) can
+# reach the underlying MTKParameters without knowing about the IIP wrapper.
+# The stiff-RHS path (`f_stiff` in `_strang_ode_func`) explicitly unwraps via
+# `p.p`, but callbacks attached for issue #219 don't, and would otherwise hit
+# `BoundsError` walking off the end of the IIP wrapper.
+@inline function Base.getproperty(iip::IIP, s::Symbol)
+    s === :ii && return getfield(iip, :ii)
+    s === :p && return getfield(iip, :p)
+    return getproperty(getfield(iip, :p), s)
+end
+@inline function Base.setproperty!(iip::IIP, s::Symbol, v)
+    s === :ii && return setfield!(iip, :ii, v)
+    s === :p && return setfield!(iip, :p, v)
+    return setproperty!(getfield(iip, :p), s, v)
+end
+@inline Base.getindex(iip::IIP, args...) = getindex(getfield(iip, :p), args...)
+@inline Base.setindex!(iip::IIP, v, args...) = setindex!(getfield(iip, :p), v, args...)
+@inline Base.length(iip::IIP) = length(getfield(iip, :p))
+@inline Base.size(iip::IIP) = size(getfield(iip, :p))
+Base.IndexStyle(::Type{<:IIP}) = IndexLinear()
+
+SymbolicIndexingInterface.parameter_values(iip::IIP) = getfield(iip, :p)
+
+SciMLStructures.ismutablescimlstructure(iip::IIP) =
+    SciMLStructures.ismutablescimlstructure(getfield(iip, :p))
+for Portion in (SciMLStructures.Tunable, SciMLStructures.Initials,
+    SciMLStructures.Discrete, SciMLStructures.Constants,
+    SciMLStructures.Caches)
+    @eval SciMLStructures.canonicalize(portion::$Portion, iip::IIP) =
+        SciMLStructures.canonicalize(portion, getfield(iip, :p))
+    @eval SciMLStructures.replace(portion::$Portion, iip::IIP, newvals) =
+        IIP{typeof(getfield(iip, :ii)), typeof(getfield(iip, :p))}(
+            getfield(iip, :ii),
+            SciMLStructures.replace(portion, getfield(iip, :p), newvals))
+    @eval SciMLStructures.replace!(portion::$Portion, iip::IIP, newvals) =
+        SciMLStructures.replace!(portion, getfield(iip, :p), newvals)
+end
+
 """
 ```julia
 # Specify the number of threads and the stiff ODE solver algorithm.

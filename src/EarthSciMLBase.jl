@@ -12,6 +12,8 @@ using Statistics
 using DiffEqCallbacks
 using LinearAlgebra
 using SymbolicIndexingInterface: setp
+import SymbolicIndexingInterface
+import SciMLStructures
 using Accessors
 using Graphs
 using MacroTools, RuntimeGeneratedFunctions

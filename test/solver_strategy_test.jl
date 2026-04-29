@@ -5,6 +5,8 @@ using OrdinaryDiffEqTsit5, OrdinaryDiffEqSDIRK, OrdinaryDiffEqLowOrderRK
 using DynamicQuantities
 using SciMLBase: DiscreteCallback, ReturnCode
 using LinearSolve
+import SciMLStructures
+import SymbolicIndexingInterface
 t = ModelingToolkit.t_nounits
 D = ModelingToolkit.D_nounits
 
@@ -350,6 +352,19 @@ end
         _, integrators_none = EarthSciMLBase._strang_integrators(
             st_local, domain, f_ode, u0_single, tstart, p, nothing)
         @test length(integrators_none[1].opts.callback.discrete_callbacks) == 0
+
+        # IIP must be transparent for parameter access so MTK-generated
+        # affect code (which expects `integrator.p::MTKParameters`) works
+        # against the inner stiff sub-integrators (PR #220 review).
+        ii0 = CartesianIndices(tuple(size(domain)...))[1]
+        iip = EarthSciMLBase.IIP{typeof(ii0), typeof(p)}(ii0, p)
+        @test iip[1] === p[1]
+        @test length(iip) == length(p)
+        @test SymbolicIndexingInterface.parameter_values(iip) === p
+        @test SciMLStructures.canonicalize(SciMLStructures.Tunable(), iip)[1] ==
+              SciMLStructures.canonicalize(SciMLStructures.Tunable(), p)[1]
+        @test SciMLStructures.ismutablescimlstructure(iip) ==
+              SciMLStructures.ismutablescimlstructure(p)
     end
 
     @testset "IMEX" begin
