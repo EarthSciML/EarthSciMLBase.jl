@@ -110,19 +110,35 @@ function _strang_ode_func(sys_mtk, coord_args, tspan, grd; sparse = false)
     return ode_f, _prob.u0, _prob.p
 end
 
-function _strang_integrators(st::SolverStrang, dom::DomainInfo, f_ode, u0_single, start, p)
+function _strang_integrators(
+        st::SolverStrang, dom::DomainInfo, f_ode, u0_single, start, p, event_cb)
     II = CartesianIndices(tuple(size(dom)...))
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
     iip = IIP{typeof(II[1]), typeof(p)}(II[1], p)
+
+    # Thread the data-load discrete callback into the inner stiff sub-integrators
+    # so its `initialize = affect` populates parameter buffers before `init`'s
+    # auto_dt_reset! evaluates the RHS — otherwise NaN propagates from
+    # still-empty interpolator buffers (issue #219).
+    nt = (; st.stiff_kwargs...)
+    inner_kwargs = if isnothing(event_cb)
+        nt
+    else
+        existing_cb = get(nt, :callback, nothing)
+        merged_cb = isnothing(existing_cb) ? CallbackSet(event_cb) :
+                    CallbackSet(event_cb, existing_cb)
+        merge(nt, (; callback = merged_cb))
+    end
+
     prob = ODEProblem(f_ode, u0_single, (start, start + typeof(start)(st.timestep)), iip;
-        st.stiff_kwargs...)
+        inner_kwargs...)
     stiff_integrators = [init(
                              remake(prob, u0 = u0_single,
                                  p = IIP{typeof(II[1]), typeof(p)}(II[1], p)),
                              st.stiffalg,
                              save_on = false, save_start = false,
                              save_end = false, initialize_save = false;
-                             st.stiff_kwargs...) for _ in 1:length(IIchunks)]
+                             inner_kwargs...) for _ in 1:length(IIchunks)]
     return IIchunks, stiff_integrators
 end
 
@@ -144,11 +160,13 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = no
     p = _strang_ode_func(sys_mtk, coord_args, (start, finish), grd;
         sparse = sparse)
 
-    IIchunks, stiff_integrators = _strang_integrators(st, dom, f_ode, u0_single, start, p)
+    event_cb = ModelingToolkit.process_events(sys_mtk)
+    IIchunks,
+    stiff_integrators = _strang_integrators(
+        st, dom, f_ode, u0_single, start, p, event_cb)
     nonstiff_op = nonstiff_ops(s, sys_mtk, coord_args, dom, u0, p, st.alg)
 
     cb = []
-    event_cb = ModelingToolkit.process_events(sys_mtk)
     if !isnothing(event_cb)
         push!(cb, event_cb)
     end

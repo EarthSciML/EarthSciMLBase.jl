@@ -143,7 +143,7 @@ p = EarthSciMLBase._strang_ode_func(sys_coords, coord_args,
     get_tspan(domain), grid; sparse = false)
 IIchunks,
 integrators = EarthSciMLBase._strang_integrators(st, domain, f_ode, u0_single,
-    get_tspan(domain)[1], p)
+    get_tspan(domain)[1], p, nothing)
 
 EarthSciMLBase.threaded_ode_step!(u, IIchunks, integrators, 0.0, 1.0)
 
@@ -317,6 +317,39 @@ end
         prob = ODEProblem(csys, st)
         sol = solve(prob, Euler(); dt = 1.0, abstol = 1e-12, reltol = 1e-12)
         @test sum(abs.(sol.u[end]))≈3.820642384890682e7 rtol=1e-3
+    end
+
+    @testset "issue #219 stiff sub-integrator event_cb" begin
+        # Regression test: the discrete event callback returned by
+        # `process_events(sys_mtk)` (e.g. EarthSciData's data-load
+        # `SymbolicDiscreteCallback`) must reach the inner stiff
+        # sub-integrators, otherwise their `init` runs `auto_dt_reset!`
+        # against still-uninitialized parameter buffers.
+        fired = Ref(0)
+        cb_event = DiscreteCallback(
+            (u, t, integrator) -> true,
+            integrator -> (fired[] += 1))
+
+        st_local = SolverStrangSerial(Tsit5(), 1.0)
+        tstart = EarthSciMLBase.get_tspan(domain)[1]
+
+        # With event_cb passed: inner integrator must carry the callback…
+        _, integrators_with = EarthSciMLBase._strang_integrators(
+            st_local, domain, f_ode, u0_single, tstart, p, cb_event)
+        @test length(integrators_with[1].opts.callback.discrete_callbacks) > 0
+
+        # …and it must actually fire during stiff sub-integration.
+        ucopy = copy(u)
+        fired[] = 0
+        EarthSciMLBase.single_ode_step!(
+            ucopy, CartesianIndices(tuple(size(domain)...))[1:1],
+            integrators_with[1], 0.0, 1.0)
+        @test fired[] > 0
+
+        # With event_cb=nothing: no extra discrete callbacks injected.
+        _, integrators_none = EarthSciMLBase._strang_integrators(
+            st_local, domain, f_ode, u0_single, tstart, p, nothing)
+        @test length(integrators_none[1].opts.callback.discrete_callbacks) == 0
     end
 
     @testset "IMEX" begin
