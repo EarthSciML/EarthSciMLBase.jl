@@ -152,20 +152,23 @@ function copy_with_change(sys::System;
         metadata = ModelingToolkit.get_metadata(sys),
         continuous_events = ModelingToolkit.get_continuous_events(sys),
         discrete_events = ModelingToolkit.get_discrete_events(sys),
-        defaults = getfield(sys, :initial_conditions)
+        defaults = getfield(sys, :initial_conditions),
+        initialization_eqs = ModelingToolkit.get_initialization_eqs(sys)
 )
     try
         if isnothing(unknowns) && isnothing(parameters)
             return System(eqs, ModelingToolkit.get_iv(sys);
                 name = name, metadata = metadata,
                 continuous_events = continuous_events, discrete_events = discrete_events,
-                initial_conditions = defaults
+                initial_conditions = defaults,
+                initialization_eqs = initialization_eqs
             )
         else
             return System(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
                 name = name, metadata = metadata,
                 continuous_events = continuous_events, discrete_events = discrete_events,
-                initial_conditions = defaults
+                initial_conditions = defaults,
+                initialization_eqs = initialization_eqs
             )
         end
     catch e

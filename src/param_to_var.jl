@@ -56,7 +56,8 @@ function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
         metadata = ModelingToolkit.get_metadata(sys),
         discrete_events = ModelingToolkit.get_discrete_events(sys),
         continuous_events = ModelingToolkit.get_continuous_events(sys),
-        defaults = defaults
+        defaults = defaults,
+        initialization_eqs = ModelingToolkit.get_initialization_eqs(sys)
     )
 end
 

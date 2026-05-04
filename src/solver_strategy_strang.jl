@@ -286,9 +286,21 @@ Take a step using the ODE solver with the given IIchunk (grid cell iterator) and
 function single_ode_step!(u, IIchunk, integrator, time, step_length)
     for ii in IIchunk
         uii = @view u[:, ii]
+        # `reset_dt = false`: `reinit!` runs `auto_dt_reset!` BEFORE
+        # `initialize_callbacks!` (the opposite order from `__init`), so the
+        # data-load discrete callback's `initialize` affect would not yet have
+        # populated the interpolator parameter buffer when the inner stiff RHS
+        # is evaluated for the initial-dt estimate — tripping the bounds check
+        # in `interp_unsafe` against a still-sentinel `DataBufferType` (issue
+        # EarthSciData #207).  We disable `reset_dt` here, set the cell index,
+        # and then call `auto_dt_reset!` ourselves AFTER `reinit!`'s callback
+        # initialization has refreshed the parameter buffer.
         reinit!(integrator, uii, t0 = time, tf = time + step_length,
-            erase_sol = false, reset_dt = true)
+            erase_sol = false, reset_dt = false)
         integrator.p.ii = ii
+        if integrator.opts.adaptive
+            auto_dt_reset!(integrator)
+        end
         solve!(integrator)
         @assert length(integrator.sol.u) == 0
         uii .= integrator.u
