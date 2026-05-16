@@ -258,6 +258,7 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
               "Use `convert(PDESystem, ...)` instead.")
     end
     connector_eqs = Equation[]
+    initialize_eqs = Equation[]
     discrete_event_fs = []
     systems = copy(sys.systems)
     for (i, a) in enumerate(systems)
@@ -284,6 +285,7 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
                         @assert ModelingToolkit.validate(eq) "invalid units in coupling equation: $eq. See warnings for details."
                     end
                     append!(connector_eqs, cs.eqs)
+                    append!(initialize_eqs, cs.initialization_equations)
                 end
             end
             a = systems[i]  # Re-sync after coupling (from/to may not match i/j order).
@@ -306,11 +308,12 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
 
         # Create system of connectors and events.
         connectors = System(connector_eqs, iv; name = name,
-            discrete_events = de, initial_conditions = ics, kwargs...)
+            discrete_events = de, initial_conditions = ics, 
+            initialization_eqs = initialize_eqs, kwargs...)
     else
         # Create system of connectors.
         connectors = System(connector_eqs, iv; name = name,
-            initial_conditions = ics, kwargs...)
+            initial_conditions = ics, initialization_eqs = initialize_eqs, kwargs...)
     end
 
     # Compose everything together.
@@ -817,8 +820,13 @@ $(FIELDS)
 """
 struct ConnectorSystem
     eqs::Vector{Equation}
+    initialization_equations::Vector{Equation}
     from::ModelingToolkit.AbstractSystem
     to::ModelingToolkit.AbstractSystem
+
+    function ConnectorSystem(eqs, from, to; initialization_equations = Equation[])
+        new(eqs, initialization_equations, from, to)
+    end
 end
 
 # Combine the non-stiff operators into a single operator.

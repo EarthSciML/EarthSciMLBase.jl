@@ -1,4 +1,4 @@
-export param_to_var
+export param_to_var, strip_var_default
 
 """
 Add the units and description in the variable `from` to the variable `to`.
@@ -60,6 +60,41 @@ function param_to_var(sys::ModelingToolkit.AbstractSystem, ps::Symbol...)
         initialization_eqs = ModelingToolkit.get_initialization_eqs(sys)
     )
 end
+
+"""
+    $(SIGNATURES)
+
+    Return a copy of the system `sys` where the variable(s) `vs` have their default values removed.
+"""
+function strip_var_default(sys::ModelingToolkit.AbstractSystem, vs::Symbol...)
+    unks = unknowns(sys)
+    defaults = copy(getfield(sys, :initial_conditions))
+    replace = Dict()
+    for v in vs
+        iiv = findfirst(isequal(v), var2symbol.(unks))
+        @assert !isnothing(iiv) "Variable `$v` not found in the system unknowns $(Symbol.(unks))"
+        var = unks[iiv]
+
+        iv = ModelingToolkit.get_iv(sys)
+        newvar = only(@variables $v(iv))
+        newvar = add_metadata(newvar, var; exclude_default = true)
+        replace[var] = newvar
+        delete!(defaults, var)
+    end
+
+    if isempty(replace)
+        return sys # Nothing to replace
+    end
+    newsys = SymbolicUtils.substitute(sys, replace)
+    copy_with_change(newsys;
+        metadata = ModelingToolkit.get_metadata(sys),
+        discrete_events = ModelingToolkit.get_discrete_events(sys),
+        continuous_events = ModelingToolkit.get_continuous_events(sys),
+        defaults = defaults,
+        initialization_eqs = ModelingToolkit.get_initialization_eqs(sys)
+    )
+end
+
 
 """
 Replace the parameter(s) `ps` in a `PDESystem` with new time-dependent variable(s)

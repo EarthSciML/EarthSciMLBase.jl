@@ -110,7 +110,8 @@ function get_needed_vars(original_sys::System, simplified_sys::System,
     # This allows us to account for any changes to the equations that have been made
     # by `mtkcompile`.
     simplified_sys_obs_reintegrated = copy_with_change(simplified_sys;
-        eqs = vcat(equations(simplified_sys), observed(simplified_sys)),
+        eqs = vcat(equations(simplified_sys), observed(simplified_sys), 
+            getfield(simplified_sys, :initialization_eqs)),
         unknowns = unknowns(original_sys)
     )
 
@@ -142,6 +143,51 @@ end
 """
 $(SIGNATURES)
 
+Return the system variables that the state variables system depend on. 
+This should be done after running `mtkcompile` on the system.
+`extra_vars` is a list of additional variables that need to be kept.
+"""
+function get_needed_vars_compiled(sys::System; extra_vars = [])
+    ModelingToolkit.iscomplete(sys) || throw(ArgumentError("System must be complete to run `get_needed_vars_compiled`."))
+
+    # Move observed equations back into the simplified system.
+    # This allows us to account for any changes to the equations that have been made
+    # by `mtkcompile`.
+    sys_reintegrated = copy_with_change(sys;
+        eqs = vcat(equations(sys), observed(sys), 
+            getfield(sys, :initialization_eqs)),
+        unknowns = unknowns(sys)
+    )
+
+    varvardeps = ModelingToolkit.varvar_dependencies(
+        ModelingToolkit.asgraph(sys_reintegrated),
+        ModelingToolkit.variable_dependencies(sys_reintegrated)
+    )
+    g = SimpleDiGraph(length(unknowns(sys_reintegrated)))
+    for (i, es) in enumerate(varvardeps.badjlist)
+        for e in es
+            add_edge!(g, i, e)
+        end
+    end
+    # Get the state variables of the compiled system.
+    st = unique(vcat(unknowns(sys), collect(extra_vars)))
+    # Get the state variables in `sys_reintegrated`.
+    st_reint = unknowns(sys_reintegrated)
+    # Get the index of the simplified state variables in `sys_reintegrated`.
+    stidx = [only(findall(isequal(s), st_reint)) for s in st]
+    # Get the index of the variables we need to keep from `sys_reintegrated`.
+    idx = collect(Graphs.DFSIterator(g, stidx))
+    # Get the index of the state variables in the original system corresponding to the
+    # variables we need from the simplified system.
+    stidx = [only(findall(isequal(s), st)) for s in st_reint[idx]]
+    st_reint[stidx] # Return the list of variables we need from the original system.
+end
+
+
+
+"""
+$(SIGNATURES)
+
 Create a copy of an System with the given changes.
 """
 function copy_with_change(sys::System;
@@ -164,7 +210,8 @@ function copy_with_change(sys::System;
                 initialization_eqs = initialization_eqs
             )
         else
-            return System(eqs, ModelingToolkit.get_iv(sys), unknowns, parameters;
+            ps = isnothing(parameters) ? ModelingToolkit.parameters(sys) : parameters
+            return System(eqs, ModelingToolkit.get_iv(sys), unknowns, ps;
                 name = name, metadata = metadata,
                 continuous_events = continuous_events, discrete_events = discrete_events,
                 initial_conditions = defaults,
