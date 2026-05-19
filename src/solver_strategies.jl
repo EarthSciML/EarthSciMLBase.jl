@@ -50,7 +50,7 @@ function ODEProblem{iip}(sys::CoupledSystem, st::SolverIMEX; u0 = nothing,
     p = MTKParameters(sys_mtk, ModelingToolkit.initial_conditions(sys_mtk))
 
     if st.alg isa MapKernel
-        p = bitsify_params(p)
+        p = bitsify_params(p, eltype(u0))
     end
 
     f2 = nonstiff_ops(sys, sys_mtk, coord_args, dom, u0, p, st.alg)
@@ -92,12 +92,18 @@ end
 
 """
 Convert parameters to bitstypes so that they can be used on the GPU.
+
+Floating-point values are also converted to element type `T` (the element type
+of the state) so that, e.g., a `Float32` GPU state does not get promoted to
+`Float64` by `Float64`-typed parameters — Metal GPUs do not support `Float64`.
 """
-function bitsify_params(p::MTKParameters, op = tuple)
-    tunable = op(p.tunable...)
-    initials = op(p.initials...)
-    discrete = Tuple(eltype(buf) <: Real ? op(buf...) : copy.(buf) for buf in p.discrete)
-    constant = Tuple(eltype(buf) <: Real ? op(buf...) : copy.(buf) for buf in p.constant)
+function bitsify_params(p::MTKParameters, T::Type = Float64, op = tuple)
+    conv(x) = (T <: AbstractFloat && x isa AbstractFloat) ? T(x) : x
+    convbuf(buf) = op((conv(x) for x in buf)...)
+    tunable = convbuf(p.tunable)
+    initials = convbuf(p.initials)
+    discrete = Tuple(eltype(buf) <: Real ? convbuf(buf) : copy.(buf) for buf in p.discrete)
+    constant = Tuple(eltype(buf) <: Real ? convbuf(buf) : copy.(buf) for buf in p.constant)
     nonnumeric = isempty(p.nonnumeric) ? p.nonnumeric : copy.(p.nonnumeric)
     caches = isempty(p.caches) ? p.caches : copy.(p.caches)
     return MTKParameters(

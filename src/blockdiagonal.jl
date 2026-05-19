@@ -163,6 +163,19 @@ function _lu!(o::BlockDiagonalLU, B::AbstractBlockDiagonal, args...; kwargs...)
     return BlockDiagonalLU(o.factors, o.ipiv, info)
 end
 
+# LinearSolve's generic `init_cacheval` allocates `ipiv` as a host
+# `Vector{BlasInt}`, unaware that a `BlockDiagonal` `A` needs a device-resident
+# `(n, nblocks)` pivot buffer for its per-block kernel. Specialize the cache
+# allocation so the correct `ipiv` is created up front. Its `length` still
+# equals `min(size(A)...)`, so `LinearSolve.solve!` does not reallocate it.
+function LS.init_cacheval(
+        alg::LS.GenericLUFactorization, A::AbstractBlockDiagonal, b, u, Pl, Pr,
+        maxiters::Int, abstol, reltol, verbose::Union{LS.LinearVerbosity, Bool},
+        assumptions::LS.OperatorAssumptions)
+    ipiv = similar(A.data, Int64, size(A.data, 1), size(A.data, 3))
+    return ArrayInterface.lu_instance(A), ipiv
+end
+
 # Fused LU factorization
 function LS.generic_lufact!(
         A::BlockDiagonal, pivot::Union{NoPivot, RowMaximum, RowNonZero},

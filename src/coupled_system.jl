@@ -301,7 +301,8 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
         System(Equation[], iv; name = :temp, systems = systems)))
     if length(discrete_event_fs) > 0
         temp_connectors = System(connector_eqs, iv; name = name,
-            initial_conditions = ics, kwargs...)
+            initial_conditions = ics, initialization_eqs = initialize_eqs,
+            kwargs...)
         temp_sys = mtkcompile(ModelingToolkit.flatten(compose(
             temp_connectors, systems...)))
         de = filter(!isnothing, [f(temp_sys) for f in discrete_event_fs])

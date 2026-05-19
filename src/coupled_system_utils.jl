@@ -133,7 +133,8 @@ function get_needed_vars(original_sys::System, simplified_sys::System,
     # Get the index of the simplified state variables in `simplified_sys_obs_reintegrated`.
     stidx = [only(findall(isequal(s), simpobsst)) for s in simpst]
     # Get the index of the variables we need to keep from `simplified_sys_obs_reintegrated`.
-    idx = collect(Graphs.DFSIterator(g, stidx))
+    # `DFSIterator` cannot handle an empty source array, so short-circuit.
+    idx = isempty(stidx) ? Int[] : collect(Graphs.DFSIterator(g, stidx))
     # Get the index of the state variables in the original system corresponding to the
     # variables we need from the simplified system.
     stidx = [only(findall(isequal(s), allst)) for s in simpobsst[idx]]
@@ -176,7 +177,9 @@ function get_needed_vars_compiled(sys::System; extra_vars = [])
     # Get the index of the simplified state variables in `sys_reintegrated`.
     stidx = [only(findall(isequal(s), st_reint)) for s in st]
     # Get the index of the variables we need to keep from `sys_reintegrated`.
-    idx = collect(Graphs.DFSIterator(g, stidx))
+    # `DFSIterator` cannot handle an empty source array (it does `last(source)`),
+    # so short-circuit when there are no state variables to traverse from.
+    idx = isempty(stidx) ? Int[] : collect(Graphs.DFSIterator(g, stidx))
     # Get the index of the state variables in the original system corresponding to the
     # variables we need from the simplified system.
     stidx = [only(findall(isequal(s), st)) for s in st_reint[idx]]

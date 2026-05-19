@@ -3,7 +3,7 @@ export param_to_var, strip_var_default
 """
 Add the units and description in the variable `from` to the variable `to`.
 """
-function add_metadata(to, from; exclude_default = false)
+function add_metadata(to, from; exclude_default = false, default_to_guess = false)
     unit = ModelingToolkit.get_unit(from)
     to = Symbolics.setmetadata(to, ModelingToolkit.VariableUnit, unit)
     desc = ModelingToolkit.getdescription(from)
@@ -11,6 +11,10 @@ function add_metadata(to, from; exclude_default = false)
     if ModelingToolkit.hasdefault(from) && !exclude_default
         default = ModelingToolkit.getdefault(from)
         to = ModelingToolkit.setdefault(to, default)
+    end
+    if ModelingToolkit.hasdefault(from) && default_to_guess
+        default = ModelingToolkit.getdefault(from)
+        to = ModelingToolkit.setguess(to, default)
     end
     to
 end
@@ -65,8 +69,9 @@ end
     $(SIGNATURES)
 
     Return a copy of the system `sys` where the variable(s) `vs` have their default values removed.
+    If `add_guess` is true, the default value will be added as an initial guess.
 """
-function strip_var_default(sys::ModelingToolkit.AbstractSystem, vs::Symbol...)
+function strip_var_default(sys::ModelingToolkit.AbstractSystem, vs::Symbol...; add_guess=false)
     unks = unknowns(sys)
     defaults = copy(getfield(sys, :initial_conditions))
     replace = Dict()
@@ -77,7 +82,7 @@ function strip_var_default(sys::ModelingToolkit.AbstractSystem, vs::Symbol...)
 
         iv = ModelingToolkit.get_iv(sys)
         newvar = only(@variables $v(iv))
-        newvar = add_metadata(newvar, var; exclude_default = true)
+        newvar = add_metadata(newvar, var; exclude_default = true, default_to_guess = add_guess)
         replace[var] = newvar
         delete!(defaults, var)
     end
