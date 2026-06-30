@@ -174,7 +174,11 @@ function _strang_integrators(
     # so its `initialize = affect` populates parameter buffers before `init`'s
     # auto_dt_reset! evaluates the RHS — otherwise NaN propagates from
     # still-empty interpolator buffers (issue #219).
-    nt = (; st.stiff_kwargs...)
+    # `sparse` is consumed separately for the Jacobian build (see `:sparse in keys(...)`
+    # below) and `optimize` is not a solver/init keyword at all — both are build-only.
+    # Strip them from the kwargs forwarded to the inner stiff ODEProblem/solver so
+    # OrdinaryDiffEq's strict keyword check does not reject them.
+    nt = Base.structdiff((; st.stiff_kwargs...), NamedTuple{(:sparse, :optimize)})
     inner_kwargs = if isnothing(event_cb)
         nt
     else
