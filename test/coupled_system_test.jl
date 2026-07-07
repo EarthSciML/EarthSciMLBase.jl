@@ -522,3 +522,60 @@ end
     eq_strs2 = sort([string(eq) for eq in equations(sys2)])
     @test eq_strs2 == unique(eq_strs2)
 end
+
+
+# ----------------------------------------------------------------------------
+# callback_vars + discrete-event factory forwarding contract: callback-only
+# variables must reach the prune factory's keep-set.
+# ----------------------------------------------------------------------------
+struct _MockPBLCallback end
+struct _Bare end
+EarthSciMLBase.get_needed_vars(::_MockPBLCallback, sys, mtk_sys, domain) = [:A1_PBLH_marker]
+
+@testset "callback_vars + 2-arg factory forwarding" begin
+    import Dates
+
+_dom = EarthSciMLBase.DomainInfo(Dates.DateTime(2016, 1, 1), Dates.DateTime(2016, 1, 2);
+    lonrange = deg2rad(-90):deg2rad(1):deg2rad(-88),
+    latrange = deg2rad(30):deg2rad(1):deg2rad(32),
+    levrange = 1:2, u_proto = zeros(Float64, 1, 1, 1, 1))
+
+@testset "callback_vars gathers advertised vars; skips method-less callbacks" begin
+    # Standalone unit on callback_vars using a hand-built CoupledSystem shell.
+    # (domain/mtk_sys are only forwarded to get_needed_vars, which ignores them here.)
+    cs = CoupledSystem(EarthSciMLBase.ModelingToolkit.AbstractSystem[],
+        EarthSciMLBase.ModelingToolkit.PDESystem[], nothing, Any[],
+        EarthSciMLBase.Operator[], EarthSciMLBase.DECallback[],
+        Any[_MockPBLCallback()])
+    @test EarthSciMLBase.callback_vars(cs, nothing, _dom) == [:A1_PBLH_marker]
+
+    # a callback with NO get_needed_vars method is silently skipped (not an error)
+    cs2 = CoupledSystem(EarthSciMLBase.ModelingToolkit.AbstractSystem[],
+        EarthSciMLBase.ModelingToolkit.PDESystem[], nothing, Any[],
+        EarthSciMLBase.Operator[], EarthSciMLBase.DECallback[],
+        Any[_Bare(), _MockPBLCallback()])
+    @test EarthSciMLBase.callback_vars(cs2, nothing, _dom) == [:A1_PBLH_marker]
+end
+
+@testset "factory dispatch: 2-arg receives extra_needed; 1-arg unchanged" begin
+    # Mirror the convert() call site: factories that accept (parent, extra_needed)
+    # get the forwarded set; legacy 1-arg factories are called with parent only.
+    seen = Ref{Any}(:untouched)
+    two_arg = function (parent_sys, extra_needed = nothing)
+        seen[] = extra_needed
+        return nothing
+    end
+    one_arg = function (parent_sys)
+        return :legacy_ran
+    end
+    extra_needed = [:A1_PBLH_marker, :op_var]
+    # the exact selector used at coupled_system.jl:317
+    r2 = applicable(two_arg, nothing, extra_needed) ?
+         two_arg(nothing, extra_needed) : two_arg(nothing)
+    r1 = applicable(one_arg, nothing, extra_needed) ?
+         one_arg(nothing, extra_needed) : one_arg(nothing)
+    @test seen[] == extra_needed        # 2-arg factory received the keep-set
+    @test r1 == :legacy_ran             # 1-arg factory called via the fallback branch
+end
+
+end
