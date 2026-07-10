@@ -184,3 +184,15 @@ end
         @test_broken err === nothing
     end
 end
+
+
+@testset "gen_coord_func loud guard on unrewritten coordinate placeholders" begin
+    # A _CoordTmpF left in generated code silently evaluates to Inf at runtime;
+    # the build-time guard must fail loudly instead when the post-codegen AST
+    # rewrite pattern stops matching.
+    tmp = EarthSciMLBase._CoordTmpF(nothing, 1)
+    bad = Expr(:call, tmp, :t)
+    clean = :(f(x) + g(y))
+    @test EarthSciMLBase._assert_no_coord_tmp(clean) === clean
+    @test_throws ErrorException EarthSciMLBase._assert_no_coord_tmp(bad)
+end
