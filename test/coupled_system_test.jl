@@ -532,6 +532,25 @@ struct _MockPBLCallback end
 struct _Bare end
 EarthSciMLBase.get_needed_vars(::_MockPBLCallback, sys, mtk_sys, domain) = [:A1_PBLH_marker]
 
+# Fixtures for the convert(System, ...) integration test below: an operator and
+# an init-callback object that each advertise one needed variable.
+struct _NeedyOp <: Operator end
+function EarthSciMLBase.get_needed_vars(::_NeedyOp, csys, mtk_sys, domain::DomainInfo)
+    [:op_needed_marker]
+end
+
+struct _AdvertisingCallback end
+function EarthSciMLBase.get_needed_vars(::_AdvertisingCallback, sys, mtk_sys, domain)
+    [:cb_needed_marker]
+end
+# couple() only routes an object into CoupledSystem.init_callbacks when it has an
+# init_callback method with this signature. convert(System, ...) never calls it,
+# so the method body does not need to build a real callback.
+function EarthSciMLBase.init_callback(::_AdvertisingCallback, sys::CoupledSystem, sys_mtk,
+        coord_args, domain::DomainInfo, alg::MapAlgorithm)
+    error("init_callback is not used by convert(System, ...)")
+end
+
 @testset "callback_vars + 2-arg factory forwarding" begin
     import Dates
 
@@ -557,25 +576,81 @@ _dom = EarthSciMLBase.DomainInfo(Dates.DateTime(2016, 1, 1), Dates.DateTime(2016
     @test EarthSciMLBase.callback_vars(cs2, nothing, _dom) == [:A1_PBLH_marker]
 end
 
-@testset "factory dispatch: 2-arg receives extra_needed; 1-arg unchanged" begin
-    # Mirror the convert() call site: factories that accept (parent, extra_needed)
-    # get the forwarded set; legacy 1-arg factories are called with parent only.
-    seen = Ref{Any}(:untouched)
-    two_arg = function (parent_sys, extra_needed = nothing)
-        seen[] = extra_needed
-        return nothing
+@testset "convert(System, ...) forwards extra_needed to 2-arg factories" begin
+    # Integration test through the real forwarding at the convert() call site
+    # (not an inline re-implementation of the applicable-selector).
+    using DomainSets
+
+    @parameters a=0.0 b=0.0 lon=0.0 lat=0.0 lev=1.0
+    @variables begin
+        x(t_nounits) = 0.0
+        y(t_nounits) = 0.0
     end
-    one_arg = function (parent_sys)
-        return :legacy_ran
+
+    # A factory that opts in to the keep-set by accepting a second argument.
+    # It records what it received and returns a real discrete event.
+    received = Ref{Any}(:never_called)
+    two_arg_factory = function (parent_sys, extra_needed = nothing)
+        received[] = extra_needed
+        f2!(mod, obs, ctx, integ) = (esys₊a = 1.0,)
+        return [0.5] => (f = f2!, modified = (esys₊a = parent_sys.esys₊a,))
     end
-    extra_needed = [:A1_PBLH_marker, :op_var]
-    # the exact selector used at coupled_system.jl:317
-    r2 = applicable(two_arg, nothing, extra_needed) ?
-         two_arg(nothing, extra_needed) : two_arg(nothing)
-    r1 = applicable(one_arg, nothing, extra_needed) ?
-         one_arg(nothing, extra_needed) : one_arg(nothing)
-    @test seen[] == extra_needed        # 2-arg factory received the keep-set
-    @test r1 == :legacy_ran             # 1-arg factory called via the fallback branch
+    # A legacy factory with only a 1-arg method: must keep working unchanged.
+    legacy_calls = Ref(0)
+    one_arg_factory = function (parent_sys)
+        legacy_calls[] += 1
+        f1!(mod, obs, ctx, integ) = (lsys₊b = 1.0,)
+        return [0.75] => (f = f1!, modified = (lsys₊b = parent_sys.lsys₊b,))
+    end
+
+    # The (negligible) coordinate-parameter term keeps lon/lat/lev in the
+    # composed system, which convert(System, ...) requires when a DomainInfo
+    # is present (same pattern as solver_strategy_test.jl).
+    esys = System([D_nounits(x) ~ a + (lon + lat + lev) * 1.0e-16], t_nounits,
+        [x], [a, lon, lat, lev]; name = :esys,
+        metadata = Dict(SysDiscreteEvent => two_arg_factory))
+    lsys = System([D_nounits(y) ~ b], t_nounits, [y], [b]; name = :lsys,
+        metadata = Dict(SysDiscreteEvent => one_arg_factory))
+
+    dom = DomainInfo(
+        constIC(0.0, t_nounits ∈ Interval(0.0, 1.0)),
+        constBC(0.0,
+            lon ∈ Interval(-1.0, 1.0),
+            lat ∈ Interval(-1.0, 1.0),
+            lev ∈ Interval(1.0, 3.0)))
+
+    csys = couple(esys, lsys, _NeedyOp(), _AdvertisingCallback(), dom)
+    sys = convert(System, csys)
+
+    # (a) The 2-arg factory was called through its 2-arg method, (b) with the
+    # operator_vars ∪ callback_vars keep-set (operator vars first, matching the
+    # unique(vcat(...)) at the convert() call site).
+    @test received[] == [:op_needed_marker, :cb_needed_marker]
+    # (c) The legacy 1-arg factory was still called, exactly once, unchanged.
+    @test legacy_calls[] == 1
+    # Both factories' events made it into the converted system.
+    @test length(ModelingToolkit.get_discrete_events(sys)) == 2
+end
+
+@testset "convert(System, ...) without DomainInfo forwards an empty keep-set" begin
+    @parameters c = 0.0
+    @variables w(t_nounits) = 0.0
+
+    received = Ref{Any}(:never_called)
+    factory = function (parent_sys, extra_needed = nothing)
+        received[] = extra_needed
+        return nothing # a factory may decline to produce an event
+    end
+    wsys = System([D_nounits(w) ~ c], t_nounits, [w], [c]; name = :wsys,
+        metadata = Dict(SysDiscreteEvent => factory))
+
+    sys = convert(System, couple(wsys))
+
+    # The 2-arg method is still preferred; with no DomainInfo the keep-set is
+    # empty but not `nothing` (which would mean the 1-arg default was used).
+    @test received[] !== nothing
+    @test received[] == Any[]
+    @test length(ModelingToolkit.get_discrete_events(sys)) == 0
 end
 
 end
