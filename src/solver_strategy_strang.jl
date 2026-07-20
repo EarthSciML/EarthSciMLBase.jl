@@ -147,19 +147,38 @@ end
 nthreads(st::SolverStrangThreads) = st.threads
 nthreads(st::SolverStrangSerial) = 1
 
+# Build the stiff RHS/jacobian closures over a *tuple* of coordinate grids.
+#
+# `grd` arrives as a `Vector` of coordinate ranges, so the natural
+# `(g[p.ii[j]] for (j, g) in enumerate(grd))` generator has runtime length:
+# splatting it lowers to `Core._apply_iterate`, which heap-boxes the coordinates
+# and forces a dynamic dispatch into the MTK-generated RHS/jacobian — on every
+# evaluation, i.e. inside every Newton iteration of every cell of every step.
+#
+# The `Vector` was already concretely typed; what it could not supply is a
+# compile-time-known *arity*. Taking `grd_t` as an argument (rather than
+# converting inline in `_strang_ode_func`) is load-bearing: it specializes this
+# method on the concrete tuple type, so the arity is fixed and the splat becomes
+# a direct call. Numerically identical to the generator form — the same
+# coordinate values in the same order.
+function _strang_stiff_closures(mtkf_coord, jac_coord, grd_t::Tuple)
+    function f_stiff(du, u, p, t)
+        coords = map(getindex, grd_t, Tuple(p.ii))
+        mtkf_coord(du, u, p.p, t, coords...)
+    end
+    function jac_stiff(du, u, p, t)
+        coords = map(getindex, grd_t, Tuple(p.ii))
+        jac_coord(du, u, p.p, t, coords...)
+    end
+    return f_stiff, jac_stiff
+end
+
 function _strang_ode_func(sys_mtk, coord_args, tspan, grd; sparse = false)
     mtkf_coord = build_coord_ode_function(sys_mtk, coord_args)
     jac_coord = build_coord_jac_function(sys_mtk, coord_args, sparse = sparse)
     _prob = ODEProblem(sys_mtk, [], tspan; sparse = sparse, build_initializeprob = false)
 
-    function f_stiff(du, u, p, t)
-        coords = (g[p.ii[j]] for (j, g) in enumerate(grd))
-        mtkf_coord(du, u, p.p, t, coords...)
-    end
-    function jac_stiff(du, u, p, t)
-        coords = (g[p.ii[j]] for (j, g) in enumerate(grd))
-        jac_coord(du, u, p.p, t, coords...)
-    end
+    f_stiff, jac_stiff = _strang_stiff_closures(mtkf_coord, jac_coord, (grd...,))
     ode_f = ODEFunction(f_stiff, jac = jac_stiff, jac_prototype = _prob.f.jac_prototype)
     return ode_f, _prob.u0, _prob.p
 end
