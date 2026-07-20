@@ -59,6 +59,36 @@ function EarthSciMLBase.get_needed_vars(::ExampleOp, csys, mtk_sys, domain::Doma
     return [mtk_sys.sys₊windspeed, mtk_sys.sys₊x, mtk_sys.sys₊y, mtk_sys.sys₊z]
 end
 
+# An operator that ASSIGNS a tendency into only the first state row and leaves the
+# other rows untouched — the write pattern of equilibrium partitioning operators
+# (e.g. GasChem's IsorropiaOp).
+struct PartialWriterOp <: Operator
+end
+
+function EarthSciMLBase.get_odefunction(
+        op::PartialWriterOp, csys::CoupledSystem, mtk_sys, coord_args,
+        domain::DomainInfo, u0, p, alg::MapAlgorithm)
+    nrows = length(unknowns(mtk_sys))
+    sz = tuple(size(domain)...)
+    function run(du, u, p, t) # In-place
+        du = reshape(du, nrows, sz...)
+        u = reshape(u, nrows, sz...)
+        @views du[1, :, :, :] .= 0.1 .* u[1, :, :, :]
+        return reshape(du, :)
+    end
+    function run(u, p, t) # Out-of-place
+        u = reshape(u, nrows, sz...)
+        du = zeros(size(u))
+        @views du[1, :, :, :] .= 0.1 .* u[1, :, :, :]
+        return reshape(du, :)
+    end
+    return run
+end
+
+function EarthSciMLBase.get_needed_vars(::PartialWriterOp, csys, mtk_sys, domain::DomainInfo)
+    return []
+end
+
 t_min = 0.0
 lon_min, lon_max = -π, π
 lat_min, lat_max = -0.45π, 0.45π
@@ -127,6 +157,37 @@ du = scimlop(reshape(u, :), p, 0.0)
 
 du2 = scimlop(reshape(u, :), p, 0.0)
 @test du2 ≈ reshape(du, :)
+
+@testset "multi-op combiner sums operator tendencies" begin
+    csys2 = EarthSciMLBase.couple(sys, ExampleOp(), PartialWriterOp(), domain)
+    sys_mtk2 = convert(System, csys2)
+    sys_coords2, coord_args2 = EarthSciMLBase._prepare_coord_sys(sys_mtk2, domain)
+    p2 = EarthSciMLBase.default_params(sys_coords2)
+    u2 = EarthSciMLBase.init_u(sys_coords2, domain)
+
+    f_full = EarthSciMLBase.get_odefunction(ExampleOp(), csys2, sys_coords2, coord_args2,
+        domain, reshape(u2, :), p2, MapBroadcast())
+    f_part = EarthSciMLBase.get_odefunction(PartialWriterOp(), csys2, sys_coords2,
+        coord_args2, domain, reshape(u2, :), p2, MapBroadcast())
+    du_full = zeros(length(u2))
+    f_full(du_full, reshape(u2, :), p2, 0.0)
+    du_part = zeros(length(u2))
+    f_part(du_part, reshape(u2, :), p2, 0.0)
+    @test sum(abs.(du_full)) > 0
+    @test sum(abs.(du_part)) > 0
+
+    combined = EarthSciMLBase.nonstiff_ops(csys2, sys_coords2, coord_args2, domain,
+        reshape(u2, :), p2, MapBroadcast())
+    # Stale incoming du contents must not leak into the result.
+    du_c = fill(123.0, length(u2))
+    combined(du_c, reshape(u2, :), p2, 0.0)
+    # True-sum contract: rows written by both operators carry both contributions
+    # (a sequential same-buffer combiner would let PartialWriterOp overwrite
+    # ExampleOp's tendency in row 1), and rows only ExampleOp writes are kept.
+    @test du_c ≈ du_full .+ du_part
+    # In-place and out-of-place forms agree.
+    @test combined(reshape(u2, :), p2, 0.0) ≈ du_c
+end
 
 grid = EarthSciMLBase.grid(domain)
 sys1 = mtkcompile(sys)

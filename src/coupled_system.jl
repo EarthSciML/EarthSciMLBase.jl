@@ -853,14 +853,19 @@ function nonstiff_ops(sys::CoupledSystem, sys_mtk, coord_args, domain, u0, p, al
                 end
                 du
             end
+            # Operators may ASSIGN into `du` (fully, like advection, or only the rows
+            # they own, like equilibrium partitioning ops) rather than accumulate, so
+            # each one must run against a freshly zeroed buffer; summing happens here,
+            # not in the operators.
             dusum = zeros(size(u0))
             function f(du, u, p, t)
                 dusum .= 0.0
-                du .= 0.0
                 for op in fs
+                    du .= 0.0
                     op(du, u, p, t)
                     dusum .+= du
                 end
+                du .= dusum
                 du
             end
             f
