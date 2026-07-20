@@ -86,7 +86,7 @@ function EarthSciMLBase.get_odefunction(
 end
 
 function EarthSciMLBase.get_needed_vars(::PartialWriterOp, csys, mtk_sys, domain::DomainInfo)
-    return []
+    return Num[]
 end
 
 t_min = 0.0
@@ -185,6 +185,10 @@ du2 = scimlop(reshape(u, :), p, 0.0)
     # (a sequential same-buffer combiner would let PartialWriterOp overwrite
     # ExampleOp's tendency in row 1), and rows only ExampleOp writes are kept.
     @test du_c ≈ du_full .+ du_part
+    # Both contributions must be visible individually (kills the overwrite bug
+    # under either operator ordering).
+    @test !(du_c ≈ du_full)
+    @test !(du_c ≈ du_part)
     # In-place and out-of-place forms agree.
     @test combined(reshape(u2, :), p2, 0.0) ≈ du_c
 end

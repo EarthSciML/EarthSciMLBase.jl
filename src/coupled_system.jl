@@ -856,16 +856,18 @@ function nonstiff_ops(sys::CoupledSystem, sys_mtk, coord_args, domain, u0, p, al
             # Operators may ASSIGN into `du` (fully, like advection, or only the rows
             # they own, like equilibrium partitioning ops) rather than accumulate, so
             # each one must run against a freshly zeroed buffer; summing happens here,
-            # not in the operators.
-            dusum = zeros(size(u0))
+            # not in the operators. The first operator writes straight into the zeroed
+            # `du`; the rest go through `scratch` (one zero-fill + one add per extra
+            # operator — cheaper than accumulating everything in a separate buffer).
+            scratch = zeros(size(u0))
             function f(du, u, p, t)
-                dusum .= 0.0
-                for op in fs
-                    du .= 0.0
-                    op(du, u, p, t)
-                    dusum .+= du
+                du .= 0.0
+                first(fs)(du, u, p, t)
+                for op in Base.tail(fs)
+                    scratch .= 0.0
+                    op(scratch, u, p, t)
+                    du .+= scratch
                 end
-                du .= dusum
                 du
             end
             f
