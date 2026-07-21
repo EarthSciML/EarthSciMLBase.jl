@@ -188,6 +188,24 @@ function build_coord_observed_function(sys_coord, coord_args, vars; kwargs...)
     gen_coord_func(sys_coord, exprs, coord_args; kwargs...)
 end
 
+"""
+Like [`build_coord_observed_function`](@ref), but for a single observed variable,
+generating a function that returns the value as a scalar instead of a length-1
+array. The out-of-place call `(u, p, t, c1, c2, c3)` on the vector form heap-allocates
+a fresh length-1 array on every evaluation; the scalar form returns the bare value,
+which matters for readers evaluated once per grid cell (or per species per grid
+cell) per solver step, such as the advection operator's wind-field accessors.
+
+The returned callable supports only the 6-argument out-of-place signature
+`(u, p, t, c1, c2, c3)`; there is no meaningful in-place variant for a scalar
+result (the codegen backend emits an unimplemented stub for it).
+"""
+function build_coord_observed_scalar_function(sys_coord, coord_args, var; kwargs...)
+    o = ModelingToolkit.observed(sys_coord)
+    i = findfirst((x) -> Symbol(x.lhs) == Symbol(var), o)
+    gen_coord_func(sys_coord, o[i].rhs, coord_args; kwargs...)
+end
+
 function _mtk_grid_func(sys_mtk, mtkf, domain::DomainInfo{ET, AT},
         alg::MA) where {ET, AT, MA <: MapAlgorithm}
     nrows = length(unknowns(sys_mtk))
