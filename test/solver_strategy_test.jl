@@ -3,7 +3,8 @@ using Test
 using ModelingToolkit, DomainSets
 using OrdinaryDiffEqTsit5, OrdinaryDiffEqSDIRK, OrdinaryDiffEqLowOrderRK
 using DynamicQuantities
-using SciMLBase: DiscreteCallback, ReturnCode
+using SciMLBase: DiscreteCallback, CallbackSet, ReturnCode
+import DiffEqCallbacks
 using LinearSolve
 import SciMLStructures
 import SymbolicIndexingInterface
@@ -453,6 +454,57 @@ end
         # `p[1][1]` (first element of the 1st parameter portion) must be
         # finite — would be undefined if IIP weren't unwrapped.
         @test isfinite(out[1])
+    end
+
+    @testset "per-cell callback initialize guard" begin
+        # `single_ode_step!` re-runs the callback-`initialize` pass only for
+        # the first cell of a chunk when `_reinit_cb_skippable` proves the
+        # repeats redundant (preset-time conditions with no preset time
+        # strictly inside the inner span). A callback with a stateful
+        # `initialize` (e.g. `PeriodicCallback` re-anchoring its epoch and
+        # scheduling its first tstop, which the per-cell `reinit!` tstop wipe
+        # would destroy) must keep per-cell initialization.
+        st_local = SolverStrangSerial(Tsit5(), 1.0)
+        tstart = EarthSciMLBase.get_tspan(domain)[1]
+        ncells_probe = 3
+        cells = CartesianIndices(tuple(size(domain)...))[1:ncells_probe]
+
+        inits = Ref(0)
+        count_init(c, u, t, integrator) = (inits[] += 1)
+
+        # Stateful, non-preset condition: initialization must stay per-cell.
+        cb_stateful = DiscreteCallback(
+            (u, t, integrator) -> false, integrator -> nothing;
+            initialize = count_init)
+        _, integs = EarthSciMLBase._strang_integrators(
+            st_local, domain, f_ode, u0_single, tstart, p, cb_stateful)
+        # `_strang_integrators` attaches the event callback both on the inner
+        # `ODEProblem` and on `init`, so each one appears twice per integrator.
+        ncbs = length(integs[1].opts.callback.discrete_callbacks)
+        inits[] = 0
+        EarthSciMLBase.single_ode_step!(copy(u), cells, integs[1], 0.0, 1.0)
+        @test inits[] == ncells_probe * ncbs
+
+        # Preset-time condition with no preset time strictly inside the span:
+        # one initialization for the whole chunk.
+        cb_preset = DiffEqCallbacks.PresetTimeCallback(
+            [0.0, 1.0, 5.0], integrator -> nothing; initialize = count_init)
+        _, integs_p = EarthSciMLBase._strang_integrators(
+            st_local, domain, f_ode, u0_single, tstart, p, cb_preset)
+        ncbs_p = length(integs_p[1].opts.callback.discrete_callbacks)
+        inits[] = 0
+        EarthSciMLBase.single_ode_step!(copy(u), cells, integs_p[1], 0.0, 1.0)
+        @test inits[] == ncbs_p
+
+        # Predicate unit checks: preset-time conditions are skippable exactly
+        # when no preset time falls strictly inside the inner span.
+        cb_pt = DiffEqCallbacks.PresetTimeCallback([0.0, 1.0, 5.0],
+            integrator -> nothing)
+        @test EarthSciMLBase._reinit_cb_skippable(CallbackSet(cb_pt), 0.0, 1.0)
+        @test !EarthSciMLBase._reinit_cb_skippable(CallbackSet(cb_pt), 0.5, 1.5)
+        @test !EarthSciMLBase._reinit_cb_skippable(
+            CallbackSet(cb_stateful), 0.0, 1.0)
+        @test EarthSciMLBase._reinit_cb_skippable(nothing, 0.0, 1.0)
     end
 
     @testset "IMEX" begin

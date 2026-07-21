@@ -303,10 +303,49 @@ function threaded_ode_step!(u, IIchunks, integrators, time, step_length)
     nothing
 end
 
+# Whether repeating the callback `initialize` pass on every per-cell `reinit!`
+# of the inner span (t0, tf) is provably redundant, so it can run once per
+# chunk per outer step instead. A callback's `initialize` may carry per-solve
+# state (e.g. `PeriodicCallback` re-anchors its epoch refs and schedules its
+# first tstop, which `reinit!`'s tstop wipe would then destroy for later
+# cells), so the skip is only allowed for `DiscreteCallback`s driven by
+# `DiffEqCallbacks.PresetTimeFunction`: their condition is a stateless
+# exact-time membership test, and their `initialize` work (re-adding interior
+# tstops + the t0-coincident affect fire) is a byte-identical repeat — except
+# when a preset time falls STRICTLY inside the span, where only the
+# initialize-time `add_tstop!` makes the integrator land on it. Anything else
+# (continuous callbacks, other conditions, user callbacks from
+# `stiff_kwargs`) disables the skip, restoring the exact per-cell behavior.
+_reinit_cb_skippable(::Nothing, t0, tf) = true
+function _reinit_cb_skippable(cb::CallbackSet, t0, tf)
+    isempty(cb.continuous_callbacks) &&
+        all(c -> _reinit_cb_skippable(c, t0, tf), cb.discrete_callbacks)
+end
+function _reinit_cb_skippable(cb::DiscreteCallback, t0, tf)
+    cb.condition isa DiffEqCallbacks.PresetTimeFunction || return false
+    return !any(t -> t0 < t < tf, cb.condition.tstops)
+end
+_reinit_cb_skippable(cb::DECallback, t0, tf) = false
+
 """
 Take a step using the ODE solver with the given IIchunk (grid cell iterator) and integrator.
 """
 function single_ode_step!(u, IIchunk, integrator, time, step_length)
+    # Repeat the callback-`initialize` pass only for the first cell of the
+    # chunk when `_reinit_cb_skippable` proves the repeats redundant: for the
+    # data-load preset-time callbacks the `initialize` affects read only
+    # `integrator.t` (identical for every cell of this outer step) and write
+    # into the one MTKParameters object shared by every cell, so re-running
+    # them per cell repeats byte-identical writes while paying for
+    # DiffEqBase's `initialize!` recursion — which heap-boxes the full flat
+    # DiscreteCallback structs (tens of KB per data-load callback) on every
+    # call. One initialization per chunk per outer step keeps the first-fire
+    # guarantee (issue #219) at 1/length(IIchunk) of the cost.
+    # `integrator.p.ii` is set AFTER `reinit!`, so the skipped
+    # initializations never observed the cell index anyway.
+    skip_repeats = _reinit_cb_skippable(
+        integrator.opts.callback, time, time + step_length)
+    reinit_cbs = true
     for ii in IIchunk
         uii = @view u[:, ii]
         # `reset_dt = false`: `reinit!` runs `auto_dt_reset!` BEFORE
@@ -319,7 +358,8 @@ function single_ode_step!(u, IIchunk, integrator, time, step_length)
         # and then call `auto_dt_reset!` ourselves AFTER `reinit!`'s callback
         # initialization has refreshed the parameter buffer.
         reinit!(integrator, uii, t0 = time, tf = time + step_length,
-            erase_sol = false, reset_dt = false)
+            erase_sol = false, reset_dt = false, reinit_callbacks = reinit_cbs)
+        reinit_cbs = !skip_repeats
         integrator.p.ii = ii
         if integrator.opts.adaptive
             auto_dt_reset!(integrator)

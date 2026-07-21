@@ -70,6 +70,7 @@ julia = "1.10"
 
 [extras]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+DiffEqCallbacks = "459566f4-90b8-5000-8ac3-15dfb0a30def"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
@@ -88,4 +89,4 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [targets]
-test = ["Documenter", "Test", "SafeTestsets", "ForwardDiff", "JLArrays", "LinearSolve", "Metal", "Reactant", "Dates", "DomainSets", "OrdinaryDiffEqLowOrderRK", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqTsit5", "SciMLBase", "SciMLSensitivity", "SciMLStructures", "Zygote"]
+test = ["Documenter", "Test", "SafeTestsets", "ForwardDiff", "JLArrays", "LinearSolve", "Metal", "Reactant", "Dates", "DiffEqCallbacks", "DomainSets", "OrdinaryDiffEqLowOrderRK", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqTsit5", "SciMLBase", "SciMLSensitivity", "SciMLStructures", "Zygote"]
