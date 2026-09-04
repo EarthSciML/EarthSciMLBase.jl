@@ -484,6 +484,28 @@ end
     @test runcount2 == 1
 end
 
+@testset "Caller-owned lowered system cache" begin
+    cs = couple(SEqn(), IEqn(), REqn())
+    cache = LoweredSystemCache()
+
+    uncached = convert(System, cs; compile = false)
+    first = convert(System, cs; compile = false, lowered_cache = cache)
+    repeated = convert(System, cs; compile = false, lowered_cache = cache)
+
+    @test repeated === first
+    @test string.(equations(first)) == string.(equations(uncached))
+    @test convert(System, cs; compile = true, lowered_cache = cache) !== first
+
+    invalidate_lowered_system!(cache, cs)
+    after_invalidation = convert(System, cs; compile = false, lowered_cache = cache)
+    @test after_invalidation !== first
+    @test string.(equations(after_invalidation)) == string.(equations(first))
+
+    empty!(cache)
+    after_empty = convert(System, cs; compile = false, lowered_cache = cache)
+    @test after_empty !== after_invalidation
+end
+
 @testset "No duplicate connector equations" begin
     struct DupACoupler
         sys::Any
