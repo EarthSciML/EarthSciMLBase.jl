@@ -446,3 +446,29 @@ end
         @test cc.runcount > 0
     end
 end
+
+@testset "Strang stiff_kwargs strip build-only kwargs" begin
+    # Regression test for build-only kwargs: `sparse` is consumed separately
+    # for the Jacobian build in `ODEProblem(::CoupledSystem, ::SolverStrang)`
+    # and `optimize` is not a solver/init keyword at all. Forwarding either to
+    # the inner stiff sub-integrators makes OrdinaryDiffEq's strict keyword
+    # check throw ("Unrecognized keyword arguments"), so `_strang_integrators`
+    # must strip them while still honoring genuine solver kwargs like `reltol`.
+    st_kw = SolverStrangSerial(Tsit5(), 1.0; sparse = true, optimize = false,
+        reltol = 1e-2)
+    tstart = EarthSciMLBase.get_tspan(domain)[1]
+
+    # Building the sub-integrators calls `init`, which errors if the
+    # build-only kwargs are forwarded (i.e. if the strip is reverted).
+    _, integrators_kw = EarthSciMLBase._strang_integrators(
+        st_kw, domain, f_ode, u0_single, tstart, p, nothing)
+    @test length(integrators_kw) == 1
+    # Genuine solver kwargs must still reach the inner integrators.
+    @test integrators_kw[1].opts.reltol == 1e-2
+
+    # Public API: coupled-problem construction reaches `_strang_integrators`
+    # (and consumes `sparse = true` for the Jacobian build), so it must
+    # succeed with build-only kwargs present.
+    prob_kw = ODEProblem(csys, st_kw)
+    @test prob_kw isa ODEProblem
+end
