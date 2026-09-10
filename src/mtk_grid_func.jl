@@ -23,67 +23,59 @@ function rewrite_broadcast(x)
     return x
 end
 
-# Placeholder symbolic variable carrying a coordinate's name + unit.  Used as
-# a trailing function argument so `build_function_wrapper` generates code that
-# references the coordinate by name rather than via the parameter buffer.
-function _coord_placeholder(name::Symbol, unit)
-    sym = Symbolics.unwrap(Symbolics.variable(name; T = Real))
-    sym = ModelingToolkit.toparam(sym)
-    if unit !== nothing
-        sym = Symbolics.setmetadata(sym, ModelingToolkit.VariableUnit, unit)
+# Move coordinate references from the generated code's body to the argument list.
+# Rewrites the generated function's AST *after* codegen: (1) appends the
+# coordinate argument symbols to the signature; (2) replaces every literal
+# `_CoordTmpF` call site with the matching coordinate argument. Operating
+# post-codegen (rather than substituting the symbolic expressions before codegen)
+# preserves the `===` node sharing that the SymbolicUtils fast_toexpr backend
+# relies on for deduplication, which keeps the generated body from blowing up on
+# large mechanisms (large sparse Jacobians).
+function rewrite_coord_func(x, coord_args, idv::Symbol)
+    if @capture(x, function (args__)
+        body_
+    end)
+        return :(function ($(args...), $(coord_args...))
+            $body
+        end)
+    elseif @capture(x, (a_)(b_))
+        # Under the fast_toexpr backend the independent variable may be renamed to
+        # a hashed argument symbol (`__argₛᵧₘ<hash>`), so we do NOT require
+        # `b == idv` — a literal `_CoordTmpF` instance in call position is
+        # unambiguous by itself.
+        if a isa _CoordTmpF
+            return :($(coord_args[a.idx]))
+        end
     end
-    return sym
+    return x
 end
 
-# Recursively walk a symbolic expression and apply `f!` to every subexpression
-# whose top-level `operation` is a `_CoordTmpF`.
-function _foreach_coord_tmp(f!, expr)
-    expr = Symbolics.unwrap(expr)
-    if Symbolics.iscall(expr)
-        if Symbolics.operation(expr) isa _CoordTmpF
-            f!(expr)
-        end
-        for a in Symbolics.arguments(expr)
-            _foreach_coord_tmp(f!, a)
-        end
+# Loud build-time guard: a `_CoordTmpF` left in the generated code would silently
+# evaluate to `Inf` at runtime (the `(::_CoordTmpF)(t) = Inf` fallback below). If
+# the codegen backend ever changes shape such that the postwalk pattern above no
+# longer matches, fail the build instead.
+function _assert_no_coord_tmp(ex)
+    ok = Ref(true)
+    MacroTools.postwalk(ex) do x
+        x isa _CoordTmpF && (ok[] = false)
+        x
     end
-    return nothing
+    ok[] || error(
+        "gen_coord_func: an unrewritten _CoordTmpF coordinate placeholder remains in " *
+        "the generated code — the post-codegen AST rewrite pattern no longer matches " *
+        "this codegen backend. Coordinates would evaluate to Inf at runtime.")
+    return ex
 end
 
-# Walk `sys_coord` equations + observed to collect every `_CoordTmpF(coord, i)(t)`
-# term that `_prepare_coord_sys` inserted.  Returns a Vector indexed by `i`; any
-# coordinate not referenced in the system gets a placeholder with no unit.
-function _coord_placeholders(sys_coord, coord_args)
-    found = Dict{Int, Tuple{Any, Any}}() # idx => (tmp_term, coord)
-    sources = vcat(equations(sys_coord), ModelingToolkit.observed(sys_coord))
-    for eq in sources, side in (eq.lhs, eq.rhs)
-
-        _foreach_coord_tmp(side) do term
-            op = Symbolics.operation(term)
-            get!(found, op.idx, (term, op.coord))
-        end
-    end
-    phs = Vector{Any}(undef, length(coord_args))
-    subst = Dict()
-    for i in eachindex(coord_args)
-        unit_c = haskey(found, i) ? ModelingToolkit.get_unit(found[i][2]) : nothing
-        phs[i] = _coord_placeholder(coord_args[i], unit_c)
-        if haskey(found, i)
-            subst[found[i][1]] = phs[i]
-        end
-    end
-    return phs, subst
+function _add_coord_args(ex, coord_args, idv::Symbol, ::MapAlgorithm)
+    ex = MacroTools.postwalk(x -> rewrite_coord_func(x, coord_args, idv), ex)
+    _assert_no_coord_tmp(ex)
 end
 
-# Build the function signature arguments that `build_function_wrapper` expects
-# for a coord-aware generated function.  Returns `(args..., p_start, p_end)`.
-function _coord_function_args(sys, placeholders)
-    dvs = unknowns(sys)
-    ps = parameters(sys; initial_parameters = true)
-    p = tuple(ModelingToolkit.reorder_parameters(sys, Symbolics.unwrap.(ps))...)
-    iv = ModelingToolkit.get_iv(sys)
-    args = (dvs, p..., iv, placeholders...)
-    return args, 2, 1 + length(p)
+function _add_coord_args(ex, coord_args, idv::Symbol, ::MapReactant)
+    ex = MacroTools.postwalk(x -> rewrite_coord_func(x, coord_args, idv), ex)
+    _assert_no_coord_tmp(ex)
+    ex = MacroTools.postwalk(x -> rewrite_broadcast(x), ex)
 end
 
 """
@@ -94,41 +86,14 @@ downstream grid-evaluation machinery.
 """
 function gen_coord_func(sys, expr, coord_args, alg::MapAlgorithm = MapBroadcast();
         eval_expression = false, eval_module = @__MODULE__)
-    placeholders, subst = _coord_placeholders(sys, coord_args)
-    expr_sub = isempty(subst) ? expr : Symbolics.substitute.(expr, (subst,))
-
-    # `build_function_wrapper` inlines observed equations into `expr_sub` via the
-    # system's stored observed RHSs. Those RHSs were not touched by the substitution
-    # above (only `expr` was), so any `_CoordTmpF(coord, i)(t)` calls hidden inside
-    # `observed(sys)` would land in the generated code unsubstituted and fall through
-    # to the `(::_CoordTmpF)(t) = Inf` fallback at runtime. Pre-inline observed (with
-    # placeholder-substituted RHSs) into `expr_sub` so the downstream `obs_subber` is
-    # a no-op; `Symbolics.fixpoint_sub` resolves nested observed references.
-    if !isempty(subst) && !isempty(ModelingToolkit.observed(sys))
-        obs_subst = Dict{Any, Any}()
-        for eq in ModelingToolkit.observed(sys)
-            obs_subst[eq.lhs] = Symbolics.substitute(eq.rhs, subst)
-        end
-        expr_sub = Symbolics.fixpoint_sub.(expr_sub, (obs_subst,))
-    end
-
-    args, p_start, p_end = _coord_function_args(sys, placeholders)
-
-    fexpr = ModelingToolkit.build_function_wrapper(
-        sys, expr_sub, args...;
-        p_start = p_start, p_end = p_end, expression = Val{true}
-    )
-
-    if alg isa MapReactant
-        fexpr = fexpr isa Tuple ?
-                map(f -> MacroTools.postwalk(rewrite_broadcast, f), fexpr) :
-                MacroTools.postwalk(rewrite_broadcast, fexpr)
-    end
-
+    idv = var2symbol(ModelingToolkit.get_iv(sys))
+    fexpr = ModelingToolkit.generate_custom_function(sys, expr, expression = Val{true})
     if fexpr isa Tuple
+        fexpr = _add_coord_args.(fexpr, (coord_args,), (idv,), (alg,))
         f = ModelingToolkit.eval_or_rgf.(fexpr; eval_expression, eval_module)
         return ModelingToolkit.GeneratedFunctionWrapper{(2, 6, true)}(f[1], f[2])
     else
+        fexpr = _add_coord_args(fexpr, coord_args, idv, alg)
         return ModelingToolkit.eval_or_rgf(fexpr; eval_expression, eval_module)
     end
 end
