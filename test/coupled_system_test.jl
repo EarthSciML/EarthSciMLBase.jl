@@ -522,3 +522,135 @@ end
     eq_strs2 = sort([string(eq) for eq in equations(sys2)])
     @test eq_strs2 == unique(eq_strs2)
 end
+
+
+# ----------------------------------------------------------------------------
+# callback_vars + discrete-event factory forwarding contract: callback-only
+# variables must reach the prune factory's keep-set.
+# ----------------------------------------------------------------------------
+struct _MockPBLCallback end
+struct _Bare end
+EarthSciMLBase.get_needed_vars(::_MockPBLCallback, sys, mtk_sys, domain) = [:A1_PBLH_marker]
+
+# Fixtures for the convert(System, ...) integration test below: an operator and
+# an init-callback object that each advertise one needed variable.
+struct _NeedyOp <: Operator end
+function EarthSciMLBase.get_needed_vars(::_NeedyOp, csys, mtk_sys, domain::DomainInfo)
+    [:op_needed_marker]
+end
+
+struct _AdvertisingCallback end
+function EarthSciMLBase.get_needed_vars(::_AdvertisingCallback, sys, mtk_sys, domain)
+    [:cb_needed_marker]
+end
+# couple() only routes an object into CoupledSystem.init_callbacks when it has an
+# init_callback method with this signature. convert(System, ...) never calls it,
+# so the method body does not need to build a real callback.
+function EarthSciMLBase.init_callback(::_AdvertisingCallback, sys::CoupledSystem, sys_mtk,
+        coord_args, domain::DomainInfo, alg::MapAlgorithm)
+    error("init_callback is not used by convert(System, ...)")
+end
+
+@testset "callback_vars + 2-arg factory forwarding" begin
+    import Dates
+
+_dom = EarthSciMLBase.DomainInfo(Dates.DateTime(2016, 1, 1), Dates.DateTime(2016, 1, 2);
+    lonrange = deg2rad(-90):deg2rad(1):deg2rad(-88),
+    latrange = deg2rad(30):deg2rad(1):deg2rad(32),
+    levrange = 1:2, u_proto = zeros(Float64, 1, 1, 1, 1))
+
+@testset "callback_vars gathers advertised vars; skips method-less callbacks" begin
+    # Standalone unit on callback_vars using a hand-built CoupledSystem shell.
+    # (domain/mtk_sys are only forwarded to get_needed_vars, which ignores them here.)
+    cs = CoupledSystem(EarthSciMLBase.ModelingToolkit.AbstractSystem[],
+        EarthSciMLBase.ModelingToolkit.PDESystem[], nothing, Any[],
+        EarthSciMLBase.Operator[], EarthSciMLBase.DECallback[],
+        Any[_MockPBLCallback()])
+    @test EarthSciMLBase.callback_vars(cs, nothing, _dom) == [:A1_PBLH_marker]
+
+    # a callback with NO get_needed_vars method is silently skipped (not an error)
+    cs2 = CoupledSystem(EarthSciMLBase.ModelingToolkit.AbstractSystem[],
+        EarthSciMLBase.ModelingToolkit.PDESystem[], nothing, Any[],
+        EarthSciMLBase.Operator[], EarthSciMLBase.DECallback[],
+        Any[_Bare(), _MockPBLCallback()])
+    @test EarthSciMLBase.callback_vars(cs2, nothing, _dom) == [:A1_PBLH_marker]
+end
+
+@testset "convert(System, ...) forwards extra_needed to 2-arg factories" begin
+    # Integration test through the real forwarding at the convert() call site
+    # (not an inline re-implementation of the applicable-selector).
+    using DomainSets
+
+    @parameters a=0.0 b=0.0 lon=0.0 lat=0.0 lev=1.0
+    @variables begin
+        x(t_nounits) = 0.0
+        y(t_nounits) = 0.0
+    end
+
+    # A factory that opts in to the keep-set by accepting a second argument.
+    # It records what it received and returns a real discrete event.
+    received = Ref{Any}(:never_called)
+    two_arg_factory = function (parent_sys, extra_needed = nothing)
+        received[] = extra_needed
+        f2!(mod, obs, ctx, integ) = (esys₊a = 1.0,)
+        return [0.5] => (f = f2!, modified = (esys₊a = parent_sys.esys₊a,))
+    end
+    # A legacy factory with only a 1-arg method: must keep working unchanged.
+    legacy_calls = Ref(0)
+    one_arg_factory = function (parent_sys)
+        legacy_calls[] += 1
+        f1!(mod, obs, ctx, integ) = (lsys₊b = 1.0,)
+        return [0.75] => (f = f1!, modified = (lsys₊b = parent_sys.lsys₊b,))
+    end
+
+    # The (negligible) coordinate-parameter term keeps lon/lat/lev in the
+    # composed system, which convert(System, ...) requires when a DomainInfo
+    # is present (same pattern as solver_strategy_test.jl).
+    esys = System([D_nounits(x) ~ a + (lon + lat + lev) * 1.0e-16], t_nounits,
+        [x], [a, lon, lat, lev]; name = :esys,
+        metadata = Dict(SysDiscreteEvent => two_arg_factory))
+    lsys = System([D_nounits(y) ~ b], t_nounits, [y], [b]; name = :lsys,
+        metadata = Dict(SysDiscreteEvent => one_arg_factory))
+
+    dom = DomainInfo(
+        constIC(0.0, t_nounits ∈ Interval(0.0, 1.0)),
+        constBC(0.0,
+            lon ∈ Interval(-1.0, 1.0),
+            lat ∈ Interval(-1.0, 1.0),
+            lev ∈ Interval(1.0, 3.0)))
+
+    csys = couple(esys, lsys, _NeedyOp(), _AdvertisingCallback(), dom)
+    sys = convert(System, csys)
+
+    # (a) The 2-arg factory was called through its 2-arg method, (b) with the
+    # operator_vars ∪ callback_vars keep-set (operator vars first, matching the
+    # unique(vcat(...)) at the convert() call site).
+    @test received[] == [:op_needed_marker, :cb_needed_marker]
+    # (c) The legacy 1-arg factory was still called, exactly once, unchanged.
+    @test legacy_calls[] == 1
+    # Both factories' events made it into the converted system.
+    @test length(ModelingToolkit.get_discrete_events(sys)) == 2
+end
+
+@testset "convert(System, ...) without DomainInfo forwards an empty keep-set" begin
+    @parameters c = 0.0
+    @variables w(t_nounits) = 0.0
+
+    received = Ref{Any}(:never_called)
+    factory = function (parent_sys, extra_needed = nothing)
+        received[] = extra_needed
+        return nothing # a factory may decline to produce an event
+    end
+    wsys = System([D_nounits(w) ~ c], t_nounits, [w], [c]; name = :wsys,
+        metadata = Dict(SysDiscreteEvent => factory))
+
+    sys = convert(System, couple(wsys))
+
+    # The 2-arg method is still preferred; with no DomainInfo the keep-set is
+    # empty but not `nothing` (which would mean the 1-arg default was used).
+    @test received[] !== nothing
+    @test received[] == Any[]
+    @test length(ModelingToolkit.get_discrete_events(sys)) == 0
+end
+
+end

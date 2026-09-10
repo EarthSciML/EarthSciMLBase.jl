@@ -305,7 +305,17 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
             kwargs...)
         temp_sys = mtkcompile(ModelingToolkit.flatten(compose(
             temp_connectors, systems...)))
-        de = filter(!isnothing, [f(temp_sys) for f in discrete_event_fs])
+        # Forward the operator- and callback-needed vars to any discrete-event
+        # factory that accepts them (e.g. EarthSciData's interp live-mask prune),
+        # so met fields consumed only out-of-band by operators/callbacks
+        # (callback-advertised met variables) are kept live rather than pruned. Factories
+        # that take only `parent_sys` (legacy 1-arg) are called unchanged.
+        extra_needed = isnothing(sys.domaininfo) ? Any[] :
+                       unique(vcat(operator_vars(sys, temp_sys, sys.domaininfo),
+                                   callback_vars(sys, temp_sys, sys.domaininfo)))
+        de = filter(!isnothing, [
+            applicable(f, temp_sys, extra_needed) ? f(temp_sys, extra_needed) : f(temp_sys)
+            for f in discrete_event_fs])
 
         # Create system of connectors and events.
         connectors = System(connector_eqs, iv; name = name,
@@ -870,6 +880,25 @@ end
 
 function operator_vars(sys::CoupledSystem, mtk_sys, domain::DomainInfo)
     unique(vcat([get_needed_vars(op, sys, mtk_sys, domain) for op in sys.ops]...))
+end
+
+"""
+Variables needed by the coupled system's init-callbacks (each one's
+`get_needed_vars`). Mirrors [`operator_vars`](@ref) over `sys.init_callbacks`.
+A callback (e.g. `PBLMixingCallback`, which needs `A1₊PBLH`) consumes met fields
+out-of-band in its observed function, so those fields appear in no compiled
+equation. Data loaders that prune interpolators by equation-reference must add
+these to the "keep" set or they will drop callback-only fields. Callbacks without
+a `get_needed_vars` method are skipped.
+"""
+function callback_vars(sys::CoupledSystem, mtk_sys, domain::DomainInfo)
+    cvs = Any[]
+    for c in sys.init_callbacks
+        sig = Tuple{typeof(c), typeof(sys), typeof(mtk_sys), typeof(domain)}
+        hasmethod(get_needed_vars, sig) &&
+            append!(cvs, get_needed_vars(c, sys, mtk_sys, domain))
+    end
+    unique(cvs)
 end
 
 """

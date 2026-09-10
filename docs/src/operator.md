@@ -188,3 +188,38 @@ anim = @animate for i in 1:length(sol.u)
 end
 gif(anim, fps = 15)
 ```
+
+## Advertising met dependencies from operators and callbacks
+
+`EarthSciData` prunes interpolators that appear in no compiled equation. A met field that a
+component consumes **out of band** — read only inside an `Operator` or an init-callback's
+observed function, not through a system equation — is invisible to that prune and would be
+dropped, leaving a zero-sentinel buffer. (A callback whose sole-consumer variable is pruned
+this way is silently disabled with no error — for instance a boundary-layer mixing callback
+that reads a PBL-height field.)
+
+To keep such fields live, a component declares what it needs:
+
+```julia
+# for an operator:
+EarthSciMLBase.get_needed_vars(op::MyOperator, csys, mtk_sys, domain::DomainInfo) = [op.pblh_var]
+
+# for an init-callback object:
+EarthSciMLBase.get_needed_vars(cb::MyCallback, csys, mtk_sys, domain::DomainInfo) = [cb.pblh_var]
+```
+
+At `convert(System, ::CoupledSystem)`, `operator_vars` and `callback_vars` gather these into
+an `extra_needed` keep-set and forward it to any discrete-event factory with a two-argument
+method:
+
+```julia
+# a prune/discrete-event factory opts in by accepting extra_needed:
+make_factory(...) = function (parent_sys, extra_needed = nothing)
+    extra_needed === nothing && return nothing   # legacy 1-arg caller: do not prune
+    apply_using(parent_sys, extra_needed)        # keep the advertised fields live
+end
+```
+
+A callback without a `get_needed_vars` method is skipped; a factory that takes only
+`parent_sys` is called unchanged (and, for a prune factory, must default to *not* pruning,
+since without the keep-set it cannot prune safely).
