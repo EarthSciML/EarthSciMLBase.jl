@@ -3,22 +3,59 @@ module EarthSciMLBaseReactantExt
 using EarthSciMLBase
 import Reactant
 using ModelingToolkit
+import LinearSolve as LS
+using LinearAlgebra
 
 function EarthSciMLBase.map_closure_to_range(f, range, ::EarthSciMLBase.MapReactant, args...)
-    function _map(f, range, args...)
-        f2(i) = f(i, args...)
-        map(f2, range)
-    end
-    Reactant.@jit _map(f, range, args...)
+    f2(i) = f(i, args...)
+    map(f2, range)
 end
 
 function EarthSciMLBase.mapreduce_range(f, op, range, ::EarthSciMLBase.MapReactant, args...)
-    function _mapreduce(range, args...)
-        f2(i) = f(i, args...)
-        out = map(f2, range)
-        reduce(op, out, init = 0)
+    f2(i) = f(i, args...)
+    mapreduce(f2, op, range; init = 0)
+end
+
+# Batched LU factorization using Reactant's native MLIR compilation.
+# Instead of iterating over blocks, this calls lu() on the entire 3D array,
+# which Reactant compiles to enzymexla.linalg_lu.
+function LS.generic_lufact!(
+        A::EarthSciMLBase.BlockDiagonal{T, <:Reactant.ConcretePJRTArray},
+        pivot::RowMaximum, ipiv; check = false) where {T}
+    function _batched_lu(data)
+        F = lu(data)
+        return (F.factors, F.ipiv, F.perm)
     end
-    Reactant.@jit _mapreduce(range, args...)
+    factors, ipiv_r, perm = Reactant.@jit _batched_lu(A.data)
+
+    # Convert ipiv from Int32 (XLA default) to Int64 for BlockDiagonalLU compatibility
+    ipiv_out = Int64.(Array(ipiv_r))
+
+    return EarthSciMLBase.BlockDiagonalLU(factors, ipiv_out, 0, perm)
+end
+
+# Batched ldiv! for Reactant BlockDiagonalLU.
+# Uses the perm vector from the batched LU factorization to apply row permutations,
+# then solves via triangular substitution on each block.
+function LinearAlgebra.ldiv!(
+        x::AbstractVector,
+        A::EarthSciMLBase.BlockDiagonalLU{T, <:Reactant.ConcretePJRTArray},
+        b::AbstractVector) where {T}
+    factors = Array(A.factors)
+    perm = Int64.(Array(A.perm))
+    n = size(factors, 1)
+    nblk = size(factors, 3)
+
+    for i in 1:nblk
+        rng = ((i - 1) * n + 1):(i * n)
+        pi = @view(perm[:, i])
+        bi = b[rng]
+        # Apply row permutation then solve L*U*x = P*b
+        permuted_bi = bi[pi]
+        y = UnitLowerTriangular(@view(factors[:, :, i])) \ permuted_bi
+        x[rng] .= UpperTriangular(@view(factors[:, :, i])) \ y
+    end
+    return x
 end
 
 function EarthSciMLBase.mtk_grid_func(
