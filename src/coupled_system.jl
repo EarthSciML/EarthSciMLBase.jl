@@ -1,5 +1,5 @@
 export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent, SysDomainInfo,
-       merge_pdesystems, slice_variable
+       LoweredSystemCache, invalidate_lowered_system!, merge_pdesystems, slice_variable
 
 """
 A system for composing together other systems using the [`couple`](@ref) function.
@@ -44,6 +44,33 @@ mutable struct CoupledSystem
 
     "Objects `x` with an `init_callback(x, Simulator)::DECallback` method."
     init_callbacks::Vector
+end
+
+"""
+    LoweredSystemCache()Update
+This defines a new mutable struct LoweredSystemCache that make possible for  Caller-owned cache for `convert(System, sys; compile = false)`. Entries are keyed
+by the identity of a mutable `CoupledSystem`, so call [`invalidate_lowered_system!`](@ref) after mutating a cached model, or `empty!` to clear every entry.
+"""
+mutable struct LoweredSystemCache
+    entries::IdDict{CoupledSystem, Dict{Any, System}}
+end
+
+LoweredSystemCache() = LoweredSystemCache(IdDict{CoupledSystem, Dict{Any, System}}())
+
+"""
+    invalidate_lowered_system!(cache, sys)
+
+Remove the lowered-system cache entry for `sys`. This must be called after a
+cached `CoupledSystem` is mutated.
+"""
+function invalidate_lowered_system!(cache::LoweredSystemCache, sys::CoupledSystem)
+    delete!(cache.entries, sys)
+    return cache
+end
+
+function Base.empty!(cache::LoweredSystemCache)
+    empty!(cache.entries)
+    return cache
 end
 
 function Base.show(io::IO, cs::CoupledSystem)
@@ -246,16 +273,28 @@ kwargs:
   - name: The desired name for the resulting System
   - compile: Whether to run `mtkcompile` on the resulting System
   - prune: Whether to prune the extra observed equations to improve performance
+  - lowered_cache: An optional caller-owned `LoweredSystemCache` for reusing an uncompiled,unpruned lowered System for the same `CoupledSystem` object. Clear the cache after mutating the CoupledSystem.
 
 Return values:
 
   - The ModelingToolkit System representation of the CoupledSystem
 """
 function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compile = true,
-        prune = false, extra_vars = [], kwargs...)
+        prune = false, extra_vars = [],
+        lowered_cache::Union{Nothing, LoweredSystemCache} = nothing, kwargs...)
     if !isempty(sys.pdesystems)
         error("Cannot convert a CoupledSystem containing PDESystems to an ODE System. " *
               "Use `convert(PDESystem, ...)` instead.")
+    end
+
+    # CoupledSystem is mutable, so the caller owns the cache lifetime and must clear it after changing `sys`. 
+    cacheable = !isnothing(lowered_cache) && !compile && !prune &&
+                isempty(extra_vars) && isempty(kwargs)
+    if cacheable
+        by_name = get(lowered_cache.entries, sys, nothing)
+        if !isnothing(by_name) && haskey(by_name, name)
+            return by_name[name]
+        end
     end
     connector_eqs = Equation[]
     initialize_eqs = Equation[]
@@ -324,6 +363,11 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
         o = extend(o, partialderivative_transform_eqs(o, sys.domaininfo))
     end
     o = ModelingToolkit.flatten(o)
+    if cacheable
+        by_name = get!(() -> Dict{Any, System}(), lowered_cache.entries, sys)
+        by_name[name] = o
+        return o
+    end
     if prune
         o_simplified = mtkcompile(o)
         extra_vars2 = []

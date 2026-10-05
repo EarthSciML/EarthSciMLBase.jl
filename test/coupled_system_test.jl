@@ -1,3 +1,7 @@
+# Tests for CoupledSystem construction, connector coupling, conversion to ModelingToolkit Systems, discrete events, PDE coupling, and solver behavior.
+# This file also verifies the optional caller-owned lowered-system cache:
+# repeated `convert(System, cs; compile=false, lowered_cache=cache)` calls
+# reuse a lowered System, while invalidation and `empty!` force reconstruction.
 using EarthSciMLBase
 using ModelingToolkit
 using ModelingToolkit: t, D
@@ -68,9 +72,7 @@ using OrdinaryDiffEqTsit5
     have_eqs = equations(sirfinal)
     obs = ModelingToolkit.observed(sirfinal)
 
-    # Check that the expected variables appear in the simplified system (either
-    # directly in the remaining equations or in observed equations that expose
-    # the equivalence between connected variables).
+    # Check that the expected variables appear in the simplified system (either directly in the remaining equations or in observed equations that expose the equivalence between connected variables).
     have_str = string(have_eqs) * " " * string(obs)
     @test occursin("reqn₊γ", have_str) && occursin("reqn₊I", have_str) &&
           occursin("reqn₊R", have_str)
@@ -155,9 +157,7 @@ end
             m = convert(System, model)
             eqstr = string(equations(m))
             obstr = string(ModelingToolkit.observed(m))
-            # After simplification, equivalent variables are substituted for a single
-            # representative, so the test checks the combined equation+observed text
-            # to stay agnostic to which representative MTK chose.
+            # After simplification, equivalent variables are substituted for a single representative, so the test checks the combined equation+observed text to stay agnostic to which representative MTK chose.
             combined = eqstr * " " * obstr
             @test occursin("b₊c_NO2(t)", combined)
             @test occursin("b₊jNO2(t)", combined)
@@ -181,9 +181,7 @@ end
 end
 
 @testset "Composed System Swapped from/to" begin
-    # Test that couple2 works correctly when ConnectorSystem returns
-    # from/to in reverse order relative to the couple2 argument order.
-    # See https://github.com/EarthSciML/EarthSciMLBase.jl/issues/177
+    # Test that couple2 works correctly when ConnectorSystem returns from/to in reverse order relative to the couple2 argument order. See https://github.com/EarthSciML/EarthSciMLBase.jl/issues/177
 
     struct XCoupler
         sys::Any
@@ -363,7 +361,6 @@ end
     end
 
     # Utility function to check if a variable is needed in the system,
-    # i.e., if one of the state variables depends on it.
     function is_var_needed(var, sys)
         target = EarthSciMLBase.var2symbol(var)
         if target in EarthSciMLBase.var2symbol.(unknowns(sys))
@@ -374,9 +371,7 @@ end
         needed_obs_idx = ModelingToolkit.observed_equations_used_by(sys, exprs)
         needed_syms = Set(EarthSciMLBase.var2symbol.(getproperty.(obs[needed_obs_idx],
             :lhs)))
-        # Follow the observed equivalence chain in both directions so that
-        # variables which MTK simplification aliased to a different representative
-        # still count as "needed" when any alias in their class is used.
+        # Follow the observed equivalence chain in both directions so that variables which MTK simplification aliased to a different representative still count as "needed" when any alias in their class is used.
         changed = true
         while changed
             changed = false
@@ -437,9 +432,7 @@ end
 
     sol = solve(ODEProblem(sys, [], (0, 10)), Tsit5())
 
-    # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for
-    # the rest of the simulation, so the final value of x should be 7.
-    # Because sys2.y is not a state variable, sysevent 2 does not run.
+    # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for the rest of the simulation, so the final value of x should be 7. Because sys2.y is not a state variable, sysevent 2 does not run.
     @test sol[sys.sys1₊x][end] ≈ 7
     @test runcount1 == 1
     @test runcount2 == 0
@@ -477,11 +470,35 @@ end
 
     sol = solve(ODEProblem(sys, [], (0, 10)), Tsit5())
 
-    # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for
-    # until t = 5, and then because of sysevent2 it become 2 for the rest of the simulation.
+    # Here the derivative of x is 0 until t = 3, then because of sysevent1 it becomes 1 for until t = 5, and then because of sysevent2 it become 2 for the rest of the simulation.
     @test sol[sys.sys1₊x][end] ≈ 12
     @test runcount1 == 1
     @test runcount2 == 1
+end
+
+@testset "Caller-owned lowered system cache" begin
+    @variables x(t_nounits) = 0.0
+    @parameters a = 1.0
+    component = System([D_nounits(x) ~ a], t_nounits, [x], [a]; name = :cache_component)
+    cs = couple(component)
+    cache = LoweredSystemCache()
+
+    uncached = convert(System, cs; compile = false)
+    first = convert(System, cs; compile = false, lowered_cache = cache)
+    repeated = convert(System, cs; compile = false, lowered_cache = cache)
+
+    @test repeated === first
+    @test string.(equations(first)) == string.(equations(uncached))
+    @test convert(System, cs; compile = true, lowered_cache = cache) !== first
+
+    invalidate_lowered_system!(cache, cs)
+    after_invalidation = convert(System, cs; compile = false, lowered_cache = cache)
+    @test after_invalidation !== first
+    @test string.(equations(after_invalidation)) == string.(equations(first))
+
+    empty!(cache)
+    after_empty = convert(System, cs; compile = false, lowered_cache = cache)
+    @test after_empty !== after_invalidation
 end
 
 @testset "No duplicate connector equations" begin
