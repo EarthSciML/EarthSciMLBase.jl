@@ -47,12 +47,9 @@ mutable struct CoupledSystem
 end
 
 """
-    LoweredSystemCache()
-
-Caller-owned cache for `convert(System, sys; compile = false)`. Entries are keyed
-by the identity of a mutable `CoupledSystem`, so call
-[`invalidate_lowered_system!`](@ref) after mutating a cached model, or `empty!`
-to clear every entry.
+    LoweredSystemCache()Update
+This defines a new mutable struct LoweredSystemCache that make possible for  Caller-owned cache for `convert(System, sys; compile = false)`. Entries are keyed
+by the identity of a mutable `CoupledSystem`, so call [`invalidate_lowered_system!`](@ref) after mutating a cached model, or `empty!` to clear every entry.
 """
 mutable struct LoweredSystemCache
     entries::IdDict{CoupledSystem, Dict{Any, System}}
@@ -276,9 +273,7 @@ kwargs:
   - name: The desired name for the resulting System
   - compile: Whether to run `mtkcompile` on the resulting System
   - prune: Whether to prune the extra observed equations to improve performance
-  - lowered_cache: An optional caller-owned `LoweredSystemCache` for reusing an uncompiled,
-    unpruned lowered System for the same `CoupledSystem` object. Clear the cache
-    after mutating the CoupledSystem.
+  - lowered_cache: An optional caller-owned `LoweredSystemCache` for reusing an uncompiled,unpruned lowered System for the same `CoupledSystem` object. Clear the cache after mutating the CoupledSystem.
 
 Return values:
 
@@ -292,9 +287,7 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
               "Use `convert(PDESystem, ...)` instead.")
     end
 
-    # CoupledSystem is mutable, so the caller owns the cache lifetime and must
-    # clear it after changing `sys`. Restrict reuse to options with no other
-    # output-affecting inputs besides the system identity and `name`.
+    # CoupledSystem is mutable, so the caller owns the cache lifetime and must clear it after changing `sys`. 
     cacheable = !isnothing(lowered_cache) && !compile && !prune &&
                 isempty(extra_vars) && isempty(kwargs)
     if cacheable
