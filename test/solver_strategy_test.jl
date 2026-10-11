@@ -3,7 +3,8 @@ using Test
 using ModelingToolkit, DomainSets
 using OrdinaryDiffEqTsit5, OrdinaryDiffEqSDIRK, OrdinaryDiffEqLowOrderRK
 using DynamicQuantities
-using SciMLBase: DiscreteCallback, CallbackSet, ReturnCode
+using SciMLBase: DiscreteCallback, ContinuousCallback, CallbackSet, ReturnCode,
+                 u_modified!
 import DiffEqCallbacks
 using LinearSolve
 import SciMLStructures
@@ -459,11 +460,12 @@ end
     @testset "per-cell callback initialize guard" begin
         # `single_ode_step!` re-runs the callback-`initialize` pass only for
         # the first cell of a chunk when `_reinit_cb_skippable` proves the
-        # repeats redundant (preset-time conditions with no preset time
-        # strictly inside the inner span). A callback with a stateful
-        # `initialize` (e.g. `PeriodicCallback` re-anchoring its epoch and
-        # scheduling its first tstop, which the per-cell `reinit!` tstop wipe
-        # would destroy) must keep per-cell initialization.
+        # repeats redundant: preset-time conditions with no preset time
+        # strictly inside the inner span and not both t0 and tf preset, or
+        # the default `initialize` (e.g. `PositiveDomain`). A callback with a
+        # stateful `initialize` (e.g. `PeriodicCallback` re-anchoring its
+        # epoch and scheduling its first tstop, which the per-cell `reinit!`
+        # tstop wipe would destroy) must keep per-cell initialization.
         st_local = SolverStrangSerial(Tsit5(), 1.0)
         tstart = EarthSciMLBase.get_tspan(domain)[1]
         ncells_probe = 3
@@ -485,10 +487,10 @@ end
         EarthSciMLBase.single_ode_step!(copy(u), cells, integs[1], 0.0, 1.0)
         @test inits[] == ncells_probe * ncbs
 
-        # Preset-time condition with no preset time strictly inside the span:
-        # one initialization for the whole chunk.
+        # Preset-time condition with a preset time at t0 only: one
+        # initialization for the whole chunk.
         cb_preset = DiffEqCallbacks.PresetTimeCallback(
-            [0.0, 1.0, 5.0], integrator -> nothing; initialize = count_init)
+            [0.0, 5.0], integrator -> nothing; initialize = count_init)
         _, integs_p = EarthSciMLBase._strang_integrators(
             st_local, domain, f_ode, u0_single, tstart, p, cb_preset)
         ncbs_p = length(integs_p[1].opts.callback.discrete_callbacks)
@@ -496,15 +498,105 @@ end
         EarthSciMLBase.single_ode_step!(copy(u), cells, integs_p[1], 0.0, 1.0)
         @test inits[] == ncbs_p
 
-        # Predicate unit checks: preset-time conditions are skippable exactly
-        # when no preset time falls strictly inside the inner span.
+        # Predicate unit checks.
+        skippable(cb, t0, tf) = EarthSciMLBase._reinit_cb_skippable(cb, t0, tf)
         cb_pt = DiffEqCallbacks.PresetTimeCallback([0.0, 1.0, 5.0],
             integrator -> nothing)
-        @test EarthSciMLBase._reinit_cb_skippable(CallbackSet(cb_pt), 0.0, 1.0)
-        @test !EarthSciMLBase._reinit_cb_skippable(CallbackSet(cb_pt), 0.5, 1.5)
-        @test !EarthSciMLBase._reinit_cb_skippable(
-            CallbackSet(cb_stateful), 0.0, 1.0)
-        @test EarthSciMLBase._reinit_cb_skippable(nothing, 0.0, 1.0)
+        cb_pd = DiffEqCallbacks.PositiveDomain(save = false)
+        cb_cont = ContinuousCallback((u, t, integrator) -> u[1], integrator -> nothing)
+        @test skippable(nothing, 0.0, 1.0)
+        # Preset times at t0 only or tf only are skippable; strictly inside the
+        # span or at both ends (the fire at tf changes the parameters that
+        # only the next cell's t0 fire would restore) are not.
+        @test skippable(CallbackSet(cb_pt), 5.0, 6.0)
+        @test skippable(CallbackSet(cb_pt), 4.0, 5.0)
+        @test !skippable(CallbackSet(cb_pt), 0.5, 1.5)
+        @test !skippable(CallbackSet(cb_pt), 0.0, 1.0)
+        # A stiff-kwarg callback with the default `initialize`, such as
+        # `PositiveDomain`, does not disable the skip: `INITIALIZE_DEFAULT`
+        # only clears `u_modified`, which `reinit!` already does.
+        @test skippable(CallbackSet(cb_pd), 0.5, 1.5)
+        @test skippable(CallbackSet(cb_pt, cb_pd), 5.0, 6.0)
+        @test !skippable(CallbackSet(cb_pt, cb_pd), 0.5, 1.5)
+        # A custom `initialize` or any continuous callback does.
+        @test !skippable(CallbackSet(cb_stateful), 0.0, 1.0)
+        @test !skippable(CallbackSet(cb_stateful, cb_pd), 5.0, 6.0)
+        @test !skippable(CallbackSet(cb_cont), 5.0, 6.0)
+        @test !skippable(CallbackSet(cb_cont, cb_pt, cb_pd), 5.0, 6.0)
+
+        # `abstol = Inf`: this fixture's states go negative by construction,
+        # so the default tolerance would shrink dt until maxiters. The
+        # `initialize` under test does not depend on it.
+        pd = DiffEqCallbacks.PositiveDomain(save = false, abstol = Inf)
+        st_pd = SolverStrangSerial(Tsit5(), 1.0; callback = pd)
+        is_pd(c) = c.affect! isa DiffEqCallbacks.PositiveDomainAffect
+        is_preset(c) = c.condition isa DiffEqCallbacks.PresetTimeFunction
+
+        # Preset-time callback plus PositiveDomain: one initialization of the
+        # preset callback for the whole chunk.
+        _, integs_ppd = EarthSciMLBase._strang_integrators(
+            st_pd, domain, f_ode, u0_single, tstart, p, cb_preset)
+        dcbs_ppd = integs_ppd[1].opts.callback.discrete_callbacks
+        @test any(is_pd, dcbs_ppd)
+        inits[] = 0
+        EarthSciMLBase.single_ode_step!(copy(u), cells, integs_ppd[1], 0.0, 1.0)
+        @test inits[] == count(is_preset, dcbs_ppd)
+
+        # Stateful callback plus PositiveDomain: still initialized per cell.
+        _, integs_spd = EarthSciMLBase._strang_integrators(
+            st_pd, domain, f_ode, u0_single, tstart, p, cb_stateful)
+        dcbs_spd = integs_spd[1].opts.callback.discrete_callbacks
+        @test any(is_pd, dcbs_spd)
+        inits[] = 0
+        EarthSciMLBase.single_ode_step!(copy(u), cells, integs_spd[1], 0.0, 1.0)
+        @test inits[] == ncells_probe * count(!is_pd, dcbs_spd)
+
+        # Threaded steps with PositiveDomain plus a data-like preset-time
+        # callback whose affect writes a parameter the RHS reads, as a data
+        # load writes the shared parameter object. Skipping the repeated
+        # initializations must reproduce the per-cell result exactly. The
+        # per-cell reference swaps PositiveDomain for a copy whose custom but
+        # equivalent `initialize` disables the skip. Preset times sit only at
+        # step starts: a fire at tf would race against other chunks' solves.
+        αsym = only(filter(x -> endswith(string(x), "α"), parameters(sys_coords)))
+        getα = SymbolicIndexingInterface.getp(sys_coords, αsym)
+        setα! = SymbolicIndexingInterface.setp(sys_coords, αsym)
+        α0 = getα(p)
+        pd_percell = DiscreteCallback(pd.condition, pd.affect!;
+            initialize = (c, u, t, integrator) -> u_modified!(integrator, false),
+            save_positions = pd.save_positions)
+        # Cells with positive lon and lat, where the solution depends on α.
+        II = CartesianIndices(tuple(size(domain)...))
+        cells_t = vec(II[(end - 3):end, (end - 2):end, 1])
+        chunks = collect(Iterators.partition(cells_t, 4))
+        u_t0 = reshape(EarthSciMLBase.init_u(sys_coords, domain), :, size(domain)...)
+        ninit = Threads.Atomic{Int}(0)
+        function run_threaded(stiff_cb, αfun)
+            cb_data = DiffEqCallbacks.PresetTimeCallback([0.0, 2.0, 10.0],
+                integrator -> setα!(integrator.p.p, αfun(integrator.t));
+                initialize = (c, u, t, integrator) -> Threads.atomic_add!(ninit, 1))
+            st_t = SolverStrangThreads(length(chunks), Tsit5(), 1.0; callback = stiff_cb)
+            _, integs_t = EarthSciMLBase._strang_integrators(
+                st_t, domain, f_ode, u0_single, tstart, p, cb_data)
+            integs_t = integs_t[1:length(chunks)]
+            ut = copy(u_t0)
+            ninit[] = 0
+            for t0 in (0.0, 2.0)
+                EarthSciMLBase.threaded_ode_step!(ut, chunks, integs_t, t0, 1.0)
+            end
+            dcbs = integs_t[1].opts.callback.discrete_callbacks
+            return (u = ut[:, cells_t], inits_per_cb = ninit[] ÷ count(is_preset, dcbs),
+                skip = skippable(integs_t[1].opts.callback, 0.0, 1.0))
+        end
+        r_skip = run_threaded(pd, t -> 10.0 + t)
+        r_ref = run_threaded(pd_percell, t -> 10.0 + t)
+        r_other = run_threaded(pd, t -> 20.0 + t)
+        setα!(p, α0)
+        @test r_skip.skip && !r_ref.skip
+        @test r_skip.u == r_ref.u
+        @test r_skip.u != r_other.u  # the data callback reaches these cells
+        @test r_skip.inits_per_cb == 2 * length(chunks)  # once per chunk per step
+        @test r_ref.inits_per_cb == 2 * length(cells_t)  # once per cell per step
     end
 
     @testset "IMEX" begin

@@ -308,22 +308,32 @@ end
 # chunk per outer step instead. A callback's `initialize` may carry per-solve
 # state (e.g. `PeriodicCallback` re-anchors its epoch refs and schedules its
 # first tstop, which `reinit!`'s tstop wipe would then destroy for later
-# cells), so the skip is only allowed for `DiscreteCallback`s driven by
-# `DiffEqCallbacks.PresetTimeFunction`: their condition is a stateless
-# exact-time membership test, and their `initialize` work (re-adding interior
-# tstops + the t0-coincident affect fire) is a byte-identical repeat — except
-# when a preset time falls STRICTLY inside the span, where only the
-# initialize-time `add_tstop!` makes the integrator land on it. Anything else
-# (continuous callbacks, other conditions, user callbacks from
-# `stiff_kwargs`) disables the skip, restoring the exact per-cell behavior.
+# cells), so the skip is only allowed for two kinds of `DiscreteCallback`:
+#   - Those driven by `DiffEqCallbacks.PresetTimeFunction`: their condition is
+#     a stateless exact-time membership test, and their `initialize` work
+#     (re-adding interior tstops + the t0-coincident affect fire) is a
+#     byte-identical repeat — except when a preset time falls STRICTLY inside
+#     the span, where only the initialize-time `add_tstop!` makes the
+#     integrator land on it, and when both t0 and tf are preset times, where
+#     each cell's solve fires the affect at tf and only the next cell's t0
+#     fire restores the t0 parameters.
+#   - Those with the default `initialize` (e.g. a `PositiveDomain` passed
+#     through `stiff_kwargs`): `INITIALIZE_DEFAULT` only clears `u_modified`,
+#     which `reinit!` already does.
+# Anything else (continuous callbacks, other callbacks with a custom
+# `initialize`) disables the skip, restoring the exact per-cell behavior.
 _reinit_cb_skippable(::Nothing, t0, tf) = true
 function _reinit_cb_skippable(cb::CallbackSet, t0, tf)
     isempty(cb.continuous_callbacks) &&
         all(c -> _reinit_cb_skippable(c, t0, tf), cb.discrete_callbacks)
 end
 function _reinit_cb_skippable(cb::DiscreteCallback, t0, tf)
-    cb.condition isa DiffEqCallbacks.PresetTimeFunction || return false
-    return !any(t -> t0 < t < tf, cb.condition.tstops)
+    if cb.condition isa DiffEqCallbacks.PresetTimeFunction
+        tstops = cb.condition.tstops
+        any(t -> t0 < t < tf, tstops) && return false
+        return !(insorted(t0, tstops) && insorted(tf, tstops))
+    end
+    return cb.initialize === INITIALIZE_DEFAULT
 end
 _reinit_cb_skippable(cb::DECallback, t0, tf) = false
 
@@ -340,7 +350,10 @@ function single_ode_step!(u, IIchunk, integrator, time, step_length)
     # DiffEqBase's `initialize!` recursion — which heap-boxes the full flat
     # DiscreteCallback structs (tens of KB per data-load callback) on every
     # call. One initialization per chunk per outer step keeps the first-fire
-    # guarantee (issue #219) at 1/length(IIchunk) of the cost.
+    # guarantee (issue #219) at 1/length(IIchunk) of the cost. Callbacks with
+    # the default `initialize` (e.g. a `PositiveDomain` stiff kwarg) have
+    # nothing to repeat: `reinit!` itself clears `u_modified` and re-copies
+    # `uprev`.
     # `integrator.p.ii` is set AFTER `reinit!`, so the skipped
     # initializations never observed the cell index anyway.
     skip_repeats = _reinit_cb_skippable(

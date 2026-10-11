@@ -6,7 +6,7 @@ using DocStringExtensions
 using DynamicQuantities, Dates
 using DomainSets
 using SciMLBase: DECallback, CallbackSet, DiscreteCallback, SplitODEProblem, reinit!,
-                 solve!, init, remake, auto_dt_reset!
+                 solve!, init, remake, auto_dt_reset!, INITIALIZE_DEFAULT
 import SciMLBase: ODEProblem
 using Statistics
 using DiffEqCallbacks
