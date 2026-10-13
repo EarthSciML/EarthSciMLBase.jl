@@ -295,12 +295,13 @@ st = SolverStrangThreads(Tsit5(), 1.0)
     @test_broken eltype(prob.f(prob.u0[:], prob.p, prob.tspan[1])) == Float32 # MTK v11 code generation does not preserve Float32
     sol = solve(prob, Euler(); dt = 1.0)
 
-    # Strang-with-Tsit5 sums fall slightly off the pre-fix value because
-    # `single_ode_step!` now runs `auto_dt_reset!` AFTER setting `integrator.p.ii`
-    # for each cell (so the initial-dt RHS evaluations use the correct cell's
-    # coordinates instead of the stale ii from the previous step) — see
-    # `single_ode_step!` and EarthSciData issue #207.
-    @test sum(abs.(sol.u[end])) ≈ 3.820629644537346e7 rtol = 1e-6
+    # Strang-with-Tsit5 sums fall slightly off the pre-fix values because
+    # `single_ode_step!` sets `integrator.p.ii` for each cell before `reinit!`, so
+    # the initial-dt RHS evaluations and the FSAL first stage (`fsalfirst`) use the
+    # correct cell's coordinates instead of the previous cell's — see
+    # `single_ode_step!` and EarthSciData issue #207. The sum no longer depends on
+    # the number of threads.
+    @test sum(abs.(sol.u[end])) ≈ 3.8206604e7 rtol = 1e-6
 
     @testset "Split problem" begin
         prob = ODEProblem(csys, SolverIMEX())
@@ -480,8 +481,6 @@ end
             initialize = count_init)
         _, integs = EarthSciMLBase._strang_integrators(
             st_local, domain, f_ode, u0_single, tstart, p, cb_stateful)
-        # `_strang_integrators` attaches the event callback both on the inner
-        # `ODEProblem` and on `init`, so each one appears twice per integrator.
         ncbs = length(integs[1].opts.callback.discrete_callbacks)
         inits[] = 0
         EarthSciMLBase.single_ode_step!(copy(u), cells, integs[1], 0.0, 1.0)
@@ -680,4 +679,174 @@ end
     # succeed with build-only kwargs present.
     prob_kw = ODEProblem(csys, st_kw)
     @test prob_kw isa ODEProblem
+end
+
+# A data-loading event shaped like EarthSciData's: at each preset time it refreshes a
+# window of three records of a time series (one before the current record, as
+# EarthSciData keeps) and the window's start time, and the RHS interpolates the window
+# linearly in time. The record times are integers and the record period is a power of
+# two, so every window that holds a time interpolates exactly the same value there.
+const DATA_PERIOD = 4.0
+data_record(τ) = Float64(1 + mod(round(Int, τ / DATA_PERIOD), 3))
+function data_window_interp(t, ts, d1, d2, d3)
+    idx = (t - ts) / DATA_PERIOD
+    k = clamp(floor(idx), 0.0, 1.0)
+    f = idx - k
+    return k == 0 ? d1 + f * (d2 - d1) : d2 + f * (d3 - d2)
+end
+@register_symbolic data_window_interp(t, ts, d1, d2, d3)
+
+# A gridded system forced by that event, with records at `phase + k * DATA_PERIOD`
+# scaled by `scale`. The window parameters start as NaN, as data buffers start
+# unloaded, and are time-independent `@parameters` like EarthSciData's.
+function data_event_csys(phase; scale = 1.0, tmax = 12.0)
+    @parameters lon=0.0 lat=0.0 lev=1.0
+    @parameters ts=NaN d1=NaN d2=NaN d3=NaN
+    @variables c(t) = 1.0
+    function load_window(m, o, ctx, integ)
+        T = floor((integ.t - phase) / DATA_PERIOD) * DATA_PERIOD + phase
+        return (; ts = T - DATA_PERIOD, d1 = scale * data_record(T - DATA_PERIOD),
+            d2 = scale * data_record(T), d3 = scale * data_record(T + DATA_PERIOD))
+    end
+    aff = ModelingToolkit.ImperativeAffect(load_window, modified = (; ts, d1, d2, d3))
+    ev = ModelingToolkit.SymbolicDiscreteCallback(
+        collect(phase:DATA_PERIOD:(tmax + DATA_PERIOD)), aff;
+        initialize = aff, initialize_save_discretes = false)
+    @named data = System(
+        [D(c) ~ data_window_interp(t, ts, d1, d2, d3) * (1 + lat^2) * lev - (1 + lon^2) * c],
+        t; discrete_events = [ev])
+    dom = DomainInfo(constIC(0.0, t ∈ Interval(0.0, tmax)),
+        constBC(0.0, lon ∈ Interval(-1.0, 1.0), lat ∈ Interval(-0.5, 0.5),
+            lev ∈ Interval(1.0, 2.0)); grid_spacing = [0.5, 0.5, 1.0])
+    return couple(data, dom), dom
+end
+
+@testset "Strang inner events" begin
+    # The stiff integrators of a problem: the stiff-step callback, last in the
+    # problem's callbacks, holds them.
+    stiff_integrators(prob) = prob.kwargs[:callback].discrete_callbacks[end].affect!.affect!.integrators
+    n_events(integ) = count(c -> c.condition isa DiffEqCallbacks.PresetTimeFunction,
+        integ.opts.callback.discrete_callbacks)
+    # The data window parameters, by name.
+    function window(prob)
+        sys = prob.f.sys
+        val(name) = only(SymbolicIndexingInterface.getp(sys, p)(prob.p)
+        for p in parameters(sys) if endswith(string(p), name))
+        return [val("₊ts"), val("₊d1"), val("₊d2"), val("₊d3")]
+    end
+    # The window loaded at t = 0 when the latest record before it is at T.
+    window0(T) = [T - DATA_PERIOD, data_record(T - DATA_PERIOD), data_record(T),
+        data_record(T + DATA_PERIOD)]
+    solve_strang(prob) = solve(prob, Euler(); dt = 1.0)
+
+    csys_b, _ = data_event_csys(0.0)
+
+    @testset "data times on step boundaries" begin
+        # The stiff integrators do without the event: the outer problem fires it
+        # before each stiff step. Its initialize ran once before the integrators were
+        # built, so their `init` saw loaded data (issue #219).
+        prob = ODEProblem(csys_b, SolverStrangSerial(Tsit5(), 1.0))
+        integs = stiff_integrators(prob)
+        @test all(i -> n_events(i) == 0, integs)
+        @test window(prob) == window0(0.0)
+        @test all(i -> isfinite(i.dt) && all(isfinite, i.fsalfirst), integs)
+        @test all(i -> i.p.p === prob.p, integs)
+
+        # `inner_events = true` keeps one copy of the event per stiff integrator (a
+        # callback given to both the problem and `init` would run twice).
+        prob_in = ODEProblem(csys_b, SolverStrangSerial(Tsit5(), 1.0; inner_events = true))
+        @test all(i -> n_events(i) == 1, stiff_integrators(prob_in))
+
+        sol = solve_strang(prob)
+        sol_in = solve_strang(prob_in)
+        @test sol.retcode == sol_in.retcode == ReturnCode.Success
+        @test sol.t == sol_in.t
+        @test sol.u == sol_in.u
+        # The data reach the solution.
+        csys_other, _ = data_event_csys(0.0; scale = 2.0)
+        @test solve_strang(ODEProblem(csys_other, SolverStrangSerial(Tsit5(), 1.0))).u[end] !=
+              sol.u[end]
+
+        # Each cell's solve starts from its own RHS (FSAL `fsalfirst` is evaluated
+        # after the cell index is set), so the block layout does not change the result.
+        for alg in (Tsit5(), TRBDF2())
+            ref = solve_strang(ODEProblem(csys_b, SolverStrangSerial(alg, 1.0))).u[end]
+            for n in (2, 7)
+                prob_t = ODEProblem(csys_b, SolverStrangThreads(n, alg, 1.0))
+                @test solve_strang(prob_t).u[end] == ref
+            end
+        end
+    end
+
+    @testset "data time inside a step" begin
+        # Data times 1.5 + 4k fall inside the steps (1, 2), (5, 6), …: the stiff
+        # integrators keep the event.
+        csys_i, _ = data_event_csys(1.5)
+        prob = ODEProblem(csys_i, SolverStrangSerial(Tsit5(), 1.0))
+        @test all(i -> n_events(i) == 1, stiff_integrators(prob))
+        @test window(prob) == window0(-2.5)
+        @test solve_strang(prob).retcode == ReturnCode.Success
+        prob_out = ODEProblem(csys_i, SolverStrangSerial(Tsit5(), 1.0; inner_events = false))
+        @test all(i -> n_events(i) == 0, stiff_integrators(prob_out))
+        @test window(prob_out) == window0(-2.5)
+        @test solve_strang(prob_out).retcode == ReturnCode.Success
+    end
+
+    @testset "events that touch unknowns" begin
+        # The outer integrator's `u` holds every grid cell, so an event that reads or
+        # changes an unknown stays in the stiff integrators.
+        _, dom = data_event_csys(0.0)
+        function event_csys(kind)
+            @parameters lon=0.0 lat=0.0 lev=1.0 k=1.0
+            @variables c(t) = 1.0
+            ev = if kind === :reset
+                ModelingToolkit.SymbolicDiscreteCallback([4.0, 8.0] => [c ~ 0.5]; iv = t)
+            elseif kind === :reads
+                ModelingToolkit.SymbolicDiscreteCallback([4.0, 8.0],
+                    ModelingToolkit.ImperativeAffect((m, o, ctx, integ) -> (; k = o.c),
+                        modified = (; k), observed = (; c)))
+            else
+                ModelingToolkit.SymbolicDiscreteCallback([4.0, 8.0],
+                    ModelingToolkit.ImperativeAffect((m, o, ctx, integ) -> (; k = 2.0),
+                        modified = (; k)))
+            end
+            @named sys_ev = System([D(c) ~ -k * c * lev + lat + lon], t;
+                discrete_events = [ev])
+            return couple(sys_ev, dom)
+        end
+        events(kind) = n_events(only(stiff_integrators(
+            ODEProblem(event_csys(kind), SolverStrangSerial(Tsit5(), 1.0)))))
+        @test events(:reset) == 1
+        @test events(:reads) == 1
+        @test events(:params) == 0
+    end
+
+    @testset "split-step boundaries" begin
+        on_boundary(τ, start, Δ) = EarthSciMLBase._on_split_boundary(τ, start, Δ)
+        @test on_boundary(4.0, 0.0, 1.0)
+        @test !on_boundary(4.5, 0.0, 1.0)
+        @test on_boundary(-3.0, 1.0, 2.0)
+        @test on_boundary(4.0, 0.0, 1.0f0)
+        # The stiff step fires at 0.0 + 3 * 0.1 = 0.30000000000000004, so 0.3 is
+        # strictly inside the step before it.
+        @test !on_boundary(0.3, 0.0, 0.1)
+        @test on_boundary(0.0 + 3 * 0.1, 0.0, 0.1)
+        @test_throws ArgumentError ODEProblem(csys_b,
+            SolverStrangSerial(Tsit5(), 1.0; inner_events = :yes))
+    end
+
+    @testset "stiff callback copied per block" begin
+        pd = DiffEqCallbacks.PositiveDomain(zeros(1); save = false)
+        prob = ODEProblem(csys_b, SolverStrangThreads(3, Tsit5(), 1.0; callback = pd))
+        integs = stiff_integrators(prob)
+        @test length(integs) == 3
+        is_pd(c) = c.affect! isa DiffEqCallbacks.PositiveDomainAffect
+        @test all(i -> count(is_pd, i.opts.callback.discrete_callbacks) == 1, integs)
+        bufs = [only(c.affect!.u for c in i.opts.callback.discrete_callbacks if is_pd(c))
+                for i in integs]
+        @test allunique(objectid.(bufs))
+        @test !any(b -> b === pd.affect!.u, bufs)
+        prob_s = ODEProblem(csys_b, SolverStrangSerial(Tsit5(), 1.0; callback = pd))
+        @test solve_strang(prob).u[end] == solve_strang(prob_s).u[end]
+    end
 end

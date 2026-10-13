@@ -86,6 +86,18 @@ where the MTK system is assumed to be stiff and the operators are assumed to be 
 The solution of the stiff ODE system is parallelized across grid cells
 using the specified number of threads.
 
+`stiff_kwargs` are passed to the stiff integrator of each block of grid cells, except:
+
+  - `callback`: each block's integrator gets its own `deepcopy`, so a callback with
+    scratch state (e.g. `PositiveDomain(u_proto)`) is not shared between threads.
+  - `inner_events`: whether the stiff integrators also carry the system's events
+    (e.g. data loading). With the default `:auto` they do not when every event fires
+    only at preset times on splitting-step boundaries (`start + k * timestep`) and
+    changes parameters only: the events then fire in the outer problem before each
+    stiff step, and the parameters are shared. `true` keeps them in any case, `false`
+    drops them in any case.
+  - `sparse` (sparse Jacobian) and `optimize`, which are build options.
+
 $(FIELDS)
 """
 struct SolverStrangThreads <: SolverStrang
@@ -118,7 +130,8 @@ SimulatorStrangSerial(stiffalg, timestep; stiff_kwargs...)
 
 Perform a simulation using [Strang splitting](https://en.wikipedia.org/wiki/Strang_splitting),
 where the MTK system is assumed to be stiff and the operators are assumed to be non-stiff.
-The solution will be calculated in serial.
+The solution will be calculated in serial. `stiff_kwargs` are handled as for
+[`SolverStrangThreads`](@ref).
 
 Additional kwargs for ODEProblem constructor:
 
@@ -183,40 +196,104 @@ function _strang_ode_func(sys_mtk, coord_args, tspan, grd; sparse = false)
     return ode_f, _prob.u0, _prob.p
 end
 
-function _strang_integrators(
-        st::SolverStrang, dom::DomainInfo, f_ode, u0_single, start, p, event_cb)
+# The callbacks of one block's stiff integrator: the system's events (shared; they
+# close over the data loaders) and a private copy of the `callback` stiff kwarg, so
+# callback scratch state such as `PositiveDomain(u_proto)`'s buffer is not shared
+# between threads.
+_block_callback(::Nothing, ::Nothing) = nothing
+_block_callback(event_cb, ::Nothing) = CallbackSet(event_cb)
+_block_callback(::Nothing, user_cb) = deepcopy(user_cb)
+_block_callback(event_cb, user_cb) = CallbackSet(event_cb, deepcopy(user_cb))
+
+"""
+Build one stiff integrator per block of grid cells. With `inner_events = false` the
+integrators do not carry `event_cb`; its `initialize` then runs once, on a throwaway
+integrator, so the parameter buffers it fills (e.g. data loaded at `start`) are filled
+before the integrators' `init` evaluates the RHS (issue #219).
+"""
+function _strang_integrators(st::SolverStrang, dom::DomainInfo, f_ode, u0_single, start,
+        p, event_cb; inner_events::Bool = true)
     II = CartesianIndices(tuple(size(dom)...))
     IIchunks = collect(Iterators.partition(II, length(II) ÷ nthreads(st)))
     iip = IIP{typeof(II[1]), typeof(p)}(II[1], p)
 
-    # Thread the data-load discrete callback into the inner stiff sub-integrators
-    # so its `initialize = affect` populates parameter buffers before `init`'s
-    # auto_dt_reset! evaluates the RHS — otherwise NaN propagates from
-    # still-empty interpolator buffers (issue #219).
     # `sparse` is consumed separately for the Jacobian build (see `:sparse in keys(...)`
-    # below) and `optimize` is not a solver/init keyword at all — both are build-only.
-    # Strip them from the kwargs forwarded to the inner stiff ODEProblem/solver so
-    # OrdinaryDiffEq's strict keyword check does not reject them.
-    nt = Base.structdiff((; st.stiff_kwargs...), NamedTuple{(:sparse, :optimize)})
-    inner_kwargs = if isnothing(event_cb)
-        nt
-    else
-        existing_cb = get(nt, :callback, nothing)
-        merged_cb = isnothing(existing_cb) ? CallbackSet(event_cb) :
-                    CallbackSet(event_cb, existing_cb)
-        merge(nt, (; callback = merged_cb))
-    end
+    # below), `inner_events` decides whether `event_cb` is passed in, and `optimize` is
+    # not a solver/init keyword at all — all are build-only. Strip them from the kwargs
+    # forwarded to the inner stiff ODEProblem/solver so OrdinaryDiffEq's strict keyword
+    # check does not reject them. `callback` is passed to `init` only, per block (see
+    # `_block_callback`): DiffEqBase merges a callback given to both the problem and
+    # `init`, which would run every callback twice.
+    nt = Base.structdiff((; st.stiff_kwargs...),
+        NamedTuple{(:sparse, :optimize, :inner_events, :callback)})
+    user_cb = get(st.stiff_kwargs, :callback, nothing)
 
     prob = ODEProblem(f_ode, u0_single, (start, start + typeof(start)(st.timestep)), iip;
-        inner_kwargs...)
-    stiff_integrators = [init(
-                             remake(prob, u0 = u0_single,
-                                 p = IIP{typeof(II[1]), typeof(p)}(II[1], p)),
-                             st.stiffalg,
-                             save_on = false, save_start = false,
-                             save_end = false, initialize_save = false;
-                             inner_kwargs...) for _ in 1:length(IIchunks)]
+        nt...)
+    new_integrator(callback) = init(
+        remake(prob, u0 = u0_single, p = IIP{typeof(II[1]), typeof(p)}(II[1], p)),
+        st.stiffalg, save_on = false, save_start = false, save_end = false,
+        initialize_save = false; nt..., callback = callback)
+    if !inner_events && !isnothing(event_cb)
+        # `init` initializes the callbacks before its first RHS evaluation, and the
+        # parameters are shared with every block's integrator.
+        new_integrator(CallbackSet(event_cb))
+    end
+    block_events = inner_events ? event_cb : nothing
+    stiff_integrators = [new_integrator(_block_callback(block_events, user_cb))
+                         for _ in 1:length(IIchunks)]
     return IIchunks, stiff_integrators
+end
+
+"""
+Whether the stiff integrators can do without the system's events `event_cb`: the
+outer problem already carries them ahead of the stiff-step callback, so at a
+splitting-step boundary they fire before the stiff step, and every integrator shares
+the parameters they set. That covers them when:
+
+  - every event fires only at preset times, and each preset time after `start` is a
+    splitting-step boundary, computed as `PeriodicCallback` computes the stiff-step
+    times. A preset time strictly inside a step needs the copies in the stiff
+    integrators.
+  - no event affect (nor its `initialize`/`finalize`) reads or changes an unknown.
+    The outer integrator's `u` holds every grid cell, so it cannot apply such an
+    event to each cell.
+"""
+function _inner_events_redundant(sys_mtk, event_cb, start, Δ)
+    isnothing(event_cb) && return true
+    isempty(ModelingToolkit.continuous_events(sys_mtk)) || return false
+    iv = ModelingToolkit.get_iv(sys_mtk)
+    params_only(ev) = all(a -> _affect_params_only(a, iv),
+        (ev.affect, ev.initialize, ev.finalize))
+    all(params_only, ModelingToolkit.discrete_events(sys_mtk)) || return false
+    cbs = event_cb isa CallbackSet ? event_cb : CallbackSet(event_cb)
+    isempty(cbs.continuous_callbacks) || return false
+    return all(cbs.discrete_callbacks) do cb
+        cb.condition isa DiffEqCallbacks.PresetTimeFunction &&
+            all(τ -> τ <= start || _on_split_boundary(τ, start, Δ), cb.condition.tstops)
+    end
+end
+
+_affect_params_only(::Nothing, _) = true
+_affect_params_only(a::ModelingToolkit.AffectSystem, _) = isempty(a.unknowns)
+function _affect_params_only(a::ModelingToolkit.ImperativeAffect, iv)
+    is_param(x) = x isa AbstractArray ? all(is_param, x) :
+                  ModelingToolkit.isparameter(Symbolics.unwrap(x))
+    all(is_param, a.modified) || return false
+    return all(a.obs) do o
+        all(v -> isequal(v, iv) || ModelingToolkit.isparameter(v),
+            Symbolics.get_variables(o))
+    end
+end
+_affect_params_only(_, _) = false
+
+# Whether `τ` is a time the stiff-step `PeriodicCallback` (period `Δ`, started at
+# `start`) fires at, computed as that callback computes them.
+function _on_split_boundary(τ, start, Δ)
+    t0 = convert(typeof(Δ), start)
+    k = round((τ - t0) / Δ)
+    (isfinite(k) && abs(k) < maxintfloat(Float64)) || return false
+    return convert(typeof(τ), t0 + Int(k) * Δ) == τ
 end
 
 function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = nothing,
@@ -238,9 +315,17 @@ function ODEProblem(s::CoupledSystem, st::SolverStrang; u0 = nothing, tspan = no
         sparse = sparse)
 
     event_cb = ModelingToolkit.process_events(sys_mtk)
+    inner_events = get(st.stiff_kwargs, :inner_events, :auto)
+    if inner_events === :auto
+        # The stiff-step period as `stiff_callback` sets it.
+        Δ = eltype(u0)(st.timestep)
+        inner_events = !_inner_events_redundant(sys_mtk, event_cb, start, Δ)
+    end
+    inner_events isa Bool ||
+        throw(ArgumentError("`inner_events` must be `:auto`, `true` or `false`; got $(repr(inner_events))"))
     IIchunks,
     stiff_integrators = _strang_integrators(
-        st, dom, f_ode, u0_single, start, p, event_cb)
+        st, dom, f_ode, u0_single, start, p, event_cb; inner_events = inner_events)
     nonstiff_op = nonstiff_ops(s, sys_mtk, coord_args, dom, u0, p, st.alg)
 
     cb = []
@@ -353,27 +438,28 @@ function single_ode_step!(u, IIchunk, integrator, time, step_length)
     # guarantee (issue #219) at 1/length(IIchunk) of the cost. Callbacks with
     # the default `initialize` (e.g. a `PositiveDomain` stiff kwarg) have
     # nothing to repeat: `reinit!` itself clears `u_modified` and re-copies
-    # `uprev`.
-    # `integrator.p.ii` is set AFTER `reinit!`, so the skipped
-    # initializations never observed the cell index anyway.
+    # `uprev`. Those `initialize` affects never read the cell index.
     skip_repeats = _reinit_cb_skippable(
         integrator.opts.callback, time, time + step_length)
     reinit_cbs = true
     for ii in IIchunk
         uii = @view u[:, ii]
+        # The cell index is set BEFORE `reinit!`: its cache `initialize!` evaluates
+        # the RHS for FSAL methods (e.g. `fsalfirst` of TRBDF2 and Tsit5), which the
+        # first step uses, and that must be this cell's RHS, not the previous one's.
+        integrator.p.ii = ii
         # `reset_dt = false`: `reinit!` runs `auto_dt_reset!` BEFORE
         # `initialize_callbacks!` (the opposite order from `__init`), so the
         # data-load discrete callback's `initialize` affect would not yet have
         # populated the interpolator parameter buffer when the inner stiff RHS
         # is evaluated for the initial-dt estimate — tripping the bounds check
         # in `interp_unsafe` against a still-sentinel `DataBufferType` (issue
-        # EarthSciData #207).  We disable `reset_dt` here, set the cell index,
-        # and then call `auto_dt_reset!` ourselves AFTER `reinit!`'s callback
-        # initialization has refreshed the parameter buffer.
+        # EarthSciData #207).  We disable `reset_dt` here and then call
+        # `auto_dt_reset!` ourselves AFTER `reinit!`'s callback initialization
+        # has refreshed the parameter buffer.
         reinit!(integrator, uii, t0 = time, tf = time + step_length,
             erase_sol = false, reset_dt = false, reinit_callbacks = reinit_cbs)
         reinit_cbs = !skip_repeats
-        integrator.p.ii = ii
         if integrator.opts.adaptive
             auto_dt_reset!(integrator)
         end
