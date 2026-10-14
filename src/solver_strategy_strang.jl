@@ -186,14 +186,27 @@ function _strang_stiff_closures(mtkf_coord, jac_coord, grd_t::Tuple)
     return f_stiff, jac_stiff
 end
 
+# Stands in for the `SciMLFunction` constructor that `process_SciMLProblem` calls last,
+# so that it returns the initial state and parameters without generating an RHS.
+struct _NoSciMLFunction end
+_NoSciMLFunction(sys; kwargs...) = _NoSciMLFunction()
+
 function _strang_ode_func(sys_mtk, coord_args, tspan, grd; sparse = false)
     mtkf_coord = build_coord_ode_function(sys_mtk, coord_args)
-    jac_coord = build_coord_jac_function(sys_mtk, coord_args, sparse = sparse)
-    _prob = ODEProblem(sys_mtk, [], tspan; sparse = sparse, build_initializeprob = false)
+    # As `build_coord_jac_function`, keeping the symbolic Jacobian: the generated
+    # sparse Jacobian writes its nonzeros in storage order, so the prototype takes
+    # its structure.
+    jac_expr = ModelingToolkit.calculate_jacobian(sys_mtk, sparse = sparse)
+    jac_coord = gen_coord_func(sys_mtk, jac_expr, coord_args)
+    # The `u0` and `p` of `ODEProblem(sys_mtk, [], tspan; build_initializeprob = false)`,
+    # which would also generate an RHS and the event callbacks, only to discard them.
+    _, u0, p = ModelingToolkit.process_SciMLProblem(_NoSciMLFunction, sys_mtk, [];
+        t = tspan[1], build_initializeprob = false)
+    jac_prototype = sparse ? similar(jac_expr, eltype(u0)) : nothing
 
     f_stiff, jac_stiff = _strang_stiff_closures(mtkf_coord, jac_coord, (grd...,))
-    ode_f = ODEFunction(f_stiff, jac = jac_stiff, jac_prototype = _prob.f.jac_prototype)
-    return ode_f, _prob.u0, _prob.p
+    ode_f = ODEFunction(f_stiff, jac = jac_stiff, jac_prototype = jac_prototype)
+    return ode_f, u0, p
 end
 
 # The callbacks of one block's stiff integrator: the system's events (shared; they

@@ -850,3 +850,126 @@ end
         @test solve_strang(prob).u[end] == solve_strang(prob_s).u[end]
     end
 end
+
+@testset "Strang stiff function without an MTK ODEProblem" begin
+    # `_strang_ode_func` takes the stiff Jacobian prototype, initial state and
+    # parameters from the compiled system instead of from
+    # `ODEProblem(sys, [], tspan)`, which would generate an RHS only to discard it.
+    # They must equal that problem's.
+    reference(sys_coord, dom, sparse) = ODEProblem(sys_coord, [], get_tspan(dom);
+        sparse, build_initializeprob = false)
+    function coord_sys(csys)
+        dom = EarthSciMLBase.domain(csys)
+        sys_coord, coord_args = EarthSciMLBase._prepare_coord_sys(convert(System, csys), dom)
+        # As `ODEProblem(::CoupledSystem, ::SolverStrang)` does before `_strang_ode_func`.
+        EarthSciMLBase.type_convert_params(sys_coord, EarthSciMLBase.init_u(sys_coord, dom))
+        return sys_coord, coord_args, dom
+    end
+    stiff_func(sys_coord, coord_args, dom, sparse) = EarthSciMLBase._strang_ode_func(
+        sys_coord, coord_args, get_tspan(dom), EarthSciMLBase.grid(dom); sparse)
+
+    # Reactions where `e`'s tendency does not depend on `e`: the Jacobian has a
+    # structural zero on its diagonal.
+    @parameters lon=0.0 lat=0.0 lev=1.0 k1=1.0 k2=0.5 k3=2.0 k4=0.3
+    @variables a(t)=1.0 b(t)=0.5 c(t)=0.2 d(t)=0.0 e(t)=0.1
+    @named chem = System(
+        [D(a) ~ -k1 * a * b + k3 * d * (1 + lat^2),
+            D(b) ~ -k1 * a * b + k2 * c,
+            D(c) ~ k1 * a * b - k2 * c - lev * c * e,
+            D(d) ~ lev * c * e - k3 * d + lon^2,
+            D(e) ~ k4 * c - k1 * a * b], t)
+    csys_chem = couple(chem,
+        DomainInfo(constIC(0.0, t ∈ Interval(0.0, 3.0)),
+            constBC(0.0, lon ∈ Interval(-1.0, 1.0), lat ∈ Interval(-0.5, 0.5),
+                lev ∈ Interval(1.0, 2.0)); grid_spacing = [0.5, 0.5, 1.0]))
+
+    @testset "no RHS generated" begin
+        # MTK compiles the RHS of `ODEProblem(sys, ...)` into a RuntimeGeneratedFunction,
+        # whose body is cached in MTK's module; count the bodies cached there.
+        cache_name = Symbol("#_RuntimeGeneratedFunctions_cache")
+        function mtk_rgf_bodies()
+            sum((ModelingToolkit, ModelingToolkit.ModelingToolkitBase)) do mod
+                isdefined(mod, cache_name) || return 0
+                cache = getfield(mod, cache_name)
+                cache isa AbstractDict ? length(cache) : sum(length, cache.levels; init = 0)
+            end
+        end
+        sys_coord, coord_args, dom = coord_sys(csys_chem)
+        n0 = mtk_rgf_bodies()
+        stiff_func(sys_coord, coord_args, dom, true)
+        @test mtk_rgf_bodies() == n0
+        # The count does see the RHS that `ODEProblem` generates for this system.
+        reference(sys_coord, dom, true)
+        @test mtk_rgf_bodies() > n0
+    end
+
+    domain32 = DomainInfo(partialderivatives_δxyδlonlat,
+        constIC(16.0, indepdomain), constBC(16.0, partialdomains...);
+        u_proto = zeros(Float32, 1, 1, 1, 1), grid_spacing = [0.1, 0.1, 1.0])
+    systems = ["main" => csys, "Float32" => couple(sys, op, domain32),
+        "data events" => first(data_event_csys(0.0)), "chem" => csys_chem]
+    @testset "$name" for (name, csys_) in systems
+        sys_coord, coord_args, dom = coord_sys(csys_)
+        funcs = Dict(sparse => stiff_func(sys_coord, coord_args, dom, sparse)
+                     for sparse in (false, true))
+        for sparse in (false, true)
+            f, u0, p = funcs[sparse]
+            ref = reference(sys_coord, dom, sparse)
+            jp, ref_jp = f.jac_prototype, ref.f.jac_prototype
+            if sparse
+                @test typeof(jp) == typeof(ref_jp)
+                @test size(jp) == size(ref_jp)
+                @test jp.colptr == ref_jp.colptr
+                @test jp.rowval == ref_jp.rowval
+            else
+                @test jp === ref_jp === nothing
+            end
+            @test typeof(u0) == typeof(ref.u0)
+            @test isequal(u0, ref.u0)
+            @test typeof(p) == typeof(ref.p)
+            # Field by field with `isequal`: the data-event parameters start as NaN.
+            @test all(fld -> isequal(getfield(p, fld), getfield(ref.p, fld)),
+                fieldnames(typeof(p)))
+        end
+
+        # The generated sparse Jacobian fills the prototype's structure as the dense
+        # one fills a matrix.
+        f_dense, u0, p = funcs[false]
+        f_sparse = funcs[true][1]
+        iip = EarthSciMLBase.IIP(first(CartesianIndices(tuple(size(dom)...))), p)
+        u = u0 .+ 1
+        J = copy(f_sparse.jac_prototype)
+        fill!(J.nzval, 0)
+        f_sparse.jac(J, u, iip, 0.0)
+        J_dense = zeros(eltype(J), size(J))
+        f_dense.jac(J_dense, u, iip, 0.0)
+        @test isapprox(Matrix(J), J_dense; nans = true)
+    end
+
+    stiff_systems = ["main" => csys, "chem" => csys_chem]
+    @testset "stiff steps ($name, sparse = $sparse)" for (name, csys_) in stiff_systems,
+        sparse in (false, true)
+
+        # Strang stiff steps from the stiff function's own prototype, state and
+        # parameters, and from `ODEProblem`'s, are bitwise the same. TRBDF2 uses
+        # the Jacobian.
+        sys_coord, coord_args, dom = coord_sys(csys_)
+        f, u0, p = stiff_func(sys_coord, coord_args, dom, sparse)
+        ref = reference(sys_coord, dom, sparse)
+        f_ref = ODEFunction(f.f, jac = f.jac, jac_prototype = ref.f.jac_prototype)
+        function stiff_steps(f, u0, p)
+            st = SolverStrangSerial(TRBDF2(), 1.0)
+            start = get_tspan(dom)[1]
+            IIchunks, integs = EarthSciMLBase._strang_integrators(
+                st, dom, f, u0, start, p, nothing)
+            u = reshape(EarthSciMLBase.init_u(sys_coord, dom), :, size(dom)...)
+            for k in 0:2
+                EarthSciMLBase.single_ode_step!(u, IIchunks[1], integs[1], start + k, 1.0)
+            end
+            return u
+        end
+        u_new = stiff_steps(f, u0, p)
+        @test all(isfinite, u_new)
+        @test isequal(u_new, stiff_steps(f_ref, ref.u0, ref.p))
+    end
+end
