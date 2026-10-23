@@ -33,7 +33,8 @@ jobs:
         run: |
           julia --project=docs/ -e '
             using Pkg
-            Pkg.develop(PackageSpec(url="https://github.com/SciML/Catalyst.jl"))
+            # Catalyst v16.2.1; later commits require SciMLBase 3, which EarthSciMLBase does not support yet.
+            Pkg.add(PackageSpec(url="https://github.com/SciML/Catalyst.jl", rev="deb00ddd9b9532370a1b6569c3b6a34d86b2f19c"))
             Pkg.develop(PackageSpec(path=pwd()))
             Pkg.instantiate()'
 

@@ -885,6 +885,10 @@ function nonstiff_ops(sys::CoupledSystem, sys_mtk, coord_args, domain, u0, p, al
     end
 end
 
+"""
+Variables needed by the coupled system's operators (the union of each
+operator's `get_needed_vars`).
+"""
 function operator_vars(sys::CoupledSystem, mtk_sys, domain::DomainInfo)
     unique(vcat([get_needed_vars(op, sys, mtk_sys, domain) for op in sys.ops]...))
 end

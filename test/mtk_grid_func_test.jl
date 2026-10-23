@@ -78,32 +78,36 @@ u0 = EarthSciMLBase.init_u(sys_coord, domain)
 @testset "grid solve" begin
     f, _, _ = EarthSciMLBase.mtk_grid_func(sys, domain, u0)
 
-    # Julia 1.12.5+ miscompiles the nested same-named closures inside
-    # `_mtk_grid_func` once the module is precompiled, producing numerically
-    # incorrect results.  The same code is correct on 1.10/lts and on 1.12.4,
-    # and rebuilding the closures outside a precompiled module also gives
-    # correct results, so the bug is upstream Julia.  Mark the tests as
-    # broken on the affected versions to keep CI green while leaving the
-    # check active for older Julia.
-    julia_grid_broken = v"1.12.5" ≤ VERSION
+    # Julia 1.12.5 through 1.13.1 can miscompile the nested same-named
+    # closures inside `_mtk_grid_func` once the module is precompiled,
+    # producing numerically incorrect results.  The same code is correct on
+    # 1.10/lts, on 1.12.4, and on 1.13.2+, and rebuilding the closures outside
+    # a precompiled module also gives correct results, so the bug is upstream
+    # Julia.  Whether it triggers on the affected versions also depends on
+    # dependency versions (it does not with the Downgrade CI's minimal
+    # versions), so on those versions record a wrong result as broken rather
+    # than failing, and accept a correct one.
+    julia_grid_broken = v"1.12.5" ≤ VERSION < v"1.13.2"
 
     @testset "in place" begin
         prob = ODEProblem(f, u0, (0.0, 1.0), p)
         sol1 = solve(prob, Tsit5())
-        if julia_grid_broken
-            @test_broken sum(sol1.u[end]) ≈ -3029.442918648946
+        ok = sum(sol1.u[end]) ≈ -3029.442918648946
+        if julia_grid_broken && !ok
+            @test_broken ok
         else
-            @test sum(sol1.u[end]) ≈ -3029.442918648946
+            @test ok
         end
     end
 
     @testset "out of place" begin
         prob = ODEProblem{false}(f, u0, (0.0, 1.0), p)
         sol2 = solve(prob, Tsit5())
-        if julia_grid_broken
-            @test_broken sum(sol2.u[end]) ≈ -3029.442918648946
+        ok = sum(sol2.u[end]) ≈ -3029.442918648946
+        if julia_grid_broken && !ok
+            @test_broken ok
         else
-            @test sum(sol2.u[end]) ≈ -3029.442918648946
+            @test ok
         end
     end
 end
@@ -174,12 +178,18 @@ end
     # generated ODE function is compiled, because the `rewrite_broadcast` post-walk
     # does not handle all shapes the new MTK v11 codegen can emit.  Mark as broken
     # so CI stays green; the coord-codegen fix itself (the focus of this PR) is
-    # exercised by the grid solve + observed tests above.
+    # exercised by the grid solve + observed tests above.  Older MTK versions
+    # (as in the Downgrade CI) do produce the right answer, so accept that too.
     try
         f, _, _ = EarthSciMLBase.mtk_grid_func(sys, domain, u0, MapReactant())
         du = similar(u0)
         f(du, u0, p, 0.0f0)
-        @test_broken du[1:2] ≈ [-11.413716694115397, -11.141592653589793]
+        ok = du[1:2] ≈ [-11.413716694115397, -11.141592653589793]
+        if ok
+            @test ok
+        else
+            @test_broken ok
+        end
     catch err
         @test_broken err === nothing
     end
