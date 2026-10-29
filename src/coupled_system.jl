@@ -1,4 +1,5 @@
-export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent, SysDomainInfo,
+export CoupledSystem, ConnectorSystem, couple, CoupleType, SysDiscreteEvent,
+       ReplaceDiscreteEvents, SysDomainInfo,
        merge_pdesystems, slice_variable
 
 """
@@ -183,6 +184,31 @@ function get_sys_discrete_event(sys::ModelingToolkit.System)
 end
 
 """
+    ReplaceDiscreteEvents(events)
+
+What a [`SysDiscreteEvent`](@ref) function returns to have `events` take the place
+of the discrete events of the system it belongs to, rather than adding an event to
+the coupled system. Use it to rebuild an event once the coupled system is known,
+e.g. a data loader's update event over only the data the coupled system uses.
+
+`events` are `ModelingToolkit.SymbolicDiscreteCallback`s in the variables of that
+system, not namespaced, like the events it was built with. They replace the events
+attached to that system itself (`ModelingToolkit.get_discrete_events`), not those of
+its subsystems; an empty `events` removes them.
+"""
+struct ReplaceDiscreteEvents
+    events::Vector{Any}
+end
+
+function _replace_discrete_events(sys::ModelingToolkit.System, r::ReplaceDiscreteEvents)
+    @assert all(e -> e isa ModelingToolkit.SymbolicDiscreteCallback, r.events) """
+        The events in a `ReplaceDiscreteEvents` returned for $(nameof(sys)) must be \
+        `ModelingToolkit.SymbolicDiscreteCallback`s."""
+    events = ModelingToolkit.SymbolicDiscreteCallback[r.events...]
+    return @set sys.discrete_events = events
+end
+
+"""
 The DataType that should be used in the ModelingToolkit System
 metadata for specifying a system's own [`DomainInfo`](@ref).
 
@@ -291,7 +317,7 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
             a = systems[i]  # Re-sync after coupling (from/to may not match i/j order).
         end
         de = get_sys_discrete_event(a)
-        (!isnothing(de)) && push!(discrete_event_fs, de)
+        (!isnothing(de)) && push!(discrete_event_fs, i => de)
     end
 
     iv = ModelingToolkit.get_iv(first(systems))
@@ -313,9 +339,18 @@ function Base.convert(::Type{<:System}, sys::CoupledSystem; name = :model, compi
         extra_needed = isnothing(sys.domaininfo) ? Any[] :
                        unique(vcat(operator_vars(sys, temp_sys, sys.domaininfo),
                                    callback_vars(sys, temp_sys, sys.domaininfo)))
-        de = filter(!isnothing, [
-            applicable(f, temp_sys, extra_needed) ? f(temp_sys, extra_needed) : f(temp_sys)
-            for f in discrete_event_fs])
+        de = []
+        for (i, f) in discrete_event_fs
+            r = applicable(f, temp_sys, extra_needed) ? f(temp_sys, extra_needed) :
+                f(temp_sys)
+            if r isa ReplaceDiscreteEvents
+                # Systems are not changed after their coupling pass above, and they
+                # are composed below.
+                systems[i] = _replace_discrete_events(systems[i], r)
+            elseif !isnothing(r)
+                push!(de, r)
+            end
+        end
 
         # Create system of connectors and events.
         connectors = System(connector_eqs, iv; name = name,

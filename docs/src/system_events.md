@@ -110,3 +110,19 @@ Finally, we can look at our "run counters" to confirm that the first data update
 ```@example system_events
 runcount1, runcount2
 ```
+
+## Replacing a system's own events
+
+A system event function can also return [`ReplaceDiscreteEvents`](@ref) to put new events in
+place of the discrete events that the system was built with, instead of adding an event to
+the coupled system. This lets a data loader that was built with one update event for all of its
+data rebuild that event, once the coupled system is known, so that it only updates the data
+that the coupled system uses. The new events are written in the variables of the system itself,
+like the events it was built with:
+
+```julia
+function sysevent(coupled_sys)
+    # ...decide which parameters the coupled system needs...
+    return ReplaceDiscreteEvents([SymbolicDiscreteCallback(times, affect)])
+end
+```

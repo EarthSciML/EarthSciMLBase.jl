@@ -484,6 +484,41 @@ end
     @test runcount2 == 1
 end
 
+@testset "ReplaceDiscreteEvents" begin
+    # A `SysDiscreteEvent` function that returns `ReplaceDiscreteEvents` puts the events
+    # in place of its own system's events; they are in that system's variables.
+    @parameters a=0.0 b=0.0
+    @variables x(t_nounits)=0.0 y(t_nounits)
+    set_a = ModelingToolkit.SymbolicDiscreteCallback([3.0],
+        ModelingToolkit.ImperativeAffect((m, o, ctx, integ) -> (; a = 1.0),
+            modified = (; a)))
+    set_b = ModelingToolkit.SymbolicDiscreteCallback([5.0],
+        ModelingToolkit.ImperativeAffect((m, o, ctx, integ) -> (; b = 2.0),
+            modified = (; b)))
+    function convert_and_solve(factory_result)
+        sys1 = System([D_nounits(x) ~ a + b], t_nounits, [x], [a, b]; name = :sys1,
+            discrete_events = [set_a],
+            metadata = Dict(SysDiscreteEvent => (parent_sys -> factory_result)))
+        sys2 = System([y ~ 1], t_nounits, [y], []; name = :sys2)
+        sys = convert(System, couple(sys1, sys2))
+        sol = solve(ODEProblem(sys, [], (0.0, 10.0)), Tsit5())
+        return length(ModelingToolkit.discrete_events(sys)), sol[sys.sys1₊x][end]
+    end
+    # x' = a + b, where `set_a` makes a = 1 from t = 3 and `set_b` makes b = 2 from t = 5.
+    n, x_end = convert_and_solve(nothing)
+    @test n == 1
+    @test x_end ≈ 7
+    n, x_end = convert_and_solve(ReplaceDiscreteEvents([set_b]))
+    @test n == 1
+    @test x_end ≈ 10
+    n, x_end = convert_and_solve(ReplaceDiscreteEvents([set_a, set_b]))
+    @test n == 2
+    @test x_end ≈ 17
+    n, x_end = convert_and_solve(ReplaceDiscreteEvents([]))
+    @test n == 0
+    @test x_end ≈ 0 atol = 1e-12
+end
+
 @testset "No duplicate connector equations" begin
     struct DupACoupler
         sys::Any
