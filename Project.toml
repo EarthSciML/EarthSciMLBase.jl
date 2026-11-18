@@ -37,7 +37,7 @@ Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 EarthSciMLBaseReactantExt = "Reactant"
 
 [compat]
-AcceleratedKernels = "0.4.3"
+AcceleratedKernels = "0.4.3, 0.5"
 Accessors = "0.1.42"
 ArrayInterface = "7.18.0"
 DiffEqCallbacks = "4.3"
